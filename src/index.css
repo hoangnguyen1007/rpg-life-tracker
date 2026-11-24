@@ -1,0 +1,400 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Default: 2D Dark Obsidian Pixel Dungeon RPG Theme */
+  :root,
+  [data-theme='dark'] {
+    --bg-canvas: #0b0e16;
+    --bg-surface: #141927;
+    --bg-surface-2: #1a2133;
+    --bg-subtle: #101522;
+    --bg-muted: #202940;
+    --border-hairline: #2d3856;
+    --border-strong: #475780;
+    --border-highlight: rgba(245, 158, 11, 0.35);
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: #8b9bb8;
+    --accent-primary: #f59e0b;
+    --accent-arcane: #8b5cf6;
+    --accent-crimson: #ef4444;
+    --accent-emerald: #10b981;
+    --accent-soft: rgba(245, 158, 11, 0.14);
+    --panel-shadow: 4px 4px 0 #05070c, inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    --tile-dot: rgba(148, 163, 184, 0.05);
+    --cal-grid-line: rgba(45, 56, 86, 0.85);
+    --cal-half-line: rgba(45, 56, 86, 0.38);
+    --cal-today-bg: rgba(245, 158, 11, 0.06);
+    --cal-now-line: #f59e0b;
+    color-scheme: dark;
+  }
+
+  /* Light Theme: Warm Guild Tavern Parchment RPG */
+  [data-theme='light'] {
+    --bg-canvas: #efe6d5;
+    --bg-surface: #fbf6eb;
+    --bg-surface-2: #f3ead7;
+    --bg-subtle: #ece0c8;
+    --bg-muted: #e2d2b3;
+    --border-hairline: #b69e72;
+    --border-strong: #8c7248;
+    --border-highlight: rgba(180, 83, 9, 0.28);
+    --text-primary: #1f1912;
+    --text-secondary: #4a3d2f;
+    --text-muted: #6f5f4d;
+    --accent-primary: #c2410c;
+    --accent-arcane: #6d28d9;
+    --accent-crimson: #dc2626;
+    --accent-emerald: #059669;
+    --accent-soft: rgba(194, 65, 12, 0.12);
+    --panel-shadow: 3px 3px 0 rgba(102, 78, 44, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    --tile-dot: rgba(120, 96, 62, 0.08);
+    --cal-grid-line: rgba(182, 158, 114, 0.72);
+    --cal-half-line: rgba(182, 158, 114, 0.35);
+    --cal-today-bg: rgba(194, 65, 12, 0.06);
+    --cal-now-line: #c2410c;
+    color-scheme: light;
+  }
+
+  html {
+    overflow-x: hidden;
+  }
+
+  body {
+    background-color: var(--bg-canvas);
+    background-image:
+      linear-gradient(to right, var(--tile-dot) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--tile-dot) 1px, transparent 1px);
+    background-size: 24px 24px;
+    color: var(--text-primary);
+    font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+    letter-spacing: -0.01em;
+    overflow-wrap: break-word;
+  }
+
+  p, span, div {
+    overflow-wrap: break-word;
+  }
+
+  input,
+  textarea,
+  select {
+    background-color: var(--bg-subtle);
+    color: var(--text-primary);
+    border: 2px solid var(--border-hairline);
+    border-radius: 2px;
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.22);
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-subtle);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 2px;
+  }
+}
+
+/* ==================== NON-CARD 2D PIXEL RPG GEOMETRY ==================== */
+.rpg-hud-bar {
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-strong);
+  border-radius: 2px;
+  box-shadow: var(--panel-shadow);
+}
+
+.rpg-window,
+.dungeon-panel-glow {
+  position: relative;
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-strong);
+  border-radius: 2px;
+  box-shadow: var(--panel-shadow);
+}
+
+.rpg-window::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border: 1px solid var(--border-hairline);
+  pointer-events: none;
+}
+
+.rpg-pane,
+.dungeon-panel,
+.studio-surface {
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-hairline);
+  border-radius: 2px;
+  box-shadow: 2px 2px 0 rgba(5, 7, 12, 0.22);
+}
+
+.rpg-divider,
+.studio-divider {
+  border-color: var(--border-hairline);
+}
+
+.studio-subtle {
+  background-color: var(--bg-subtle);
+}
+
+/* Flush RPG Menu Book Tabs (zero gap above .rpg-window) */
+.rpg-tab {
+  position: relative;
+  background-color: var(--bg-subtle);
+  color: var(--text-secondary);
+  border: 2px solid var(--border-hairline);
+  border-bottom: none;
+  border-radius: 2px 2px 0 0;
+  font-weight: 700;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.rpg-tab:hover {
+  background-color: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+
+.rpg-tab-active {
+  position: relative;
+  z-index: 2;
+  margin-bottom: -2px;
+  padding-bottom: calc(0.625rem + 2px);
+  background-color: var(--bg-surface);
+  color: var(--accent-primary);
+  border: 2px solid var(--border-strong);
+  border-bottom: 2px solid var(--bg-surface);
+  border-radius: 2px 2px 0 0;
+  font-weight: 800;
+}
+
+/* Pixel-segmented progress / HP / EXP track */
+.rpg-bar-track {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid var(--border-strong);
+  border-radius: 2px;
+  background-color: var(--bg-subtle);
+}
+
+.rpg-bar-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent,
+    transparent 10px,
+    rgba(0, 0, 0, 0.2) 10px,
+    rgba(0, 0, 0, 0.2) 12px
+  );
+  pointer-events: none;
+}
+
+.text-main {
+  color: var(--text-primary);
+}
+
+.text-sub {
+  color: var(--text-secondary);
+}
+
+.text-dim {
+  color: var(--text-muted);
+}
+
+.pixel-art {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.font-pixel {
+  font-family: 'Silkscreen', 'JetBrains Mono', monospace;
+}
+
+/* Tactile 2D Pixel Game Buttons */
+.btn-primary {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  color: #140f07;
+  border: 2px solid #fbbf24;
+  border-radius: 2px;
+  font-weight: 700;
+  box-shadow: 2px 2px 0 #78350f;
+  transition: transform 0.08s ease, filter 0.12s ease, box-shadow 0.08s ease;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 #78350f;
+}
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-crimson {
+  background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+  color: #ffffff;
+  border: 2px solid #f87171;
+  border-radius: 2px;
+  font-weight: 700;
+  box-shadow: 2px 2px 0 #7f1d1d;
+  transition: transform 0.08s ease, filter 0.12s ease, box-shadow 0.08s ease;
+}
+.btn-crimson:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn-crimson:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 #7f1d1d;
+}
+.btn-crimson:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-arcane {
+  background: linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%);
+  color: #ffffff;
+  border: 2px solid #a78bfa;
+  border-radius: 2px;
+  font-weight: 700;
+  box-shadow: 2px 2px 0 #4c1d95;
+  transition: transform 0.08s ease, filter 0.12s ease, box-shadow 0.08s ease;
+}
+.btn-arcane:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn-arcane:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 #4c1d95;
+}
+.btn-arcane:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-emerald {
+  background: linear-gradient(180deg, #10b981 0%, #047857 100%);
+  color: #ffffff;
+  border: 2px solid #34d399;
+  border-radius: 2px;
+  font-weight: 700;
+  box-shadow: 2px 2px 0 #064e3b;
+  transition: transform 0.08s ease, filter 0.12s ease, box-shadow 0.08s ease;
+}
+.btn-emerald:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn-emerald:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 #064e3b;
+}
+.btn-emerald:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background-color: var(--bg-surface-2);
+  color: var(--text-primary);
+  border: 2px solid var(--border-strong);
+  border-radius: 2px;
+  font-weight: 600;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.22);
+  transition: background-color 0.12s ease, transform 0.08s ease;
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--bg-muted);
+}
+.btn-secondary:active:not(:disabled) {
+  transform: translate(1px, 1px);
+}
+.btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ==================== 2D PIXEL RPG ANIMATIONS ==================== */
+@keyframes dungeon-bob {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes monster-float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-5px) scale(1.02); }
+}
+
+@keyframes heart-critical {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.7)); }
+  50% { transform: scale(1.16); filter: drop-shadow(0 0 7px rgba(248, 113, 113, 1)); }
+}
+
+@keyframes torch-stepped {
+  0%, 100% { opacity: 0.92; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+@keyframes ember-drift {
+  0% { opacity: 0; transform: translateY(0); }
+  25% { opacity: 0.9; }
+  100% { opacity: 0; transform: translateY(-28px) translateX(4px); }
+}
+
+@keyframes hp-hurt-flash {
+  0%, 100% { filter: brightness(1); }
+  30% { filter: brightness(1.8) saturate(1.6); }
+}
+
+.anim-hero-idle {
+  animation: dungeon-bob 2.2s steps(4) infinite;
+}
+
+.anim-monster-idle {
+  animation: monster-float 2.4s steps(4) infinite;
+}
+
+.anim-torch {
+  animation: torch-stepped 0.9s steps(4) infinite;
+}
+
+.anim-ember {
+  animation: ember-drift 2.4s steps(6) infinite;
+}
+
+.anim-hp-hurt {
+  animation: hp-hurt-flash 0.45s steps(3);
+}
+
+.anim-heart-crit {
+  animation: heart-critical 0.85s ease-in-out infinite;
+}

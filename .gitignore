@@ -1,0 +1,26 @@
+# Dependencies & build
+node_modules/
+dist/
+build/
+.vite/
+
+# Local SQLite database, WAL files & backups (personal data + API keys)
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+
+# Environment & logs
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+
+# Agent, IDE & OS files
+.agents/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
