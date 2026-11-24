@@ -670,4 +670,133 @@ export interface SystemStatePayload {
   lastDeliberation: CouncilDeliberation | null;
   growthBonuses: PlayerGrowthBonuses;
   chatThreads: AIChatThread[];
+  assistantSummary?: {
+    trackerRunning: boolean;
+    focusScore: number;
+    deepWorkMinutes: number;
+    unreadNudges: number;
+    currentCategory?: ActivityCategory;
+  };
+}
+
+export type ActivityCategory =
+  | 'deep_work'
+  | 'study_research'
+  | 'communication'
+  | 'distraction'
+  | 'other'
+  | 'idle';
+
+export interface ActivityRule {
+  id: string;
+  keyword: string; // lowercase substring matched against processName or windowTitle
+  category: Exclude<ActivityCategory, 'idle'>;
+  stat?: AttributeKey;
+}
+
+export interface ActivityLogEntry {
+  id: string;
+  dateKey: string; // YYYY-MM-DD (Asia/Ho_Chi_Minh)
+  processName: string;
+  windowTitle: string;
+  category: ActivityCategory;
+  durationSeconds: number;
+  startedAt: string;
+  endedAt: string;
+  creditedToSkill?: boolean;
+}
+
+export interface AssistantNudge {
+  id: string;
+  dateKey: string;
+  kind:
+    | 'morning_briefing'
+    | 'upcoming_block'
+    | 'distraction_guard'
+    | 'ultradian_break'
+    | 'evening_winddown'
+    | 'system';
+  title: string;
+  message: string;
+  createdAt: string;
+  dismissed: boolean;
+  toastSent?: boolean;
+}
+
+export interface AssistantSettings {
+  trackerEnabled: boolean;
+  pollIntervalSeconds: number; // default 10
+  idleThresholdSeconds: number; // default 180 (3 min)
+  windowsToastEnabled: boolean;
+  distractionGuardEnabled: boolean;
+  distractionThresholdMinutes: number; // default 3
+  distractionCooldownMinutes: number; // default 15
+  upcomingBlockReminderEnabled: boolean;
+  upcomingReminderLeadMinutes: number; // default 5
+  ultradianBreakEnabled: boolean;
+  ultradianBreakMinutes: number; // default 80
+  eveningWinddownEnabled: boolean;
+  eveningWinddownTime: string; // default '22:30'
+  quietHoursStart: string; // default '23:30'
+  quietHoursEnd: string; // default '07:00'
+  autoCreditSkillXp: boolean;
+  customRules: ActivityRule[];
+}
+
+export interface StartupStatusPayload {
+  platform: string;
+  isWindows: boolean;
+  startupInstalled: boolean;
+  startupScriptPath: string;
+  desktopShortcutInstalled: boolean;
+  desktopShortcutPath: string;
+  traySupported: boolean;
+  daemonRunning: boolean;
+  serverUrl: string;
+}
+
+export interface DailyActivitySummary {
+  dateKey: string;
+  deepWorkMinutes: number;
+  studyMinutes: number;
+  communicationMinutes: number;
+  distractionMinutes: number;
+  otherMinutes: number;
+  idleMinutes: number;
+  totalActiveMinutes: number;
+  focusScore: number; // 0..100
+  uncreditedFocusMinutes: number;
+  currentApp?: {
+    processName: string;
+    windowTitle: string;
+    category: ActivityCategory;
+    since: string;
+  } | null;
+  topApps: Array<{
+    processName: string;
+    category: ActivityCategory;
+    minutes: number;
+  }>;
+  recentLogs: ActivityLogEntry[];
+}
+
+export interface MorningBriefingPayload {
+  dateKey: string;
+  dayLabel: string;
+  greeting: string;
+  fixedBlocksCount: number;
+  freeHours: number;
+  bestDeepWorkWindow: string | null;
+  pendingQuestsCount: number;
+  activeChapterLabel: string;
+  suggestedAction: string;
+}
+
+export interface AssistantOverviewPayload {
+  settings: AssistantSettings;
+  startup: StartupStatusPayload;
+  activity: DailyActivitySummary;
+  briefing: MorningBriefingPayload;
+  nudges: AssistantNudge[];
+  trackerRunning: boolean;
 }

@@ -4,6 +4,13 @@ import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import { computeRankFromMastery, computeXpToNextLevel, db, getTodayKey } from './db.ts';
+import { assistantDaemon } from './assistant-daemon.ts';
+import { desktopTracker } from './desktop-tracker.ts';
+import {
+  installWindowsStartup,
+  launchSystemTray,
+  uninstallWindowsStartup,
+} from './windows-startup.ts';
 import {
   applyTaskContributionToSkill,
   areSkillPrerequisitesMet,
@@ -44,6 +51,7 @@ import type {
   AIChatMessage,
   AIConsultRequest,
   AISettings,
+  AssistantSettings,
   AttributeKey,
   BossMission,
   ChapterStageNode,
@@ -564,6 +572,8 @@ function buildStatePayload(): SystemStatePayload {
   const lastDeliberation = db.getLastDeliberation();
   const growthBonuses = computePlayerGrowthBonuses(player, skills, inventory, shadows);
   const chatThreads = db.getChatThreads();
+  const activitySummary = desktopTracker.getDailySummary(getVnTodayKey());
+  const unreadNudges = db.getAssistantNudges(30).filter((n) => !n.dismissed).length;
 
   return {
     player,
@@ -586,6 +596,13 @@ function buildStatePayload(): SystemStatePayload {
     lastDeliberation,
     growthBonuses,
     chatThreads,
+    assistantSummary: {
+      trackerRunning: desktopTracker.isRunning(),
+      focusScore: activitySummary.focusScore,
+      deepWorkMinutes: activitySummary.deepWorkMinutes,
+      unreadNudges,
+      currentCategory: activitySummary.currentApp?.category,
+    },
   };
 }
 
@@ -2737,6 +2754,133 @@ app.post('/api/system/reset', (req, res) => {
   res.json(buildStatePayload());
 });
 
+// ==================== SMART PC AUTO-START, TRACKER & PROACTIVE ASSISTANT ====================
+app.get('/api/assistant/overview', (_req, res) => {
+  res.json(assistantDaemon.getOverview(buildStatePayload()));
+});
+
+app.put('/api/assistant/settings', (req, res) => {
+  const patch = (req.body || {}) as Partial<AssistantSettings>;
+  const current = db.getAssistantSettings();
+  const updated = db.saveAssistantSettings({
+    ...current,
+    ...patch,
+    customRules: Array.isArray(patch.customRules) ? patch.customRules : current.customRules,
+  });
+  desktopTracker.restartIfEnabled();
+  db.checkpointWal();
+  res.json({
+    ...assistantDaemon.getOverview(buildStatePayload()),
+    settings: updated,
+  });
+});
+
+app.post('/api/assistant/tracker/toggle', (req, res) => {
+  const { enabled } = (req.body || {}) as { enabled?: boolean };
+  const current = db.getAssistantSettings();
+  const nextEnabled = typeof enabled === 'boolean' ? enabled : !current.trackerEnabled;
+  db.saveAssistantSettings({ ...current, trackerEnabled: nextEnabled });
+  if (nextEnabled) {
+    desktopTracker.start();
+  } else {
+    desktopTracker.stop();
+  }
+  db.checkpointWal();
+  res.json(assistantDaemon.getOverview(buildStatePayload()));
+});
+
+app.post('/api/assistant/startup/install', async (req, res) => {
+  try {
+    const opts = (req.body || {}) as {
+      createDesktopShortcut?: boolean;
+      launchTray?: boolean;
+    };
+    const result = await installWindowsStartup(opts);
+    res.json({
+      ok: result.ok,
+      message: result.message,
+      overview: assistantDaemon.getOverview(buildStatePayload()),
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : 'Không thể cài Tự khởi động cùng Windows.',
+    });
+  }
+});
+
+app.post('/api/assistant/startup/uninstall', async (req, res) => {
+  try {
+    const opts = (req.body || {}) as { removeDesktopShortcut?: boolean };
+    const result = await uninstallWindowsStartup(opts);
+    res.json({
+      ok: result.ok,
+      message: result.message,
+      overview: assistantDaemon.getOverview(buildStatePayload()),
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : 'Không thể gỡ Tự khởi động cùng Windows.',
+    });
+  }
+});
+
+app.post('/api/assistant/tray/launch', (_req, res) => {
+  try {
+    res.json(launchSystemTray());
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : 'Không thể khởi chạy Khay Hệ Thống.',
+    });
+  }
+});
+
+app.post('/api/assistant/test-notification', async (_req, res) => {
+  const result = await assistantDaemon.sendTestNotification();
+  res.json({
+    ok: result.ok,
+    message: result.message,
+    overview: assistantDaemon.getOverview(buildStatePayload()),
+  });
+});
+
+app.post('/api/assistant/nudge/:id/dismiss', (req, res) => {
+  db.dismissAssistantNudge(req.params.id);
+  db.checkpointWal();
+  res.json(assistantDaemon.getOverview(buildStatePayload()));
+});
+
+app.post('/api/assistant/activity/sync-skill', (_req, res) => {
+  const syncRes = assistantDaemon.creditUncreditedFocusToSkills();
+  const state = buildStatePayload();
+  const overview = assistantDaemon.getOverview(state);
+  res.json({
+    ...syncRes,
+    overview,
+    state,
+  });
+});
+
+app.post('/api/assistant/activity/record-sample', (req, res) => {
+  const body = (req.body || {}) as {
+    processName?: string;
+    windowTitle?: string;
+    durationSeconds?: number;
+    isIdle?: boolean;
+  };
+  if (!body.processName) {
+    res.status(400).json({ error: 'processName is required' });
+    return;
+  }
+  desktopTracker.recordSample({
+    processName: body.processName,
+    windowTitle: body.windowTitle || '',
+    durationSeconds: body.durationSeconds,
+    isIdle: body.isIdle,
+  });
+  db.checkpointWal();
+  res.json(assistantDaemon.getOverview(buildStatePayload()));
+});
+
 const distDir = path.resolve(process.cwd(), 'dist');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
@@ -2748,4 +2892,6 @@ if (fs.existsSync(distDir)) {
 
 app.listen(PORT, () => {
   console.log(`\n[THE SYSTEM // SYS.OS] Neural Core online at http://localhost:${PORT}`);
+  desktopTracker.start();
+  assistantDaemon.start();
 });

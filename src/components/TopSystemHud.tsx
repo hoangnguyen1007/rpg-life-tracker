@@ -15,7 +15,7 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import type { AISettings, PlayerState } from '../types/system';
+import type { AISettings, PlayerState, SystemStatePayload } from '../types/system';
 import { PixelHeart, PixelHeroSprite } from './DungeonSprites';
 
 interface TopSystemHudProps {
@@ -24,6 +24,8 @@ interface TopSystemHudProps {
   theme: 'light' | 'dark';
   soundEnabled?: boolean;
   lastSavedAt?: string;
+  assistantSummary?: SystemStatePayload['assistantSummary'];
+  onOpenAssistant?: () => void;
   onToggleTheme: () => void;
   onToggleSound?: () => void;
   onOpenSettings: () => void;
@@ -37,6 +39,8 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
   player,
   theme,
   soundEnabled = true,
+  assistantSummary,
+  onOpenAssistant,
   onToggleTheme,
   onToggleSound,
   onOpenSettings,
@@ -212,6 +216,18 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
 
         {/* TOP-RIGHT COMPACT RESOURCE & TOOL COUNTERS */}
         <div className="flex flex-wrap items-center gap-2">
+          {assistantSummary?.trackerRunning && onOpenAssistant && (
+            <button
+              type="button"
+              onClick={onOpenAssistant}
+              className="flex items-center gap-1.5 border-2 border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 font-mono text-[11px] font-bold text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-300 rounded-[2px]"
+              title="Trợ Lý PC đang theo dõi Focus — bấm để mở"
+            >
+              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+              <span>Focus {assistantSummary.focusScore}%</span>
+            </button>
+          )}
+
           {/* Clickable SP Badge -> Cây Kĩ Năng */}
           <button
             type="button"

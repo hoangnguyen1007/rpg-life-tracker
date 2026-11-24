@@ -3,6 +3,8 @@ import type {
   AIConsultResponse,
   AIDayPlanResult,
   AISettings,
+  AssistantOverviewPayload,
+  AssistantSettings,
   AttributeKey,
   AuditLogEntry,
   ChatContextScope,
@@ -409,5 +411,67 @@ export const systemApi = {
     request<SystemStatePayload>('/api/system/reset', {
       method: 'POST',
       body: JSON.stringify({ mode, clearChats: options?.clearChats }),
+    }),
+
+  getAssistantOverview: () =>
+    request<AssistantOverviewPayload>('/api/assistant/overview'),
+
+  updateAssistantSettings: (patch: Partial<AssistantSettings>) =>
+    request<AssistantOverviewPayload>('/api/assistant/settings', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
+
+  toggleDesktopTracker: (enabled: boolean) =>
+    request<AssistantOverviewPayload>('/api/assistant/tracker/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    }),
+
+  installWindowsStartup: (opts: { createDesktopShortcut?: boolean; launchTray?: boolean }) =>
+    request<{ ok: boolean; message: string; overview: AssistantOverviewPayload }>(
+      '/api/assistant/startup/install',
+      {
+        method: 'POST',
+        body: JSON.stringify(opts),
+      }
+    ),
+
+  uninstallWindowsStartup: (opts?: { removeDesktopShortcut?: boolean }) =>
+    request<{ ok: boolean; message: string; overview: AssistantOverviewPayload }>(
+      '/api/assistant/startup/uninstall',
+      {
+        method: 'POST',
+        body: JSON.stringify(opts || {}),
+      }
+    ),
+
+  launchSystemTray: () =>
+    request<{ ok: boolean; message: string }>('/api/assistant/tray/launch', {
+      method: 'POST',
+    }),
+
+  testAssistantNotification: () =>
+    request<{ ok: boolean; message: string; overview: AssistantOverviewPayload }>(
+      '/api/assistant/test-notification',
+      { method: 'POST' }
+    ),
+
+  dismissAssistantNudge: (id: string) =>
+    request<AssistantOverviewPayload>(`/api/assistant/nudge/${id}/dismiss`, {
+      method: 'POST',
+    }),
+
+  syncActivityToSkill: () =>
+    request<{
+      ok: boolean;
+      minutesCredited: number;
+      skillXpAdded: number;
+      bonusSp: number;
+      message: string;
+      overview: AssistantOverviewPayload;
+      state: SystemStatePayload;
+    }>('/api/assistant/activity/sync-skill', {
+      method: 'POST',
     }),
 };

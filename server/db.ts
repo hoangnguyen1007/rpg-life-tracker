@@ -13,7 +13,11 @@ import type {
   AIChatMessage,
   AIChatThread,
   AISettings,
+  ActivityCategory,
+  ActivityLogEntry,
   AgentMemoryLog,
+  AssistantNudge,
+  AssistantSettings,
   AuditActionType,
   AuditLogEntry,
   BossMission,
@@ -34,6 +38,28 @@ import type {
   SystemResetMode,
   TimetableBlock,
 } from './types.ts';
+
+export function buildDefaultAssistantSettings(): AssistantSettings {
+  return {
+    trackerEnabled: process.platform === 'win32' && !process.env.THE_SYSTEM_DB_PATH,
+    pollIntervalSeconds: 10,
+    idleThresholdSeconds: 180,
+    windowsToastEnabled: true,
+    distractionGuardEnabled: true,
+    distractionThresholdMinutes: 3,
+    distractionCooldownMinutes: 15,
+    upcomingBlockReminderEnabled: true,
+    upcomingReminderLeadMinutes: 5,
+    ultradianBreakEnabled: true,
+    ultradianBreakMinutes: 80,
+    eveningWinddownEnabled: true,
+    eveningWinddownTime: '22:30',
+    quietHoursStart: '23:30',
+    quietHoursEnd: '07:00',
+    autoCreditSkillXp: true,
+    customRules: [],
+  };
+}
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
@@ -362,11 +388,36 @@ class SystemDatabase {
         FOREIGN KEY (thread_id) REFERENCES ai_chat_threads(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        id TEXT PRIMARY KEY,
+        date_key TEXT NOT NULL,
+        process_name TEXT NOT NULL,
+        window_title TEXT NOT NULL,
+        category TEXT NOT NULL,
+        duration_seconds INTEGER NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT NOT NULL,
+        credited_to_skill INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS assistant_nudges (
+        id TEXT PRIMARY KEY,
+        date_key TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        dismissed INTEGER NOT NULL DEFAULT 0,
+        toast_sent INTEGER NOT NULL DEFAULT 0
+      );
+
       CREATE INDEX IF NOT EXISTS idx_quests_date_status ON quests(date_key, status);
       CREATE INDEX IF NOT EXISTS idx_timetable_day_start ON timetable_blocks(day_of_week, start_time);
       CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_logs(timestamp DESC);
       CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON transaction_audit_log(timestamp DESC);
       CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON ai_chat_messages(thread_id, created_at ASC);
+      CREATE INDEX IF NOT EXISTS idx_activity_date ON activity_logs(date_key, started_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_nudges_date ON assistant_nudges(date_key, created_at DESC);
     `);
   }
 
@@ -1485,10 +1536,168 @@ class SystemDatabase {
       DELETE FROM transaction_audit_log;
       DELETE FROM ai_chat_messages;
       DELETE FROM ai_chat_threads;
+      DELETE FROM activity_logs;
+      DELETE FROM assistant_nudges;
     `);
     if (prevAi) {
       this.setKV('ai_settings', prevAi);
     }
+  }
+
+  getAssistantSettings(): AssistantSettings {
+    const saved = this.getKV<Partial<AssistantSettings>>('assistant_settings');
+    const defaults = buildDefaultAssistantSettings();
+    if (!saved) return defaults;
+    return {
+      ...defaults,
+      ...saved,
+      customRules: Array.isArray(saved.customRules) ? saved.customRules : [],
+    };
+  }
+
+  saveAssistantSettings(settings: AssistantSettings): AssistantSettings {
+    const normalized: AssistantSettings = {
+      ...buildDefaultAssistantSettings(),
+      ...settings,
+      customRules: Array.isArray(settings.customRules) ? settings.customRules : [],
+    };
+    this.setKV('assistant_settings', normalized);
+    return normalized;
+  }
+
+  upsertActivityLog(entry: ActivityLogEntry): void {
+    this.db
+      .prepare(
+        `INSERT INTO activity_logs (
+          id, date_key, process_name, window_title, category,
+          duration_seconds, started_at, ended_at, credited_to_skill
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          process_name = excluded.process_name,
+          window_title = excluded.window_title,
+          category = excluded.category,
+          duration_seconds = excluded.duration_seconds,
+          ended_at = excluded.ended_at,
+          credited_to_skill = excluded.credited_to_skill`
+      )
+      .run(
+        entry.id,
+        entry.dateKey,
+        entry.processName,
+        entry.windowTitle,
+        entry.category,
+        Math.max(1, Math.round(entry.durationSeconds)),
+        entry.startedAt,
+        entry.endedAt,
+        entry.creditedToSkill ? 1 : 0
+      );
+    this.touchLastSaved();
+  }
+
+  getActivityLogsByDate(dateKey: string): ActivityLogEntry[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, date_key, process_name, window_title, category,
+                duration_seconds, started_at, ended_at, credited_to_skill
+         FROM activity_logs
+         WHERE date_key = ?
+         ORDER BY started_at DESC`
+      )
+      .all(dateKey) as Array<{
+      id: string;
+      date_key: string;
+      process_name: string;
+      window_title: string;
+      category: ActivityCategory;
+      duration_seconds: number;
+      started_at: string;
+      ended_at: string;
+      credited_to_skill: number;
+    }>;
+
+    return rows.map((r) => ({
+      id: r.id,
+      dateKey: r.date_key,
+      processName: r.process_name,
+      windowTitle: r.window_title,
+      category: r.category,
+      durationSeconds: r.duration_seconds,
+      startedAt: r.started_at,
+      endedAt: r.ended_at,
+      creditedToSkill: r.credited_to_skill === 1,
+    }));
+  }
+
+  markActivityCredited(dateKey: string): void {
+    this.db
+      .prepare(
+        `UPDATE activity_logs
+         SET credited_to_skill = 1
+         WHERE date_key = ?
+           AND category IN ('deep_work', 'study_research')
+           AND credited_to_skill = 0`
+      )
+      .run(dateKey);
+    this.touchLastSaved();
+  }
+
+  addAssistantNudge(nudge: AssistantNudge): void {
+    this.db
+      .prepare(
+        `INSERT INTO assistant_nudges (
+          id, date_key, kind, title, message, created_at, dismissed, toast_sent
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          dismissed = excluded.dismissed,
+          toast_sent = excluded.toast_sent`
+      )
+      .run(
+        nudge.id,
+        nudge.dateKey,
+        nudge.kind,
+        nudge.title,
+        nudge.message,
+        nudge.createdAt,
+        nudge.dismissed ? 1 : 0,
+        nudge.toastSent ? 1 : 0
+      );
+    this.touchLastSaved();
+  }
+
+  getAssistantNudges(limit = 30): AssistantNudge[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, date_key, kind, title, message, created_at, dismissed, toast_sent
+         FROM assistant_nudges
+         ORDER BY created_at DESC
+         LIMIT ?`
+      )
+      .all(limit) as Array<{
+      id: string;
+      date_key: string;
+      kind: AssistantNudge['kind'];
+      title: string;
+      message: string;
+      created_at: string;
+      dismissed: number;
+      toast_sent: number;
+    }>;
+
+    return rows.map((r) => ({
+      id: r.id,
+      dateKey: r.date_key,
+      kind: r.kind,
+      title: r.title,
+      message: r.message,
+      createdAt: r.created_at,
+      dismissed: r.dismissed === 1,
+      toastSent: r.toast_sent === 1,
+    }));
+  }
+
+  dismissAssistantNudge(id: string): void {
+    this.db.prepare('UPDATE assistant_nudges SET dismissed = 1 WHERE id = ?').run(id);
+    this.touchLastSaved();
   }
 
   resetAll(mode: SystemResetMode = 'clean', options?: { clearChats?: boolean }): void {
@@ -1504,6 +1713,7 @@ class SystemDatabase {
       if (mode === 'progress') {
         const prevPlayer = this.getKV<PlayerState>('player_state');
         const prevAi = this.getKV<AISettings>('ai_settings');
+        const prevAssistantSettings = this.getKV<AssistantSettings>('assistant_settings');
         const keptBlocks = this.getTimetableBlocks().filter(
           (b) => !b.id.startsWith('tt-task-') && !b.id.startsWith('tt-ai-')
         );
@@ -1545,6 +1755,9 @@ class SystemDatabase {
 
         if (prevAi) {
           this.setKV('ai_settings', prevAi);
+        }
+        if (prevAssistantSettings) {
+          this.setKV('assistant_settings', prevAssistantSettings);
         }
 
         if (keptBlocks.length > 0) {

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import {
+  Bot,
   CalendarClock,
   Coffee,
   Command,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 import type {
   AIChatMessage,
+  AssistantOverviewPayload,
   ChatContextScope,
   Quest,
   RejectionReason,
@@ -46,8 +48,9 @@ import { SystemSettingsModal } from './components/SystemSettingsModal';
 import { AwakeningWizardModal } from './components/AwakeningWizardModal';
 import { DeathCheckpointModal } from './components/DeathCheckpointModal';
 import { ResetProgressModal } from './components/ResetProgressModal';
+import { AssistantCenterView } from './components/AssistantCenterView';
 
-type TabKey = 'quests' | 'skills' | 'campaign' | 'timetable' | 'hero';
+type TabKey = 'quests' | 'skills' | 'campaign' | 'timetable' | 'hero' | 'assistant';
 type HeroSubTab = 'status' | 'profile' | 'shop' | 'shadows';
 
 interface SystemAlert {
@@ -62,6 +65,7 @@ const NAV_TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'skills', label: 'Cây Kĩ Năng', icon: <GitBranch className="h-4 w-4" /> },
   { key: 'hero', label: 'Tiến Độ & Mục Tiêu', icon: <Shield className="h-4 w-4" /> },
   { key: 'campaign', label: 'Hành Trình', icon: <Skull className="h-4 w-4" /> },
+  { key: 'assistant', label: 'Trợ Lý PC', icon: <Bot className="h-4 w-4" /> },
 ];
 
 export default function App() {
@@ -81,6 +85,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [questUtilityTab, setQuestUtilityTab] = useState<'advisor' | 'rhythm' | 'reflect'>('advisor');
+  const [assistantOverview, setAssistantOverview] = useState<AssistantOverviewPayload | null>(null);
+  const [assistantLoading, setAssistantLoading] = useState(false);
 
   const [activeChatThreadId, setActiveChatThreadId] = useState<string | null>(() => {
     return typeof window !== 'undefined'
@@ -166,6 +172,31 @@ export default function App() {
   useEffect(() => {
     loadState();
   }, [loadState]);
+
+  const loadAssistantOverview = useCallback(async () => {
+    setAssistantLoading(true);
+    try {
+      const ov = await systemApi.getAssistantOverview();
+      setAssistantOverview(ov);
+    } catch {
+      // Non-fatal if assistant endpoint is temporarily unavailable
+    } finally {
+      setAssistantLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAssistantOverview();
+  }, [loadAssistantOverview]);
+
+  useEffect(() => {
+    if (activeTab !== 'assistant') return;
+    void loadAssistantOverview();
+    const timer = setInterval(() => {
+      void loadAssistantOverview();
+    }, 20000);
+    return () => clearInterval(timer);
+  }, [activeTab, loadAssistantOverview]);
 
   const openCommandPalette = useCallback(() => {
     soundEngine.click();
@@ -414,6 +445,19 @@ export default function App() {
         },
       },
       {
+        id: 'action-assistant',
+        group: 'Hệ thống',
+        label: 'Mở Trợ Lý PC & Khởi động cùng Windows',
+        hint: 'Assistant',
+        keywords: 'assistant tro ly pc startup windows tray activity tracker',
+        icon: <Bot className="h-4 w-4 text-emerald-400" />,
+        run: async () => {
+          soundEngine.click();
+          setActiveTab('assistant');
+          setCommandPaletteOpen(false);
+        },
+      },
+      {
         id: 'action-settings',
         group: 'Hệ thống',
         label: 'Mở Cài đặt (LLM API & Backup)',
@@ -478,6 +522,13 @@ export default function App() {
 
   const spAvailable = state.player.skillPoints ?? 0;
   const anyChatPending = Object.values(pendingChatKeys).some(Boolean);
+  const trackerRunning = Boolean(
+    assistantOverview?.trackerRunning ?? state.assistantSummary?.trackerRunning
+  );
+  const unreadNudges =
+    assistantOverview?.nudges.filter((n) => !n.dismissed).length ??
+    state.assistantSummary?.unreadNudges ??
+    0;
 
   return (
     <div className="min-h-screen pb-10">
@@ -502,6 +553,11 @@ export default function App() {
           theme={theme}
           soundEnabled={soundEnabled}
           lastSavedAt={state.storageInfo?.lastSavedAt}
+          assistantSummary={state.assistantSummary}
+          onOpenAssistant={() => {
+            soundEngine.click();
+            setActiveTab('assistant');
+          }}
           onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
           onToggleSound={handleToggleSound}
           onOpenSettings={() => {
@@ -550,6 +606,17 @@ export default function App() {
                       className="h-3.5 w-3.5 animate-spin text-amber-400"
                       aria-label="AI đang xử lý"
                     />
+                  )}
+                  {tab.key === 'assistant' && trackerRunning && (
+                    <span
+                      className="h-2 w-2 animate-pulse rounded-full bg-emerald-400"
+                      title="PC Activity Tracker đang chạy"
+                    />
+                  )}
+                  {tab.key === 'assistant' && unreadNudges > 0 && (
+                    <span className="font-pixel bg-amber-500 px-1 py-0.5 text-[9px] font-bold leading-none text-[#180f03] rounded-[2px]">
+                      {unreadNudges}
+                    </span>
                   )}
                   {showSpDot && (
                     <span
@@ -1026,6 +1093,79 @@ export default function App() {
                     />
                   )}
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'assistant' && (
+              <div className="p-4 sm:p-5">
+                <AssistantCenterView
+                  overview={assistantOverview}
+                  loading={assistantLoading}
+                  onRefresh={loadAssistantOverview}
+                  onToggleTracker={async (enabled) => {
+                    soundEngine.systemPing();
+                    const ov = await systemApi.toggleDesktopTracker(enabled);
+                    setAssistantOverview(ov);
+                    pushAlert(
+                      enabled ? 'Đã bật Tracker PC' : 'Đã tắt Tracker PC',
+                      enabled
+                        ? 'Hệ thống bắt đầu ghi nhận thời gian tập trung trên Windows.'
+                        : 'Đã tạm dừng theo dõi cửa sổ.'
+                    );
+                  }}
+                  onUpdateSettings={async (patch) => {
+                    soundEngine.click();
+                    const ov = await systemApi.updateAssistantSettings(patch);
+                    setAssistantOverview(ov);
+                    pushAlert('Đã lưu quy tắc Trợ Lý PC', 'Cấu hình thông báo & phân loại đã được cập nhật.');
+                  }}
+                  onInstallStartup={async (opts) => {
+                    const res = await systemApi.installWindowsStartup(opts);
+                    setAssistantOverview(res.overview);
+                    soundEngine.skillUnlock();
+                    pushAlert('Đã cài Khởi động cùng Windows', res.message);
+                  }}
+                  onUninstallStartup={async (opts) => {
+                    const res = await systemApi.uninstallWindowsStartup(opts);
+                    setAssistantOverview(res.overview);
+                    soundEngine.alert();
+                    pushAlert('Đã gỡ Khởi động cùng Windows', res.message);
+                  }}
+                  onLaunchTray={async () => {
+                    soundEngine.systemPing();
+                    const res = await systemApi.launchSystemTray();
+                    pushAlert('System Tray', res.message);
+                  }}
+                  onTestNotification={async () => {
+                    soundEngine.systemPing();
+                    const res = await systemApi.testAssistantNotification();
+                    setAssistantOverview(res.overview);
+                    pushAlert('Thử thông báo Windows', res.message);
+                  }}
+                  onDismissNudge={async (id) => {
+                    soundEngine.click();
+                    const ov = await systemApi.dismissAssistantNudge(id);
+                    setAssistantOverview(ov);
+                  }}
+                  onSyncFocusToSkill={async () => {
+                    const res = await systemApi.syncActivityToSkill();
+                    setAssistantOverview(res.overview);
+                    setState(res.state);
+                    if (res.bonusSp > 0) {
+                      triggerLevelUpFx();
+                    } else {
+                      soundEngine.questComplete();
+                    }
+                    pushAlert('Quy đổi Focus -> Skill XP!', res.message);
+                  }}
+                  onRunOrchestrate={async () => {
+                    soundEngine.systemPing();
+                    const updated = await systemApi.orchestrate({});
+                    setState(updated);
+                    setActiveTab('quests');
+                    pushAlert('Kế hoạch mới đã sẵn sàng', 'AI đã sắp xếp nhiệm vụ vừa khung giờ rảnh hôm nay.');
+                  }}
+                />
               </div>
             )}
           </main>
