@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Activity,
   Bell,
   Bot,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Clock,
   Cpu,
+  Flame,
   Monitor,
   Plus,
   Power,
@@ -23,20 +26,65 @@ import type {
   ActivityRule,
   AssistantOverviewPayload,
   AssistantSettings,
+  AttributeKey,
+  DailyActivitySummary,
+  Quest,
 } from '../types/system';
+
+type HourlyActivitySlice = {
+  hour: number;
+  deepWorkMins: number;
+  studyMins: number;
+  commMins: number;
+  distractionMins: number;
+  otherMins: number;
+  dominantCategory: ActivityCategory | 'none';
+};
+
+type SuggestedFocusSession = {
+  minutes: number;
+  topApp: string;
+  dominantCategory: 'deep_work' | 'study_research';
+  suggestedTitle: string;
+  primaryStat: AttributeKey;
+  skillName?: string;
+};
+
+type ExtendedActivitySummary = DailyActivitySummary & {
+  hourlyBreakdown?: HourlyActivitySlice[];
+  peakFocusHour?: string | null;
+  distractionBudgetMinutes?: number;
+  suggestedFocusSession?: SuggestedFocusSession | null;
+};
+
+type ExtendedAssistantSettings = AssistantSettings & {
+  autoPauseQuestOnIdle?: boolean;
+  distractionBudgetMinutes?: number;
+};
 
 export interface AssistantCenterViewProps {
   overview: AssistantOverviewPayload | null;
+  pendingQuests?: Quest[];
   loading?: boolean;
   onRefresh: () => Promise<void>;
   onToggleTracker: (enabled: boolean) => Promise<void>;
-  onUpdateSettings: (patch: Partial<AssistantSettings>) => Promise<void>;
+  onUpdateSettings: (patch: Partial<ExtendedAssistantSettings>) => Promise<void>;
   onInstallStartup: (opts: { createDesktopShortcut: boolean; launchTray: boolean }) => Promise<void>;
   onUninstallStartup: (opts: { removeDesktopShortcut: boolean }) => Promise<void>;
   onLaunchTray: () => Promise<void>;
   onTestNotification: () => Promise<void>;
   onDismissNudge: (id: string) => Promise<void>;
   onSyncFocusToSkill: () => Promise<void>;
+  onReclassifyApp?: (payload: {
+    keyword: string;
+    category: Exclude<ActivityCategory, 'idle'>;
+  }) => Promise<void>;
+  onConvertFocusToQuest?: (payload: {
+    mode: 'complete_new' | 'credit_pending';
+    title?: string;
+    questId?: string;
+    primaryStat?: AttributeKey;
+  }) => Promise<void>;
   onRunOrchestrate?: () => Promise<void>;
 }
 
@@ -76,8 +124,19 @@ const CATEGORY_META: Record<
   },
 };
 
+const QUICK_RECLASSIFY_CHOICES: Array<{
+  category: Exclude<ActivityCategory, 'idle' | 'other'>;
+  label: string;
+}> = [
+  { category: 'deep_work', label: 'Deep Work' },
+  { category: 'study_research', label: 'Học tập' },
+  { category: 'communication', label: 'Giao tiếp' },
+  { category: 'distraction', label: 'Xao nhãng' },
+];
+
 export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
   overview,
+  pendingQuests = [],
   loading = false,
   onRefresh,
   onToggleTracker,
@@ -88,6 +147,8 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
   onTestNotification,
   onDismissNudge,
   onSyncFocusToSkill,
+  onReclassifyApp,
+  onConvertFocusToQuest,
   onRunOrchestrate,
 }) => {
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -95,6 +156,18 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
   const [newRuleKeyword, setNewRuleKeyword] = useState('');
   const [newRuleCategory, setNewRuleCategory] =
     useState<Exclude<ActivityCategory, 'idle'>>('deep_work');
+  const [selectedPendingQuestId, setSelectedPendingQuestId] = useState<string>(
+    () => pendingQuests[0]?.id || ''
+  );
+
+  useEffect(() => {
+    if (
+      pendingQuests.length > 0 &&
+      !pendingQuests.some((q) => q.id === selectedPendingQuestId)
+    ) {
+      setSelectedPendingQuestId(pendingQuests[0].id);
+    }
+  }, [pendingQuests, selectedPendingQuestId]);
 
   const runBusy = async (key: string, fn: () => Promise<void>) => {
     setBusyKey(key);
@@ -128,7 +201,9 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
     );
   }
 
-  const { settings, startup, activity, briefing, nudges, trackerRunning } = overview;
+  const settings = overview.settings as ExtendedAssistantSettings;
+  const activity = overview.activity as ExtendedActivitySummary;
+  const { startup, briefing, nudges, trackerRunning } = overview;
 
   const segTotal = Math.max(
     1,
@@ -146,6 +221,42 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
     { key: 'distraction', mins: activity.distractionMinutes },
     { key: 'other', mins: activity.otherMinutes },
   ];
+
+  // Build 18-hour timeline (06h -> 23h)
+  const hourlyMap = new Map<number, HourlyActivitySlice>(
+    (activity.hourlyBreakdown || []).map((h) => [h.hour, h])
+  );
+  const hourlyBars: HourlyActivitySlice[] = Array.from({ length: 18 }, (_, i) => {
+    const hr = 6 + i;
+    return (
+      hourlyMap.get(hr) || {
+        hour: hr,
+        deepWorkMins: 0,
+        studyMins: 0,
+        commMins: 0,
+        distractionMins: 0,
+        otherMins: 0,
+        dominantCategory: 'none',
+      }
+    );
+  });
+  const maxHourTotal = Math.max(
+    15,
+    ...hourlyBars.map(
+      (h) => h.deepWorkMins + h.studyMins + h.commMins + h.distractionMins + h.otherMins
+    )
+  );
+
+  const distractionBudget =
+    activity.distractionBudgetMinutes ?? settings.distractionBudgetMinutes ?? 45;
+  const distractionPct = Math.min(
+    100,
+    Math.round((activity.distractionMinutes / Math.max(1, distractionBudget)) * 100)
+  );
+  const isOverBudget = activity.distractionMinutes > distractionBudget;
+
+  const suggestedSession = activity.suggestedFocusSession;
+  const effectiveQuestId = selectedPendingQuestId || pendingQuests[0]?.id || '';
 
   const handleAddRule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,6 +354,106 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
           </div>
         </div>
       </section>
+
+      {/* Smart Unlogged Focus -> Quest Bridge Card */}
+      {activity.uncreditedFocusMinutes >= 10 && (
+        <section className="studio-surface border-emerald-500/60 bg-emerald-500/5 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="rounded-[2px] border-2 border-emerald-500/50 bg-emerald-500/15 p-2 text-emerald-400">
+                <Flame className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-pixel rounded-[2px] border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-bold text-emerald-400">
+                    FOCUS BRIDGE · +{activity.uncreditedFocusMinutes} PHÚT CHƯA QUY ĐỔI
+                  </span>
+                  {suggestedSession?.topApp && (
+                    <span className="font-mono text-xs font-bold text-main">
+                      App chính: {suggestedSession.topApp}
+                    </span>
+                  )}
+                  {suggestedSession?.skillName && (
+                    <span className="font-mono text-[11px] text-cyan-400">
+                      → {suggestedSession.skillName}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-sub">
+                  PC ghi nhận <strong className="text-main">{activity.uncreditedFocusMinutes} phút</strong> tập trung thực tế
+                  {suggestedSession?.suggestedTitle ? ` (${suggestedSession.suggestedTitle})` : ''}. Quy đổi ngay thành Quest để nhận XP, Gold, SP và Skill XP!
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {onConvertFocusToQuest && (
+                <button
+                  type="button"
+                  disabled={busyKey === 'convert-new'}
+                  onClick={() =>
+                    runBusy('convert-new', () =>
+                      onConvertFocusToQuest({
+                        mode: 'complete_new',
+                        title:
+                          suggestedSession?.suggestedTitle ||
+                          `Phiên Tập Trung (${activity.uncreditedFocusMinutes}p)`,
+                        primaryStat: suggestedSession?.primaryStat || 'INT',
+                      })
+                    )
+                  }
+                  className="btn-primary flex items-center gap-1.5 px-3.5 py-2 text-xs"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Ghi nhận thành Quest đã xong</span>
+                </button>
+              )}
+
+              {onConvertFocusToQuest && pendingQuests.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={effectiveQuestId}
+                    onChange={(e) => setSelectedPendingQuestId(e.target.value)}
+                    className="max-w-[180px] px-2 py-1.5 text-xs"
+                    aria-label="Chọn Quest đang chờ"
+                  >
+                    {pendingQuests.map((q) => (
+                      <option key={q.id} value={q.id}>
+                        {q.title}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!effectiveQuestId || busyKey === 'convert-pending'}
+                    onClick={() =>
+                      runBusy('convert-pending', () =>
+                        onConvertFocusToQuest({
+                          mode: 'credit_pending',
+                          questId: effectiveQuestId,
+                        })
+                      )
+                    }
+                    className="btn-secondary px-3 py-1.5 text-xs"
+                  >
+                    Gắn vào Quest đang chờ
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={busyKey === 'sync-skill'}
+                onClick={() => runBusy('sync-skill', onSyncFocusToSkill)}
+                className="btn-emerald flex items-center gap-1.5 px-3 py-1.5 text-xs"
+              >
+                <Zap className="h-3.5 w-3.5" />
+                <span>Chỉ cộng Skill XP</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Section 2: Khởi động cùng PC & Chế độ Desktop */}
       <section className="studio-surface p-5">
@@ -344,7 +555,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
         </div>
       </section>
 
-      {/* Sections 3 & 4: Two-Column Ledger (Live PC Tracker | Proactive Assistant Rules) */}
+      {/* Sections 3 & 4: Two-Column Ledger (Live PC Tracker + 24h Timeline | Proactive Rules) */}
       <section className="studio-surface overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12">
           {/* Section 3: Theo dõi Hoạt động Thông minh (Live PC Tracker) */}
@@ -399,7 +610,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
 
             {/* Segmented Horizontal Pixel Bar */}
             <div>
-              <div className="h-4 w-full overflow-hidden rounded-[2px] border-2 studio-divider studio-subtle flex">
+              <div className="flex h-4 w-full overflow-hidden rounded-[2px] border-2 studio-divider studio-subtle">
                 {segments.map((seg) => {
                   if (seg.mins <= 0) return null;
                   const pct = (seg.mins / segTotal) * 100;
@@ -425,57 +636,135 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
               </div>
             </div>
 
-            {/* Sync Uncredited Focus Minutes -> Skill XP */}
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-[2px] border-2 p-3 studio-subtle studio-divider">
-              <div className="text-xs text-sub">
-                Thời gian tập trung chưa quy đổi:{' '}
-                <strong className="font-mono text-emerald-400">
-                  {activity.uncreditedFocusMinutes} phút
-                </strong>{' '}
-                <span className="text-dim">(tối thiểu 10 phút)</span>
+            {/* 24h Pixel Focus Timeline (06h -> 23h) + Peak Focus Hour + Distraction Budget */}
+            <div className="space-y-3 rounded-[2px] border-2 p-3 studio-subtle studio-divider">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-extrabold text-main">
+                  <Clock className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Nhịp Tập Trung Theo Giờ (06h → 23h)</span>
+                </div>
+                <div className="font-mono text-[11px] text-amber-400">
+                  Giờ Vàng Thực Tế: <strong>{activity.peakFocusHour || 'Chưa đủ dữ liệu'}</strong>
+                </div>
               </div>
-              <button
-                type="button"
-                disabled={activity.uncreditedFocusMinutes < 10 || busyKey === 'sync-skill'}
-                onClick={() => runBusy('sync-skill', onSyncFocusToSkill)}
-                className="btn-emerald flex items-center gap-1.5 px-3 py-1.5 text-xs"
-              >
-                <Zap className="h-3.5 w-3.5" />
-                <span>Quy đổi {activity.uncreditedFocusMinutes}p tập trung → Skill XP</span>
-              </button>
+
+              <div className="grid grid-cols-18 gap-1 items-end pt-1" style={{ gridTemplateColumns: 'repeat(18, minmax(0, 1fr))' }}>
+                {hourlyBars.map((h) => {
+                  const total =
+                    h.deepWorkMins +
+                    h.studyMins +
+                    h.commMins +
+                    h.distractionMins +
+                    h.otherMins;
+                  const heightPx = total > 0 ? Math.max(6, Math.round((total / maxHourTotal) * 44)) : 3;
+                  const barCls =
+                    h.dominantCategory === 'none'
+                      ? 'bg-slate-700/50'
+                      : CATEGORY_META[h.dominantCategory]?.barCls || 'bg-slate-500';
+                  const tip = `${String(h.hour).padStart(2, '0')}h: Deep Work ${h.deepWorkMins}p · Học tập ${h.studyMins}p · Giao tiếp ${h.commMins}p · Xao nhãng ${h.distractionMins}p · Khác ${h.otherMins}p`;
+                  return (
+                    <div key={h.hour} className="flex flex-col items-center gap-1" title={tip}>
+                      <div className="flex h-11 w-full items-end">
+                        <div
+                          className={`w-full rounded-[1px] transition-all ${barCls}`}
+                          style={{ height: `${heightPx}px` }}
+                        />
+                      </div>
+                      <span className="font-mono text-[9px] text-dim">
+                        {h.hour % 3 === 0 ? String(h.hour).padStart(2, '0') : ''}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Distraction Budget Bar */}
+              <div className="border-t pt-2.5 studio-divider">
+                <div className="mb-1 flex items-center justify-between font-mono text-[11px]">
+                  <span className="font-semibold text-sub">Ngân Sách Xao Nhãng Hôm Nay</span>
+                  <span className={isOverBudget ? 'font-bold text-rose-400' : 'font-bold text-main'}>
+                    {activity.distractionMinutes}p / {distractionBudget}p
+                    {isOverBudget ? ' (Vượt ngưỡng!)' : ''}
+                  </span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-[2px] border studio-divider bg-[var(--bg-surface)]">
+                  <div
+                    className={`h-full transition-all ${
+                      isOverBudget
+                        ? 'bg-rose-500'
+                        : distractionPct >= 75
+                          ? 'bg-amber-400'
+                          : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${distractionPct}%` }}
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Top 5 Apps Today */}
+            {/* Top Apps Today + 1-Click Reclassify Picker */}
             <div>
-              <h4 className="mb-2 font-display text-xs font-extrabold uppercase tracking-wide text-dim">
-                Top Ứng Dụng Hôm Nay
-              </h4>
+              <div className="mb-2 flex items-center justify-between">
+                <h4 className="font-display text-xs font-extrabold uppercase tracking-wide text-dim">
+                  Top Ứng Dụng Hôm Nay (Phân loại nhanh 1-click)
+                </h4>
+              </div>
               {activity.topApps.length === 0 ? (
                 <p className="text-xs text-dim">
                   Chưa ghi nhận hoạt động PC nào hôm nay. Bật Tracker để tự động phân loại thời gian làm việc/học tập.
                 </p>
               ) : (
                 <div className="divide-y-2 border-2 studio-divider">
-                  {activity.topApps.slice(0, 5).map((app) => (
+                  {activity.topApps.slice(0, 6).map((app) => (
                     <div
                       key={`${app.processName}-${app.category}`}
-                      className="flex items-center justify-between gap-2 px-3 py-2 text-xs studio-subtle"
+                      className="flex flex-col gap-2 px-3 py-2.5 text-xs studio-subtle sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <span className="truncate font-mono font-bold text-main">
-                        {app.processName}
-                      </span>
-                      <div className="flex shrink-0 items-center gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate font-mono font-bold text-main">
+                          {app.processName}
+                        </span>
                         <span
-                          className={`rounded-[2px] border px-1.5 py-0.5 font-mono text-[10px] font-bold ${
+                          className={`shrink-0 rounded-[2px] border px-1.5 py-0.5 font-mono text-[10px] font-bold ${
                             CATEGORY_META[app.category].badgeCls
                           }`}
                         >
                           {CATEGORY_META[app.category].label}
                         </span>
-                        <span className="w-12 text-right font-mono font-bold text-main">
+                        <span className="shrink-0 font-mono font-bold text-main">
                           {app.minutes}p
                         </span>
                       </div>
+
+                      {onReclassifyApp && (
+                        <div className="flex flex-wrap items-center gap-1">
+                          {QUICK_RECLASSIFY_CHOICES.map((choice) => {
+                            const active = app.category === choice.category;
+                            return (
+                              <button
+                                key={choice.category}
+                                type="button"
+                                disabled={active || busyKey === `reclass-${app.processName}-${choice.category}`}
+                                onClick={() =>
+                                  runBusy(`reclass-${app.processName}-${choice.category}`, () =>
+                                    onReclassifyApp({
+                                      keyword: app.processName,
+                                      category: choice.category,
+                                    })
+                                  )
+                                }
+                                className={`rounded-[2px] border px-1.5 py-0.5 font-mono text-[10px] transition ${
+                                  active
+                                    ? `${CATEGORY_META[choice.category].badgeCls} font-bold`
+                                    : 'studio-divider bg-[var(--bg-surface)] text-dim hover:border-amber-400 hover:text-main'
+                                }`}
+                              >
+                                {choice.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -591,6 +880,39 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   className="h-4 w-4 accent-amber-500"
                 />
               </label>
+
+              <label className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 text-xs studio-subtle">
+                <span className="font-semibold text-main">
+                  Tự tạm dừng Quest khi rời máy (AFK)
+                </span>
+                <input
+                  type="checkbox"
+                  checked={settings.autoPauseQuestOnIdle ?? true}
+                  onChange={(e) =>
+                    onUpdateSettings({ autoPauseQuestOnIdle: e.target.checked })
+                  }
+                  className="h-4 w-4 accent-amber-500"
+                />
+              </label>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-xs studio-subtle">
+                <span className="font-semibold text-main">Ngân sách Xao nhãng (phút/ngày)</span>
+                <div className="flex items-center gap-1 font-mono text-[11px]">
+                  <input
+                    type="number"
+                    min={5}
+                    max={240}
+                    value={settings.distractionBudgetMinutes ?? 45}
+                    onChange={(e) =>
+                      onUpdateSettings({
+                        distractionBudgetMinutes: Math.max(5, Number(e.target.value) || 45),
+                      })
+                    }
+                    className="w-14 px-1.5 py-0.5 text-center text-xs"
+                  />
+                  <span className="text-dim">phút</span>
+                </div>
+              </div>
 
               <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-xs studio-subtle">
                 <label className="flex cursor-pointer items-center gap-2">

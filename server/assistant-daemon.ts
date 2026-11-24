@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { db } from './db.ts';
 import { desktopTracker } from './desktop-tracker.ts';
-import { analyzeDaySchedule, inferSkillIdForTask, timeToMinutes } from './scheduler.ts';
+import { analyzeDaySchedule, timeToMinutes } from './scheduler.ts';
 import { applyTaskContributionToSkill } from './skill-tree-data.ts';
 import { getVnDayOfWeek, getVnNowMinutes, getVnNowParts, getVnTodayKey } from './time-vn.ts';
 import type {
@@ -402,42 +402,52 @@ class AssistantDaemonService {
       .reduce((acc, l) => acc + l.durationSeconds, 0);
 
     const topProc = logs[0]?.processName || 'PC Deep Work';
-    const inferredStat = studySec > deepSec ? 'PER' : 'INT';
-
     const skills = db.getSkills();
-    const targetSkillId =
-      studySec > deepSec
-        ? skills.find((s) => s.id === 'sk-knw-1')?.id ||
-          inferSkillIdForTask(topProc, 'study research active recall', 'PER', skills)
-        : inferSkillIdForTask(topProc, 'deep work coding focus', inferredStat, skills) ||
-          skills.find((s) => s.id === 'sk-int-1')?.id;
 
-    const targetSkill = skills.find((s) => s.id === targetSkillId) || skills[0];
-    if (!targetSkill) {
-      return {
-        ok: false,
-        minutesCredited: 0,
-        skillXpAdded: 0,
-        bonusSp: 0,
-        message: 'Không tìm thấy kỹ năng để quy đổi.',
-      };
+    const buckets: Array<{ skillId: string; minutes: number; label: string }> = [];
+    const totalFocusSec = deepSec + studySec;
+    if (deepSec > 0 && studySec > 0 && totalFocusSec > 0) {
+      const deepMins = Math.max(1, Math.round((deepSec / totalFocusSec) * minutesCredited));
+      const studyMins = Math.max(1, minutesCredited - deepMins);
+      buckets.push({ skillId: 'sk-int-1', minutes: deepMins, label: 'Deep Work' });
+      buckets.push({ skillId: 'sk-knw-1', minutes: studyMins, label: 'Học & Nghiên cứu' });
+    } else if (studySec >= deepSec) {
+      buckets.push({ skillId: 'sk-knw-1', minutes: minutesCredited, label: 'Học & Nghiên cứu' });
+    } else {
+      buckets.push({ skillId: 'sk-int-1', minutes: minutesCredited, label: 'Deep Work' });
     }
 
-    const skillXpAdded = Math.max(15, Math.round(minutesCredited * 2.2));
+    let skillXpAdded = 0;
     let bonusSp = 0;
+    const creditedNames: string[] = [];
 
     db.runTransaction(() => {
-      const res = applyTaskContributionToSkill(targetSkill, {
-        dateKey,
-        title: `PC Focus Sync (${minutesCredited}p · ${topProc})`,
-        minutes: minutesCredited,
-        xpAdded: skillXpAdded,
-      });
-      bonusSp = res.bonusSp;
-      db.saveSkill(targetSkill);
+      const player = db.getPlayer();
+
+      for (const b of buckets) {
+        if (b.minutes <= 0) continue;
+        const targetSkill =
+          skills.find((s) => s.id === b.skillId) ||
+          skills.find((s) => s.id === 'sk-exe-1') ||
+          skills[0];
+        if (!targetSkill) continue;
+
+        const bucketXp = Math.max(10, Math.round(b.minutes * 2.2));
+        skillXpAdded += bucketXp;
+
+        const res = applyTaskContributionToSkill(targetSkill, {
+          dateKey,
+          title: `PC ${b.label} (${b.minutes}p · ${topProc})`,
+          minutes: b.minutes,
+          xpAdded: bucketXp,
+        });
+        bonusSp += res.bonusSp;
+        db.saveSkill(targetSkill);
+        creditedNames.push(`${targetSkill.name} (+${bucketXp} XP)`);
+      }
+
       db.markActivityCredited(dateKey);
 
-      const player = db.getPlayer();
       if (bonusSp > 0) {
         player.skillPoints = (player.skillPoints || 0) + bonusSp;
         player.totalSkillPointsEarned = (player.totalSkillPointsEarned || 0) + bonusSp;
@@ -446,15 +456,15 @@ class AssistantDaemonService {
 
       db.addAuditLog(
         'SKILL_VERIFIED',
-        `Quy đổi ${minutesCredited}p PC Focus → +${skillXpAdded} Skill XP cho "${targetSkill.name}"${bonusSp > 0 ? ` (+${bonusSp} Bonus SP)` : ''}`,
-        { skillId: targetSkill.id, minutesCredited, skillXpAdded, bonusSp }
+        `Quy đổi ${minutesCredited}p PC Focus → ${creditedNames.join(', ')}${bonusSp > 0 ? ` (+${bonusSp} Bonus SP)` : ''}`,
+        { minutesCredited, skillXpAdded, bonusSp, creditedNames }
       );
       db.addMemoryLog({
         id: uid('log'),
         timestamp: new Date().toISOString(),
         agent: 'SCHOLAR',
         eventType: 'QUEST_COMPLETED',
-        summary: `PC Focus Sync: +${minutesCredited}p → "${targetSkill.name}" (+${skillXpAdded} Skill XP)`,
+        summary: `PC Focus Sync: +${minutesCredited}p → ${creditedNames.join(' & ')}`,
         insight: `Theo dõi PC tự động xác thực ${minutesCredited} phút tập trung sâu.`,
       });
     });
@@ -466,7 +476,7 @@ class AssistantDaemonService {
       minutesCredited,
       skillXpAdded,
       bonusSp,
-      message: `Đã quy đổi ${minutesCredited}p tập trung trên PC → +${skillXpAdded} Skill XP cho "${targetSkill.name}"${bonusSp > 0 ? ` (+${bonusSp} Bonus SP!)` : '!'}`,
+      message: `Đã quy đổi ${minutesCredited}p tập trung PC → ${creditedNames.join(' · ')}${bonusSp > 0 ? ` (+${bonusSp} Bonus SP!)` : '!'}`,
     };
   }
 

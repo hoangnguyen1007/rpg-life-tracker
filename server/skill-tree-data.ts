@@ -652,13 +652,24 @@ export function areSkillPrerequisitesMet(skill: SkillNode, allSkills: SkillNode[
   return skill.prerequisiteIds.every((pid) => (map.get(pid)?.masteryTier ?? 0) >= minLv);
 }
 
-export function computePlayerMaxHp(player: PlayerState, skills: SkillNode[]): number {
+export function computePlayerMaxHp(
+  player: PlayerState,
+  skills: SkillNode[],
+  inventory: InventoryItem[] = []
+): number {
   const maxHeartsLevels = skills
     .filter((s) => s.effectCode === 'MAX_HEARTS' || s.id === 'sk-vit-1')
     .reduce((sum, s) => sum + (s.masteryTier ?? 0), 0);
   // Base 100 HP (5 hearts * 20 HP). Every 2 player levels adds +10 HP; each MAX_HEARTS level adds +20 HP (1 full Heart).
   const levelBonus = Math.floor(Math.max(0, player.level - 1) / 2) * 10;
-  return 100 + levelBonus + maxHeartsLevels * 20;
+  let armorHpBonus = 0;
+  for (const inv of inventory) {
+    if (!inv.equipped) continue;
+    if (inv.effectCode === 'BUFF_RECOVERY_15_HP_10') armorHpBonus += 10;
+    else if (inv.effectCode === 'BUFF_FATIGUE_REDUCE_25') armorHpBonus += 20;
+    else if (inv.effectCode === 'BUFF_HEARTS_2_FATIGUE_20') armorHpBonus += 40;
+  }
+  return 100 + levelBonus + maxHeartsLevels * 20 + armorHpBonus;
 }
 
 export function computePlayerGrowthBonuses(
@@ -735,14 +746,53 @@ export function computePlayerGrowthBonuses(
   const equippedEffects = new Set(
     inventory.filter((i) => i.equipped).map((i) => i.effectCode)
   );
+  if (equippedEffects.has('BUFF_XP_10')) xpBonusPct += 10;
   if (equippedEffects.has('BUFF_XP_15')) xpBonusPct += 15;
+  if (equippedEffects.has('BUFF_XP_18_FOCUS_15')) {
+    xpBonusPct += 18;
+    focusBonusPct += 15;
+  }
+  if (equippedEffects.has('BUFF_BOSS_25_XP_10')) {
+    bossDamageBonusPct += 25;
+    xpBonusPct += 10;
+  }
+  if (equippedEffects.has('BUFF_FOCUS_12')) focusBonusPct += 12;
+  if (equippedEffects.has('BUFF_FOCUS_15_FATIGUE_10')) {
+    focusBonusPct += 15;
+    fatigueReductionPct += 10;
+  }
+  if (equippedEffects.has('BUFF_FOCUS_18_MASTERY_10')) {
+    focusBonusPct += 18;
+    masteryBonusPct += 10;
+  }
+  if (equippedEffects.has('BUFF_MASTERY_10')) masteryBonusPct += 10;
   if (equippedEffects.has('BUFF_MASTERY_20')) masteryBonusPct += 20;
+  if (equippedEffects.has('BUFF_MASTERY_25_BOSS_15')) {
+    masteryBonusPct += 25;
+    bossDamageBonusPct += 15;
+  }
+  if (equippedEffects.has('BUFF_GOLD_10_FOCUS_8')) {
+    goldBonusPct += 10;
+    focusBonusPct += 8;
+  }
+  if (equippedEffects.has('BUFF_GOLD_20')) goldBonusPct += 20;
+  if (equippedEffects.has('BUFF_RECOVERY_15_HP_10')) recoveryBonusPct += 15;
+  if (equippedEffects.has('BUFF_RECOVERY_25_GOLD_15')) {
+    recoveryBonusPct += 25;
+    goldBonusPct += 15;
+  }
   if (equippedEffects.has('BUFF_FATIGUE_REDUCE_25')) fatigueReductionPct += 25;
+  if (equippedEffects.has('BUFF_HEARTS_2_FATIGUE_20')) fatigueReductionPct += 20;
+  if (equippedEffects.has('BUFF_OMNI_15')) {
+    xpBonusPct += 15;
+    masteryBonusPct += 15;
+    goldBonusPct += 15;
+  }
 
   masteryBonusPct += shadows.length * 2;
   fatigueReductionPct = Math.min(65, fatigueReductionPct);
 
-  const maxHp = computePlayerMaxHp(player, skills);
+  const maxHp = computePlayerMaxHp(player, skills, inventory);
   const maxHearts = Math.max(5, Math.round(maxHp / 20));
 
   return {

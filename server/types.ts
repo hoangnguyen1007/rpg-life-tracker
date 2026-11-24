@@ -187,6 +187,8 @@ export interface StoryChapter {
 }
 
 export type ShopItemCategory = 'artifact' | 'consumable' | 'real_reward';
+export type ItemRarity = 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY' | 'MYTHIC';
+export type EquipmentSlot = 'weapon' | 'armor' | 'helm' | 'accessory' | 'tome' | 'boots';
 
 export interface ShopItem {
   id: string;
@@ -197,6 +199,11 @@ export interface ShopItem {
   price: number;
   effectCode: string;
   effectLabel: string;
+  rarity?: ItemRarity;
+  slot?: EquipmentSlot;
+  iconKey?: string;
+  statFocus?: AttributeKey;
+  lore?: string;
   isCustom?: boolean;
 }
 
@@ -208,6 +215,10 @@ export interface InventoryItem {
   category: ShopItemCategory;
   effectCode: string;
   effectLabel: string;
+  rarity?: ItemRarity;
+  slot?: EquipmentSlot;
+  iconKey?: string;
+  statFocus?: AttributeKey;
   quantity: number;
   equipped: boolean;
   acquiredAt: string;
@@ -443,6 +454,9 @@ export interface Quest {
   actualStartTime?: string;
   actualEndTime?: string;
   linkedBlockId?: string;
+  verifiedFocusSeconds?: number;
+  distractionSeconds?: number;
+  focusIntegrityPct?: number;
 }
 
 export interface TaskDraftAnalysis {
@@ -741,6 +755,8 @@ export interface AssistantSettings {
   quietHoursEnd: string; // default '07:00'
   autoCreditSkillXp: boolean;
   customRules: ActivityRule[];
+  autoPauseQuestOnIdle?: boolean; // default true
+  distractionBudgetMinutes?: number; // default 45
 }
 
 export interface StartupStatusPayload {
@@ -778,6 +794,25 @@ export interface DailyActivitySummary {
     minutes: number;
   }>;
   recentLogs: ActivityLogEntry[];
+  hourlyBreakdown?: Array<{
+    hour: number; // 6..23
+    deepWorkMins: number;
+    studyMins: number;
+    commMins: number;
+    distractionMins: number;
+    otherMins: number;
+    dominantCategory: ActivityCategory | 'none';
+  }>;
+  peakFocusHour?: string | null; // e.g. "09:00–10:00"
+  distractionBudgetMinutes?: number;
+  suggestedFocusSession?: {
+    minutes: number;
+    topApp: string;
+    dominantCategory: 'deep_work' | 'study_research';
+    suggestedTitle: string;
+    primaryStat: AttributeKey;
+    skillName?: string;
+  } | null;
 }
 
 export interface MorningBriefingPayload {

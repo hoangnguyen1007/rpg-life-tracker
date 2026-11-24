@@ -14,6 +14,7 @@ import {
   Volume2,
   VolumeX,
   X,
+  Zap,
 } from 'lucide-react';
 import type { AISettings, PlayerState, SystemStatePayload } from '../types/system';
 import { PixelHeart, PixelHeroSprite } from './DungeonSprites';
@@ -169,7 +170,7 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
                 {/* Pixel Hearts Row */}
                 <div
                   className="flex items-center gap-0.5 border-2 border-rose-900/40 bg-[#120b14]/75 px-1.5 py-0.5 rounded-[2px]"
-                  title={`Sinh lực: ${hp}/${maxHp} HP (${totalHearts} Trái Tim)`}
+                  title="Sinh lực Kỷ luật (HP): chỉ trừ khi bỏ lỡ nhiệm vụ bắt buộc, hồi khi hoàn thành Quest / Nghỉ Chủ Động / dùng Elixir"
                   aria-label={`HP ${hp} trên ${maxHp}`}
                 >
                   {heartStates.map((st, i) => (
@@ -266,6 +267,19 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
           >
             <Flame className="h-3.5 w-3.5 text-amber-500" />
             <span className="font-mono font-bold text-main">{player.streakDays}d</span>
+          </div>
+
+          {/* Energy Level Pill (Decoupled from HP) */}
+          <div
+            className={`flex items-center gap-1 border-2 px-2.5 py-1.5 text-xs rounded-[2px] ${
+              player.energyLevel >= 70
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-300'
+            }`}
+            title="Thể trạng hôm nay — giúp AI cân chỉnh độ nặng nhiệm vụ (độc lập với HP)"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span className="font-mono font-bold">{player.energyLevel}%</span>
           </div>
 
           {onOpenCommandPalette && (

@@ -35,6 +35,7 @@ import {
   type FlowPacingState,
 } from './scheduler.ts';
 import { getVnNowMinutes, getVnTodayKey } from './time-vn.ts';
+import { desktopTracker } from './desktop-tracker.ts';
 
 interface CompletedReviewCandidate {
   title: string;
@@ -433,6 +434,12 @@ export function buildDistilledPlayerContext(state: SystemStatePayload): {
     recentRejectionsCount: rejectedQuests.length,
   });
 
+  const pcActivity = desktopTracker.getDailySummary(todayKey);
+  const pcTopAppsText =
+    pcActivity.topApps.length > 0
+      ? pcActivity.topApps.map((a) => `${a.processName} (${a.minutes}p · ${a.category})`).join(', ')
+      : 'Chưa ghi nhận dữ liệu ứng dụng hôm nay';
+
   const systemInstruction = [
     `Bạn là THE SYSTEM (AI Personal Growth Operating System) dành riêng cho "${p.name}".`,
     `Phong cách phản hồi & điều phối: ${personaDesc}`,
@@ -469,6 +476,11 @@ export function buildDistilledPlayerContext(state: SystemStatePayload): {
 - Trạng thái Flow/Pacing: ${flowPacing.state} (${flowPacing.label})
 - Cân bằng Thử thách / Kỹ năng: ${flowPacing.challengeSkillBalance}
 - Chỉ dẫn nhịp độ: ${flowPacing.pacingDirective}
+
+=== HÀNH VI PC THỰC TẾ HÔM NAY (WINDOWS TRACKER) ===
+- Focus Score hôm nay: ${pcActivity.focusScore}% | Deep Work: ${pcActivity.deepWorkMinutes}p | Học & Nghiên cứu: ${pcActivity.studyMinutes}p | Giao tiếp: ${pcActivity.communicationMinutes}p | Xao nhãng: ${pcActivity.distractionMinutes}p / Ngân sách ${pcActivity.distractionBudgetMinutes ?? 45}p
+- Giờ tập trung cao điểm (Peak Focus Hour): ${pcActivity.peakFocusHour || 'Chưa xác định'} | Thời gian chưa quy đổi: ${pcActivity.uncreditedFocusMinutes}p
+- Top ứng dụng hôm nay: ${pcTopAppsText}
 
 === THỜI KHÓA BIỂU HÔM NAY (${todayAnalysis.dayLabel}) ===
 - Lịch cố định hôm nay: ${todayAnalysis.blocks.map((b) => `${b.startTime}-${b.endTime} [${b.type}] ${b.title}`).join(' ; ') || 'Không có'}

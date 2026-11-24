@@ -1,4 +1,5 @@
 import type {
+  ActivityCategory,
   AIChatThread,
   AIConsultResponse,
   AIDayPlanResult,
@@ -270,6 +271,8 @@ export const systemApi = {
     description?: string;
     currency: 'gold' | 'runestones';
     price: number;
+    iconKey?: string;
+    rarity?: 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY' | 'MYTHIC';
   }) =>
     request<SystemStatePayload>('/api/shop/custom', {
       method: 'POST',
@@ -473,5 +476,37 @@ export const systemApi = {
       state: SystemStatePayload;
     }>('/api/assistant/activity/sync-skill', {
       method: 'POST',
+    }),
+
+  reclassifyActivityApp: (payload: {
+    keyword: string;
+    category: Exclude<ActivityCategory, 'idle'>;
+    retroactive?: boolean;
+  }) =>
+    request<{ ok: boolean; updatedRows: number; message: string; overview: AssistantOverviewPayload }>(
+      '/api/assistant/activity/reclassify',
+      {
+        method: 'POST',
+        body: JSON.stringify({ ...payload, retroactive: payload.retroactive ?? true }),
+      }
+    ),
+
+  convertActivityToQuest: (payload: {
+    mode: 'complete_new' | 'credit_pending';
+    title?: string;
+    questId?: string;
+    primaryStat?: AttributeKey;
+  }) =>
+    request<{
+      ok: boolean;
+      message: string;
+      xpGain?: number;
+      goldGain?: number;
+      spGain?: number;
+      overview: AssistantOverviewPayload;
+      state: SystemStatePayload;
+    }>('/api/assistant/activity/convert-to-quest', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
 };

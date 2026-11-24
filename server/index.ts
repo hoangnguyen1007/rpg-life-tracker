@@ -51,6 +51,7 @@ import type {
   AIChatMessage,
   AIConsultRequest,
   AISettings,
+  ActivityCategory,
   AssistantSettings,
   AttributeKey,
   BossMission,
@@ -702,10 +703,6 @@ app.post('/api/player/checkin', (req, res) => {
   };
   if (typeof energyLevel === 'number') {
     player.energyLevel = Math.max(10, Math.min(100, energyLevel));
-    player.hp = Math.max(
-      10,
-      Math.min(player.maxHp, Math.round((player.energyLevel / 100) * player.maxHp))
-    );
   }
   if (typeof fatigue === 'number') {
     player.fatigue = Math.max(0, Math.min(100, fatigue));
@@ -735,8 +732,7 @@ app.post('/api/player/reflect', (req, res) => {
     if (plannedRestMode) {
       player.energyLevel = Math.min(100, player.energyLevel + 15);
       player.fatigue = Math.max(0, player.fatigue - 20);
-      const targetHp = Math.round((player.energyLevel / 100) * player.maxHp);
-      player.hp = Math.min(player.maxHp, Math.max((player.hp ?? player.maxHp) + 25, targetHp));
+      player.hp = Math.min(player.maxHp, (player.hp ?? player.maxHp) + 25);
     }
     db.savePlayer(player);
   }
@@ -1810,13 +1806,20 @@ app.post('/api/quests/:id/complete', (req, res) => {
       inventory.filter((i) => i.equipped).map((i) => i.effectCode)
     );
     const hasOverdrive = player.activeBuffs.includes('OVERDRIVE_1.5X');
+    const hasDoubleXp = player.activeBuffs.includes('DOUBLE_XP_2X');
+    const hasEspresso = player.activeBuffs.includes('ESPRESSO_FOCUS');
 
     const prevRank = player.rank;
 
     let xpMult =
       (dungeonCleared ? 1.25 + growthBonuses.focusBonusPct / 100 : 1.0) +
       growthBonuses.xpBonusPct / 100;
+    if ((quest.verifiedFocusSeconds ?? 0) >= 600 && (quest.focusIntegrityPct ?? 0) >= 80) {
+      xpMult += 0.15;
+    }
+    if (hasEspresso) xpMult += 0.15;
     if (hasOverdrive) xpMult *= 1.5;
+    if (hasDoubleXp) xpMult *= 2.0;
 
     let goldMult = 1.0 + growthBonuses.goldBonusPct / 100;
     if (hasOverdrive) goldMult *= 1.5;
@@ -1830,8 +1833,10 @@ app.post('/api/quests/:id/complete', (req, res) => {
     player.gold += goldGain;
     awardSkillPoints(player, spGain);
 
-    if (hasOverdrive) {
-      player.activeBuffs = player.activeBuffs.filter((b) => b !== 'OVERDRIVE_1.5X');
+    if (hasOverdrive || hasDoubleXp || hasEspresso) {
+      player.activeBuffs = player.activeBuffs.filter(
+        (b) => b !== 'OVERDRIVE_1.5X' && b !== 'DOUBLE_XP_2X' && b !== 'ESPRESSO_FOCUS'
+      );
     }
 
     const todayKey = getTodayKey();
@@ -2559,6 +2564,11 @@ app.post('/api/shop/buy', (req, res) => {
       existingInv.quantity += 1;
       db.saveInventoryItem(existingInv);
     } else {
+      const slotOccupied =
+        item.category === 'artifact' &&
+        Boolean(item.slot) &&
+        inventory.some((inv) => inv.equipped && inv.slot === item.slot);
+      const shouldAutoEquip = item.category === 'artifact' && !slotOccupied;
       db.saveInventoryItem({
         id: uid('inv'),
         itemId: item.id,
@@ -2567,12 +2577,20 @@ app.post('/api/shop/buy', (req, res) => {
         category: item.category,
         effectCode: item.effectCode,
         effectLabel: item.effectLabel,
+        rarity: item.rarity,
+        slot: item.slot,
+        iconKey: item.iconKey,
+        statFocus: item.statFocus,
         quantity: 1,
-        equipped: item.category === 'artifact',
+        equipped: shouldAutoEquip,
         acquiredAt: getTodayKey(),
       });
     }
 
+    player.equippedArtifactIds = db
+      .getInventory()
+      .filter((i) => i.equipped)
+      .map((i) => i.itemId);
     db.savePlayer(player);
     db.addMemoryLog({
       id: uid('log'),
@@ -2589,15 +2607,18 @@ app.post('/api/shop/buy', (req, res) => {
     );
   });
 
+  db.checkpointWal();
   res.json(buildStatePayload());
 });
 
 app.post('/api/shop/custom', (req, res) => {
-  const { name, description, currency, price } = req.body as {
+  const { name, description, currency, price, iconKey, rarity } = req.body as {
     name: string;
     description?: string;
     currency: 'gold' | 'runestones';
     price: number;
+    iconKey?: string;
+    rarity?: 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY' | 'MYTHIC';
   };
   if (!name || !name.trim() || !price || price < 1) {
     res.status(400).json({ error: 'Tên phần thưởng và giá phải hợp lệ.' });
@@ -2607,11 +2628,14 @@ app.post('/api/shop/custom', (req, res) => {
     id: uid('item-custom'),
     name: name.trim(),
     description: description?.trim() || 'Phần thưởng tự thiết lập để tự động viên sau chuỗi ngày nỗ lực.',
+    lore: 'Phần thưởng cá nhân giúp duy trì dopamine lành mạnh và kỷ luật bền vững.',
     category: 'real_reward',
     currency: currency === 'runestones' ? 'runestones' : 'gold',
     price: Math.round(price),
     effectCode: 'REDEEM_VOUCHER',
     effectLabel: 'Phần thưởng cá nhân ngoài đời',
+    iconKey: iconKey?.trim() || 'gift_box',
+    rarity: rarity || 'RARE',
     isCustom: true,
   });
   db.checkpointWal();
@@ -2646,20 +2670,62 @@ app.post('/api/inventory/use', (req, res) => {
     let msg = '';
 
     if (inv.category === 'artifact') {
-      inv.equipped = !inv.equipped;
+      const nextEquipped = !inv.equipped;
+      let swappedName: string | null = null;
+      if (nextEquipped && inv.slot) {
+        for (const other of db.getInventory()) {
+          if (other.id !== inv.id && other.equipped && other.slot === inv.slot) {
+            other.equipped = false;
+            db.saveInventoryItem(other);
+            swappedName = other.name;
+          }
+        }
+      }
+      inv.equipped = nextEquipped;
       db.saveInventoryItem(inv);
-      msg = inv.equipped ? `Đã trang bị "${inv.name}" (${inv.effectLabel}).` : `Đã tháo trang bị "${inv.name}".`;
+      player.equippedArtifactIds = db
+        .getInventory()
+        .filter((i) => i.equipped)
+        .map((i) => i.itemId);
+      db.savePlayer(player);
+      msg = inv.equipped
+        ? swappedName
+          ? `Đã trang bị "${inv.name}" (thay cho "${swappedName}").`
+          : `Đã trang bị "${inv.name}" (${inv.effectLabel}).`
+        : `Đã tháo trang bị "${inv.name}".`;
     } else {
-      if (inv.effectCode === 'USE_ELIXIR') {
+      if (inv.effectCode === 'USE_HYDRATION') {
+        player.hp = Math.min(player.maxHp, (player.hp ?? player.maxHp) + 15);
+        player.energyLevel = Math.min(100, player.energyLevel + 15);
+        player.fatigue = Math.max(0, player.fatigue - 10);
+        msg = 'Đã uống Bình Nước Điện Giải: +15 HP, +15% Energy & -10% Fatigue!';
+      } else if (inv.effectCode === 'USE_ESPRESSO') {
+        player.energyLevel = Math.min(100, player.energyLevel + 20);
+        if (!player.activeBuffs.includes('ESPRESSO_FOCUS')) {
+          player.activeBuffs.push('ESPRESSO_FOCUS');
+        }
+        msg = 'Đã dùng Espresso: +20% Energy & +15% XP cho Quest tiếp theo!';
+      } else if (inv.effectCode === 'USE_ELIXIR') {
         player.hp = Math.min(player.maxHp, (player.hp ?? player.maxHp) + 40);
         player.energyLevel = Math.min(100, player.energyLevel + 25);
         player.fatigue = Math.max(0, player.fatigue - 30);
-        msg = 'Đã dùng Elixir: +40 HP, +25% Energy và -30% Fatigue!';
+        msg = 'Đã dùng Elixir NSDR: +40 HP, +25% Energy và -30% Fatigue!';
+      } else if (inv.effectCode === 'USE_FULL_RESTORE') {
+        player.hp = player.maxHp;
+        player.energyLevel = 100;
+        player.fatigue = 0;
+        player.penaltyActive = false;
+        msg = 'Linh Dược Phượng Hoàng: Hồi đầy 100% HP & Energy, xóa sạch Fatigue!';
       } else if (inv.effectCode === 'USE_OVERDRIVE') {
         if (!player.activeBuffs.includes('OVERDRIVE_1.5X')) {
           player.activeBuffs.push('OVERDRIVE_1.5X');
         }
         msg = 'Đã kích hoạt Overdrive: Quest kế tiếp nhận x1.5 XP & Gold!';
+      } else if (inv.effectCode === 'USE_DOUBLE_XP') {
+        if (!player.activeBuffs.includes('DOUBLE_XP_2X')) {
+          player.activeBuffs.push('DOUBLE_XP_2X');
+        }
+        msg = 'Đã kích hoạt Tinh Thể Siêu Tập Trung: x2.0 XP Quest kế tiếp!';
       } else if (inv.effectCode === 'USE_HIDDEN_SCROLL') {
         db.saveQuest({
           id: uid('q-scroll'),
@@ -2685,7 +2751,41 @@ app.post('/api/inventory/use', (req, res) => {
           requiresProof: true,
           createdAt: new Date().toISOString(),
         });
-        msg = 'Đã mở khóa 1 Hidden Quest mới trong tab Hôm nay & AI!';
+        msg = 'Đã mở khóa 1 Hidden Quest mới trong tab Hôm Nay!';
+      } else if (inv.effectCode === 'USE_RAID_SCROLL') {
+        db.saveQuest({
+          id: uid('q-raid'),
+          dateKey: getTodayKey(),
+          type: 'hidden',
+          rank: 'S',
+          title: '[RAID SPRINT] Đột Phá 60 Phút Không Khoan Nhượng',
+          description: 'Mở khóa từ Ấn Ký Phá Giáp Boss: dồn toàn lực 60 phút cho đầu việc quan trọng nhất để bứt phá cột mốc.',
+          learningMethod: 'Ultradian Raid Sprint',
+          reasoning: 'Kích hoạt từ Ấn Ký Phá Giáp Boss trong Kho đồ.',
+          agentSource: 'ARCHITECT',
+          scheduledSlot: 'Flexible Raid Slot',
+          durationMinutes: 60,
+          xpReward: 220,
+          masteryReward: 45,
+          goldReward: 160,
+          statRewards: { INT: 2, STR: 1, AGI: 2 },
+          subtasks: [
+            { id: uid('rs-1'), label: 'Tắt toàn bộ thiết bị gây xao nhãng trong 60 phút', done: false },
+            { id: uid('rs-2'), label: 'Xuất ra 1 sản phẩm / kết quả kiểm chứng được', done: false },
+          ],
+          status: 'pending',
+          requiresProof: true,
+          createdAt: new Date().toISOString(),
+        });
+        msg = 'Đã triệu hồi Raid Sprint 60p Rank S trong tab Hôm Nay!';
+      } else if (inv.effectCode === 'USE_GRACE_SHIELD') {
+        player.plannedRestMode = true;
+        player.hp = Math.min(player.maxHp, (player.hp ?? player.maxHp) + 25);
+        msg = 'Khiên Bảo Hộ đã bật Nghỉ Chủ Động hôm nay & hồi +25 HP!';
+      } else if (inv.effectCode === 'USE_SP_SHARD') {
+        awardSkillPoints(player, 1);
+        player.masteryScore += 30;
+        msg = 'Hấp thụ Mảnh Tinh Hoa: +1 Điểm Kĩ Năng (SP) & +30 Mastery!';
       } else {
         msg = `Đã sử dụng phần thưởng "${inv.name}" — Hãy tận hưởng thành quả xứng đáng của bạn!`;
       }
@@ -2703,6 +2803,7 @@ app.post('/api/inventory/use', (req, res) => {
     return msg;
   });
 
+  db.checkpointWal();
   res.json({ message, state: buildStatePayload() });
 });
 
@@ -2879,6 +2980,282 @@ app.post('/api/assistant/activity/record-sample', (req, res) => {
   });
   db.checkpointWal();
   res.json(assistantDaemon.getOverview(buildStatePayload()));
+});
+
+app.post('/api/assistant/activity/reclassify', (req, res) => {
+  const { keyword, category, retroactive } = (req.body || {}) as {
+    keyword?: string;
+    category?: Exclude<ActivityCategory, 'idle'>;
+    retroactive?: boolean;
+  };
+
+  const cleanKw = (keyword || '').trim().toLowerCase();
+  const validCategories: Array<Exclude<ActivityCategory, 'idle'>> = [
+    'deep_work',
+    'study_research',
+    'communication',
+    'distraction',
+    'other',
+  ];
+  if (!cleanKw || !category || !validCategories.includes(category)) {
+    res.status(400).json({ error: 'Cần nhập từ khóa và nhóm phân loại hợp lệ.' });
+    return;
+  }
+
+  const current = db.getAssistantSettings();
+  const filteredRules = current.customRules.filter(
+    (r) => r.keyword.trim().toLowerCase() !== cleanKw
+  );
+  const nextRules = [{ id: uid('rule'), keyword: cleanKw, category }, ...filteredRules];
+  db.saveAssistantSettings({ ...current, customRules: nextRules });
+
+  let updatedRows = 0;
+  if (retroactive !== false) {
+    updatedRows = db.reclassifyTodayActivityLogs(cleanKw, category, getVnTodayKey());
+  }
+
+  db.checkpointWal();
+
+  const overview = assistantDaemon.getOverview(buildStatePayload());
+  res.json({
+    ok: true,
+    updatedRows,
+    message: `Đã phân loại "${cleanKw}" → ${category}${updatedRows > 0 ? ` (cập nhật ${updatedRows} bản ghi hôm nay)` : ''}.`,
+    overview,
+  });
+});
+
+app.post('/api/assistant/activity/convert-to-quest', (req, res) => {
+  const body = (req.body || {}) as {
+    mode?: 'complete_new' | 'credit_pending';
+    title?: string;
+    questId?: string;
+    primaryStat?: AttributeKey;
+  };
+  const mode = body.mode === 'credit_pending' ? 'credit_pending' : 'complete_new';
+  const dateKey = getVnTodayKey();
+  const focusLogs = db
+    .getActivityLogsByDate(dateKey)
+    .filter(
+      (l) => !l.creditedToSkill && (l.category === 'deep_work' || l.category === 'study_research')
+    );
+
+  const totalSec = focusLogs.reduce((acc, l) => acc + l.durationSeconds, 0);
+  const uncreditedMins = Math.floor(totalSec / 60);
+
+  if (mode === 'credit_pending') {
+    if (!body.questId) {
+      res.status(400).json({ error: 'Thiếu questId để cộng giờ tập trung vào nhiệm vụ.' });
+      return;
+    }
+    const quest = db.getQuestById(body.questId);
+    if (!quest || quest.status !== 'pending') {
+      res.status(404).json({ error: 'Không tìm thấy nhiệm vụ đang chờ phù hợp.' });
+      return;
+    }
+    if (uncreditedMins < 1) {
+      res.status(400).json({ error: 'Chưa có thời gian tập trung mới để cộng vào nhiệm vụ.' });
+      return;
+    }
+
+    db.runTransaction(() => {
+      quest.pausedAccumulatedSeconds = (quest.pausedAccumulatedSeconds || 0) + totalSec;
+      quest.verifiedFocusSeconds = (quest.verifiedFocusSeconds || 0) + totalSec;
+      const vf = quest.verifiedFocusSeconds || 0;
+      const ds = quest.distractionSeconds || 0;
+      quest.focusIntegrityPct = vf + ds > 0 ? Math.round((vf / (vf + ds)) * 100) : 100;
+      if (!quest.startedAt) {
+        quest.isPaused = true;
+      }
+      db.saveQuest(quest);
+      db.markActivityCredited(dateKey);
+    });
+    db.checkpointWal();
+
+    const state = buildStatePayload();
+    res.json({
+      ok: true,
+      message: `Đã cộng +${uncreditedMins} phút Focus PC vào nhiệm vụ "${quest.title}"!`,
+      overview: assistantDaemon.getOverview(state),
+      state,
+    });
+    return;
+  }
+
+  if (uncreditedMins < 10) {
+    res.status(400).json({
+      error: `Cần tối thiểu 10 phút Deep Work / Học tập chưa quy đổi (hiện có ${uncreditedMins}p).`,
+    });
+    return;
+  }
+
+  const outcome = db.runTransaction(() => {
+    const player = db.getPlayer();
+    const skills = db.getSkills();
+    const inventory = db.getInventory();
+    const shadows = db.getShadows();
+    const growthBonuses = computePlayerGrowthBonuses(player, skills, inventory, shadows);
+
+    const studySec = focusLogs
+      .filter((l) => l.category === 'study_research')
+      .reduce((acc, l) => acc + l.durationSeconds, 0);
+    const deepSec = focusLogs
+      .filter((l) => l.category === 'deep_work')
+      .reduce((acc, l) => acc + l.durationSeconds, 0);
+    const procTotals = new Map<string, number>();
+    for (const l of focusLogs) {
+      procTotals.set(l.processName, (procTotals.get(l.processName) || 0) + l.durationSeconds);
+    }
+    const topProc =
+      Array.from(procTotals.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || 'PC Focus';
+
+    const primaryStat: AttributeKey =
+      body.primaryStat || (studySec > deepSec ? 'PER' : 'INT');
+    const qRank: QuestRank =
+      uncreditedMins >= 60 ? 'B' : uncreditedMins >= 35 ? 'C' : 'D';
+    const questTitle =
+      body.title?.trim() ||
+      (studySec > deepSec
+        ? `Phiên Nghiên cứu & Học sâu (${topProc} · ${uncreditedMins}p)`
+        : `Phiên Deep Work trên ${topProc} (${uncreditedMins}p)`);
+
+    const balanced = computeBalancedQuestRewards({
+      durationMinutes: uncreditedMins,
+      rank: qRank,
+      type: 'daily',
+      requiresProof: false,
+      primaryStat,
+      secondaryStat: 'AGI',
+    });
+
+    const targetSkillId =
+      inferSkillIdForTask(questTitle, 'pc tracker focus', primaryStat, skills) ||
+      (studySec > deepSec ? 'sk-knw-1' : 'sk-int-1');
+
+    const xpMult = 1.0 + growthBonuses.xpBonusPct / 100 + 0.15; // Flow focus integrity 100%
+    const goldMult = 1.0 + growthBonuses.goldBonusPct / 100;
+    const xpGain = Math.max(15, Math.round(balanced.xpReward * xpMult));
+    const goldGain = Math.max(10, Math.round(balanced.goldReward * goldMult));
+    let spGain = uncreditedMins >= 45 ? 2 : 1;
+    const masteryGain = Math.round(
+      balanced.masteryReward * (1.0 + growthBonuses.masteryBonusPct / 100)
+    );
+
+    const endHHmm = getVnTimeHHmm();
+    const startHHmm = minutesToTime(Math.max(0, getVnNowMinutes() - uncreditedMins));
+
+    const completedQuest: Quest = {
+      id: uid('q-pc'),
+      dateKey,
+      type: 'daily',
+      rank: qRank,
+      title: questTitle,
+      description: `Tự động tạo & nghiệm thu từ ${uncreditedMins} phút tập trung thật trên PC (${topProc}).`,
+      learningMethod: 'Verified PC Deep Work Session',
+      reasoning: 'Đồng bộ trực tiếp từ Windows Activity Tracker.',
+      agentSource: 'ARCHITECT',
+      skillId: targetSkillId,
+      scheduledSlot: `${startHHmm} - ${endHHmm} (PC Sync)`,
+      durationMinutes: uncreditedMins,
+      actualDurationMinutes: uncreditedMins,
+      actualStartTime: startHHmm,
+      actualEndTime: endHHmm,
+      verifiedFocusSeconds: totalSec,
+      distractionSeconds: 0,
+      focusIntegrityPct: 100,
+      xpReward: balanced.xpReward,
+      masteryReward: balanced.masteryReward,
+      goldReward: balanced.goldReward,
+      statRewards: balanced.statRewards,
+      subtasks: [],
+      status: 'completed',
+      requiresProof: false,
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+    };
+    db.saveQuest(completedQuest);
+
+    player.currentXp += xpGain;
+    player.gold += goldGain;
+    player.masteryScore += masteryGain;
+    player.runestones += 1;
+    awardSkillPoints(player, spGain);
+
+    for (const [k, v] of Object.entries(balanced.statRewards)) {
+      const key = k as AttributeKey;
+      if (typeof v === 'number') {
+        player.stats[key] = (player.stats[key] || 0) + v;
+      }
+    }
+
+    if (player.streakDays === 0 || player.lastCheckinDate !== dateKey) {
+      player.streakDays += 1;
+      player.lastCheckinDate = dateKey;
+    }
+
+    applyLevelUps(player);
+
+    const targetSkill = skills.find((s) => s.id === targetSkillId) || skills[0];
+    if (targetSkill) {
+      const skillXp = Math.max(12, Math.round(xpGain * 0.65));
+      const { bonusSp } = applyTaskContributionToSkill(targetSkill, {
+        dateKey,
+        title: questTitle,
+        minutes: uncreditedMins,
+        xpAdded: skillXp,
+      });
+      if (bonusSp > 0) {
+        awardSkillPoints(player, bonusSp);
+        spGain += bonusSp;
+      }
+      db.saveSkill(targetSkill);
+    }
+
+    advanceMinionWaveOnQuestComplete(player);
+    player.rank = computeRankFromMastery(player.masteryScore);
+    db.savePlayer(player);
+
+    db.recordDailyProgress({
+      dateKey,
+      questsCompleted: 1,
+      focusMinutes: uncreditedMins,
+      xpEarned: xpGain,
+      masteryEarned: masteryGain,
+      energyLevel: player.energyLevel,
+    });
+
+    db.markActivityCredited(dateKey);
+
+    db.addAuditLog(
+      'QUEST_COMPLETED',
+      `Nghiệm thu ${uncreditedMins}p Focus PC thành Quest "${questTitle}" (+${xpGain} XP, +${spGain} SP, +${goldGain}G)`,
+      { questId: completedQuest.id, uncreditedMins, xpGain, goldGain, spGain }
+    );
+    db.addMemoryLog({
+      id: uid('log'),
+      timestamp: new Date().toISOString(),
+      agent: 'ARCHITECT',
+      eventType: 'QUEST_COMPLETED',
+      summary: `PC Focus → Quest "${questTitle}" (+${xpGain} XP, +${goldGain}G, +${spGain} SP)`,
+      insight: `Quy đổi ${uncreditedMins} phút Deep Work/Study xác thực trên PC thành nhiệm vụ hoàn thành.`,
+    });
+
+    return {
+      xpGain,
+      goldGain,
+      spGain,
+      message: `Đã nghiệm thu ${uncreditedMins}p tập trung PC thành Quest hoàn chỉnh (+${xpGain} XP, +${goldGain}G, +${spGain} SP)!`,
+    };
+  });
+
+  db.checkpointWal();
+  const state = buildStatePayload();
+  res.json({
+    ok: true,
+    ...outcome,
+    overview: assistantDaemon.getOverview(state),
+    state,
+  });
 });
 
 const distDir = path.resolve(process.cwd(), 'dist');

@@ -1,105 +1,261 @@
 import crypto from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { db } from './db.ts';
-import { getVnTodayKey } from './time-vn.ts';
+import { inferSkillIdForTask } from './scheduler.ts';
+import { VN_TIMEZONE, getVnTodayKey } from './time-vn.ts';
 import type {
   ActivityCategory,
   ActivityLogEntry,
   ActivityRule,
+  AttributeKey,
   DailyActivitySummary,
 } from './types.ts';
 
-const DEEP_WORK_KEYWORDS = [
+const DEEP_WORK_PROCESSES = new Set([
   'code',
   'cursor',
+  'windsurf',
+  'antigravity',
+  'antigravity ide',
   'idea64',
   'pycharm',
+  'pycharm64',
   'webstorm',
+  'webstorm64',
+  'clion',
+  'clion64',
+  'rider',
+  'rider64',
+  'goland',
+  'goland64',
+  'phpstorm',
+  'datagrip',
+  'studio64',
   'devenv',
+  'sublime_text',
+  'notepad++',
+  'zed',
+  'eclipse',
+  'netbeans',
+  'devcpp',
+  'codeblocks',
+  'nvim',
+  'neovim',
   'windowsterminal',
-  'powershell',
-  'cmd',
   'wt',
+  'powershell',
+  'pwsh',
+  'cmd',
+  'wsl',
+  'ubuntu',
+  'docker',
+  'postman',
+  'insomnia',
+  'bruno',
+  'dbeaver',
+  'ssms',
+  'pgadmin',
+  'mongodb',
+  'mongodbcompass',
+  'tableplus',
+  'wireshark',
+  'packettracer',
+  'figma',
+  'blender',
+  'unity',
+  'unrealeditor',
+  'photoshop',
+  'illustrator',
+  'premiere',
+  'afterfx',
+  'capcut',
+  'davinci',
+  'resolve',
+  'autocad',
+  'solidworks',
+  'matlab',
+  'rstudio',
+  'winword',
+  'excel',
+  'powerpnt',
+  'onenote',
+  'obsidian',
+  'notion',
+  'logseq',
+  'anytype',
+  'typora',
+]);
+
+const DEEP_WORK_KEYWORDS = [
+  // Unambiguous IDE / tool titles
+  'visual studio code',
+  'vscode',
+  'cursor',
+  'windsurf',
+  'antigravity',
+  'jetbrains',
+  'android studio',
+  'visual studio',
+  'windows terminal',
   'figma',
   'obsidian',
   'notion',
   'postman',
-  'docker',
+  'miro.com',
+  'canva',
+  'overleaf',
+  // Web Dev & Productivity
   'github',
   'gitlab',
+  'bitbucket',
   'stackoverflow',
   'leetcode',
+  'codeforces',
+  'hackerrank',
+  'vnoi',
+  'kaggle',
+  'huggingface',
+  'colab',
+  'jupyter',
+  'vercel',
+  'supabase',
+  'firebase',
+  'aws.amazon',
+  'console.cloud.google',
+  'developer.mozilla',
+  'w3schools',
+  'geeksforgeeks',
   'localhost',
   '127.0.0.1',
-  'antigravity',
-  'zed',
-  'dbeaver',
-  'datagrip',
-  'winword',
-  'excel',
-  'powerpnt',
-  'visual studio',
+  'linear',
+  'jira',
+  'trello',
+  'clickup',
+  'docs.google',
+  'sheets.google',
+  'slides.google',
+  'drive.google',
+  'the system',
+  'rpg life tracker',
 ];
+
+const STUDY_PROCESSES = new Set([
+  'anki',
+  'acrobat',
+  'acrord32',
+  'foxit',
+  'foxitpdfreader',
+  'sumatrapdf',
+  'zotero',
+  'mendeley',
+  'calibre',
+  'kindle',
+]);
 
 const STUDY_KEYWORDS = [
   'anki',
-  'acrobat',
-  'foxit',
-  'sumatrapdf',
   'zotero',
+  'mendeley',
+  '.pdf',
   'coursera',
   'udemy',
-  'edx',
+  'edx.org',
+  'khanacademy',
+  'freecodecamp',
+  'brilliant.org',
   'duolingo',
+  'quizlet',
+  'elsa speak',
   'ielts',
+  'toeic',
+  'cambridge',
+  'oxford',
+  'dictionary',
+  'grammarly',
+  'deepl',
+  'translate.google',
   'arxiv',
-  'scholar',
-  'docs.google',
+  'scholar.google',
+  'researchgate',
+  'ieee',
   'wikipedia',
+  'courses.uit',
+  'daa.uit',
+  'moodle',
+  'canvas',
+  'classroom.google',
+  'studocu',
+  'fullstack.edu.vn',
+  'f8 -',
+  'học lập trình',
+  '28tech',
+  'viblo',
   'chatgpt',
+  'openai',
   'claude',
+  'anthropic',
   'gemini',
+  'aistudio',
   'perplexity',
   'notebooklm',
+  'deepseek',
+  'grok.com',
 ];
 
 const YOUTUBE_STUDY_TITLE_RE =
-  /(tutorial|course|lecture|bài giảng|học|lập trình|algorithm|english|ielts|math|toán|physics|cs50|roadmap|programming|coding|system design|documentation)/i;
+  /(tutorial|course|lecture|bài giảng|học|lập trình|algorithm|english|ielts|toeic|math|toán|physics|cs50|roadmap|programming|coding|system design|documentation|giải đề|ôn thi|hướng dẫn|seminar|workshop)/i;
 
 const COMMUNICATION_KEYWORDS = [
   'slack',
   'teams',
+  'ms-teams',
   'zoom',
   'outlook',
-  'mail',
+  'gmail',
+  'mail.google',
   'zalo',
   'messenger',
   'telegram',
   'discord',
   'meet.google',
+  'whatsapp',
 ];
 
 const DISTRACTION_KEYWORDS = [
   'tiktok',
   'facebook',
   'instagram',
+  'threads',
+  'x.com',
+  'twitter',
   'reels',
   'shorts',
   'reddit',
   'netflix',
   'twitch',
+  'bilibili',
+  'anime',
+  'manga',
   'steam',
+  'epicgames',
   'riot',
   'league',
   'valorant',
   'genshin',
+  'honkai',
+  'minecraft',
+  'roblox',
   'shopee',
   'lazada',
+  'tiki',
   'youtube',
 ];
 
 const PRIVATE_TITLE_RE =
   /(inprivate|incognito|ẩn danh|1password|bitwarden|keepass|lastpass|internet banking|vietcombank|techcombank|mbbank|acb online)/i;
+
+const SYSTEM_IDLE_PROCESS_RE =
+  /^(idle|lockapp|shellexperiencehost|searchhost|startmenuexperiencehost|dwm|taskmgr)$/i;
 
 export function scrubWindowTitle(_processName: string, title: string): string {
   const trimmed = (title || '').trim();
@@ -121,9 +277,21 @@ export function classifyActivity(
     return 'idle';
   }
 
-  const proc = (processName || '').toLowerCase();
+  const procRaw = (processName || '').trim();
+  const proc = procRaw.toLowerCase();
+  const procBase = proc.replace(/\.exe$/i, '');
   const title = (windowTitle || '').toLowerCase();
-  const combined = `${proc} ${title}`;
+
+  // Treat empty/system shell/lockscreen/Program Manager frames as idle so they never inflate 'other'
+  if (
+    !procBase ||
+    SYSTEM_IDLE_PROCESS_RE.test(procBase) ||
+    (procBase === 'explorer' && (!title || title === 'program manager'))
+  ) {
+    return 'idle';
+  }
+
+  const combined = `${procBase} ${title}`;
 
   // Custom user rules ALWAYS take top priority
   for (const rule of customRules) {
@@ -134,15 +302,15 @@ export function classifyActivity(
     }
   }
 
-  // Educational YouTube takes precedence over distraction YouTube
-  if (combined.includes('youtube') && YOUTUBE_STUDY_TITLE_RE.test(title)) {
+  // Educational YouTube or VLC lectures take precedence over distraction/other
+  if ((combined.includes('youtube') || procBase === 'vlc') && YOUTUBE_STUDY_TITLE_RE.test(title)) {
     return 'study_research';
   }
 
-  if (DEEP_WORK_KEYWORDS.some((kw) => combined.includes(kw))) {
+  if (DEEP_WORK_PROCESSES.has(procBase) || DEEP_WORK_KEYWORDS.some((kw) => combined.includes(kw))) {
     return 'deep_work';
   }
-  if (STUDY_KEYWORDS.some((kw) => combined.includes(kw))) {
+  if (STUDY_PROCESSES.has(procBase) || STUDY_KEYWORDS.some((kw) => combined.includes(kw))) {
     return 'study_research';
   }
   if (COMMUNICATION_KEYWORDS.some((kw) => combined.includes(kw))) {
@@ -155,22 +323,27 @@ export function classifyActivity(
   return 'other';
 }
 
-function buildPsTrackerScript(pollIntervalSeconds: number): string {
-  const sec = Math.max(3, Math.min(60, Math.round(pollIntervalSeconds || 10)));
-  const ps = `
-$ErrorActionPreference = 'SilentlyContinue'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Add-Type -TypeDefinition @"
+export const WIN_TRACKER_CSHARP = `
 using System;
 using System.Text;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 public struct LASTINPUTINFO {
   public uint cbSize;
   public uint dwTime;
 }
 
+public class WinSampleResult {
+  public string ProcessName { get; set; }
+  public string WindowTitle { get; set; }
+  public int IdleSeconds { get; set; }
+}
+
 public static class WinTrackerNative {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
   [DllImport("user32.dll")]
   public static extern IntPtr GetForegroundWindow();
 
@@ -184,46 +357,130 @@ public static class WinTrackerNative {
   public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
   [DllImport("user32.dll")]
+  public static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+  [DllImport("user32.dll")]
   public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
 
-  public static uint GetIdleSeconds() {
-    LASTINPUTINFO lii = new LASTINPUTINFO();
-    lii.cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO));
-    if (!GetLastInputInfo(ref lii)) return 0;
-    uint tick = unchecked((uint)Environment.TickCount);
-    uint diffMs = tick - lii.dwTime;
-    return diffMs / 1000;
-  }
+  [DllImport("user32.dll")]
+  public static extern IntPtr OpenInputDesktop(uint dwFlags, bool fInherit, uint dwDesiredAccess);
 
-  public static string GetActiveWindowTitle(IntPtr hWnd) {
+  [DllImport("user32.dll")]
+  public static extern bool SetThreadDesktop(IntPtr hDesktop);
+
+  [DllImport("user32.dll")]
+  public static extern bool CloseDesktop(IntPtr hDesktop);
+
+  [DllImport("kernel32.dll")]
+  public static extern ulong GetTickCount64();
+
+  private static string ReadWindowTitle(IntPtr hWnd) {
     int len = GetWindowTextLength(hWnd);
     if (len <= 0) return "";
     StringBuilder sb = new StringBuilder(len + 1);
     GetWindowText(hWnd, sb, sb.Capacity);
     return sb.ToString();
   }
+
+  private static string ResolveProcessName(IntPtr hwnd, uint pid) {
+    if (pid == 0) return "Idle";
+    try {
+      string name = Process.GetProcessById((int)pid).ProcessName;
+      if (string.Equals(name, "ApplicationFrameHost", StringComparison.OrdinalIgnoreCase)) {
+        uint resolvedChildPid = 0;
+        EnumChildWindows(hwnd, delegate(IntPtr childHwnd, IntPtr lParam) {
+          uint cpid = 0;
+          GetWindowThreadProcessId(childHwnd, out cpid);
+          if (cpid != 0 && cpid != pid) {
+            resolvedChildPid = cpid;
+            return false;
+          }
+          return true;
+        }, IntPtr.Zero);
+        if (resolvedChildPid != 0) {
+          try {
+            string inner = Process.GetProcessById((int)resolvedChildPid).ProcessName;
+            if (!string.IsNullOrEmpty(inner)) return inner;
+          } catch {}
+        }
+      }
+      return string.IsNullOrEmpty(name) ? "Idle" : name;
+    } catch {
+      return "Idle";
+    }
+  }
+
+  public static int GetIdleSeconds() {
+    LASTINPUTINFO lii = new LASTINPUTINFO();
+    lii.cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO));
+    if (!GetLastInputInfo(ref lii)) return 0;
+    ulong tick64 = GetTickCount64();
+    uint tick32 = unchecked((uint)(tick64 & 0xFFFFFFFFUL));
+    uint diffMs = unchecked(tick32 - lii.dwTime);
+    return (int)(diffMs / 1000U);
+  }
+
+  private static WinSampleResult SampleOnCurrentThread() {
+    WinSampleResult res = new WinSampleResult();
+    res.ProcessName = "Idle";
+    res.WindowTitle = "";
+    res.IdleSeconds = GetIdleSeconds();
+
+    IntPtr hwnd = GetForegroundWindow();
+    if (hwnd == IntPtr.Zero) {
+      return res;
+    }
+
+    uint pid = 0;
+    GetWindowThreadProcessId(hwnd, out pid);
+    res.ProcessName = ResolveProcessName(hwnd, pid);
+    res.WindowTitle = ReadWindowTitle(hwnd);
+    return res;
+  }
+
+  public static WinSampleResult Sample() {
+    WinSampleResult result = null;
+    Thread t = new Thread(() => {
+      IntPtr hDesk = IntPtr.Zero;
+      try {
+        // Bind clean worker thread to the active interactive input desktop (works even if parent shell is on an isolated WinSta0 desktop)
+        hDesk = OpenInputDesktop(0, false, 0x0001 | 0x0040 | 0x0002);
+        if (hDesk != IntPtr.Zero) {
+          SetThreadDesktop(hDesk);
+        }
+        result = SampleOnCurrentThread();
+      } catch {
+        result = null;
+      } finally {
+        if (hDesk != IntPtr.Zero) {
+          CloseDesktop(hDesk);
+        }
+      }
+    });
+    t.IsBackground = true;
+    t.Start();
+    t.Join(2500);
+    return result ?? SampleOnCurrentThread();
+  }
 }
+`;
+
+function buildPsTrackerScript(pollIntervalSeconds: number): string {
+  const sec = Math.max(3, Math.min(60, Math.round(pollIntervalSeconds || 10)));
+  const ps = `
+$ErrorActionPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -TypeDefinition @"
+${WIN_TRACKER_CSHARP}
 "@
 
 while ($true) {
   try {
-    $hwnd = [WinTrackerNative]::GetForegroundWindow()
-    $procName = "Idle"
-    $winTitle = ""
-    if ($hwnd -ne [IntPtr]::Zero) {
-      [uint32]$wpid = 0
-      [WinTrackerNative]::GetWindowThreadProcessId($hwnd, [ref]$wpid) | Out-Null
-      if ($wpid -gt 0) {
-        $p = [System.Diagnostics.Process]::GetProcessById([int]$wpid)
-        if ($p -and $p.ProcessName) { $procName = $p.ProcessName }
-      }
-      $winTitle = [WinTrackerNative]::GetActiveWindowTitle($hwnd)
-    }
-    $idle = [WinTrackerNative]::GetIdleSeconds()
+    $s = [WinTrackerNative]::Sample()
     $payload = @{
-      processName = $procName
-      windowTitle = $winTitle
-      idleSeconds = [int]$idle
+      processName = $s.ProcessName
+      windowTitle = $s.WindowTitle
+      idleSeconds = [int]$s.IdleSeconds
     } | ConvertTo-Json -Compress
     [Console]::Out.WriteLine($payload)
     [Console]::Out.Flush()
@@ -233,6 +490,19 @@ while ($true) {
 }
 `;
   return Buffer.from(ps, 'utf16le').toString('base64');
+}
+
+const vnHourFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: VN_TIMEZONE,
+  hour: '2-digit',
+  hourCycle: 'h23',
+});
+
+function getVnHourFromIso(iso: string): number {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 12;
+  const h = Number(vnHourFormatter.format(d));
+  return h === 24 ? 0 : h;
 }
 
 class DesktopTrackerService {
@@ -329,7 +599,7 @@ class DesktopTrackerService {
           };
           const settings = db.getAssistantSettings();
           this.recordSample({
-            processName: parsed.processName || 'unknown',
+            processName: parsed.processName || 'Idle',
             windowTitle: parsed.windowTitle || '',
             durationSeconds: settings.pollIntervalSeconds || 10,
             idleSeconds: Number(parsed.idleSeconds) || 0,
@@ -362,6 +632,64 @@ class DesktopTrackerService {
     });
   }
 
+  private syncRunningQuestWithPoll(
+    dateKey: string,
+    category: ActivityCategory,
+    dur: number,
+    idleSeconds: number,
+    nowMs: number,
+    idleThresholdSeconds: number,
+    autoPauseQuestOnIdle: boolean
+  ): void {
+    const runningQuest = db
+      .getQuests(dateKey)
+      .find((q) => q.status === 'pending' && Boolean(q.startedAt) && !q.isPaused);
+    if (!runningQuest) return;
+
+    let mutated = false;
+    if (category === 'deep_work' || category === 'study_research') {
+      runningQuest.verifiedFocusSeconds = (runningQuest.verifiedFocusSeconds || 0) + dur;
+      mutated = true;
+    } else if (category === 'distraction') {
+      runningQuest.distractionSeconds = (runningQuest.distractionSeconds || 0) + dur;
+      mutated = true;
+    }
+
+    const vf = runningQuest.verifiedFocusSeconds || 0;
+    const ds = runningQuest.distractionSeconds || 0;
+    if (vf + ds > 0) {
+      runningQuest.focusIntegrityPct = Math.round((vf / (vf + ds)) * 100);
+      mutated = true;
+    }
+
+    if (autoPauseQuestOnIdle && category === 'idle' && idleSeconds >= idleThresholdSeconds) {
+      const elapsedSec = runningQuest.startedAt
+        ? Math.max(0, Math.round((nowMs - Date.parse(runningQuest.startedAt)) / 1000))
+        : 0;
+      const activeElapsed = Math.max(0, elapsedSec - Math.min(elapsedSec, idleSeconds));
+      runningQuest.pausedAccumulatedSeconds =
+        (runningQuest.pausedAccumulatedSeconds || 0) + activeElapsed;
+      runningQuest.startedAt = undefined;
+      runningQuest.isPaused = true;
+      mutated = true;
+
+      db.addAssistantNudge({
+        id: `ndg-${crypto.randomUUID().slice(0, 8)}`,
+        dateKey,
+        kind: 'system',
+        title: 'Đã tự tạm dừng phiên tập trung',
+        message: `Đã tự tạm dừng phiên "${runningQuest.title}" vì không thao tác PC (${Math.max(1, Math.round(idleSeconds / 60))} phút).`,
+        createdAt: new Date(nowMs).toISOString(),
+        dismissed: false,
+        toastSent: false,
+      });
+    }
+
+    if (mutated) {
+      db.saveQuest(runningQuest);
+    }
+  }
+
   recordSample(input: {
     processName: string;
     windowTitle: string;
@@ -371,8 +699,9 @@ class DesktopTrackerService {
   }): ActivityLogEntry {
     const settings = db.getAssistantSettings();
     const dur = Math.max(1, Math.round(input.durationSeconds ?? settings.pollIntervalSeconds ?? 10));
+    const idleThreshold = settings.idleThresholdSeconds || 180;
     const idleSec = input.isIdle
-      ? (settings.idleThresholdSeconds || 180) + 10
+      ? idleThreshold + 10
       : Math.max(0, Number(input.idleSeconds) || 0);
 
     const processName = (input.processName || 'Unknown').trim() || 'Unknown';
@@ -382,7 +711,7 @@ class DesktopTrackerService {
       rawTitle,
       settings.customRules,
       idleSec,
-      settings.idleThresholdSeconds || 180
+      idleThreshold
     );
     const windowTitle = scrubWindowTitle(processName, rawTitle);
 
@@ -426,6 +755,17 @@ class DesktopTrackerService {
       };
     }
 
+    // Live Quest <-> PC Tracker attribution & auto-pause on idle
+    this.syncRunningQuestWithPoll(
+      dateKey,
+      category,
+      dur,
+      idleSec,
+      nowMs,
+      idleThreshold,
+      settings.autoPauseQuestOnIdle !== false
+    );
+
     const canCoalesce =
       this.activeBlock &&
       this.activeBlock.dateKey === dateKey &&
@@ -459,6 +799,7 @@ class DesktopTrackerService {
   }
 
   getDailySummary(dateKey: string = getVnTodayKey()): DailyActivitySummary {
+    const settings = db.getAssistantSettings();
     const logs = db.getActivityLogsByDate(dateKey);
 
     let deepWorkSec = 0;
@@ -468,34 +809,76 @@ class DesktopTrackerService {
     let otherSec = 0;
     let idleSec = 0;
     let uncreditedFocusSec = 0;
+    let uncreditedDeepSec = 0;
+    let uncreditedStudySec = 0;
 
     const appTotals = new Map<
       string,
       { processName: string; category: ActivityCategory; seconds: number }
     >();
+    const uncreditedAppTotals = new Map<string, number>();
+
+    const hourlyBuckets = new Map<
+      number,
+      {
+        deepSec: number;
+        studySec: number;
+        commSec: number;
+        distractionSec: number;
+        otherSec: number;
+      }
+    >();
+    for (let h = 6; h <= 23; h++) {
+      hourlyBuckets.set(h, { deepSec: 0, studySec: 0, commSec: 0, distractionSec: 0, otherSec: 0 });
+    }
+    const focusSecByHour = new Map<number, number>();
 
     for (const log of logs) {
       const sec = Math.max(0, log.durationSeconds);
+      const vnHour = getVnHourFromIso(log.startedAt);
+      const bucket = hourlyBuckets.get(vnHour);
+
       switch (log.category) {
         case 'deep_work':
           deepWorkSec += sec;
-          if (!log.creditedToSkill) uncreditedFocusSec += sec;
+          if (bucket) bucket.deepSec += sec;
+          focusSecByHour.set(vnHour, (focusSecByHour.get(vnHour) || 0) + sec);
+          if (!log.creditedToSkill) {
+            uncreditedFocusSec += sec;
+            uncreditedDeepSec += sec;
+            uncreditedAppTotals.set(
+              log.processName,
+              (uncreditedAppTotals.get(log.processName) || 0) + sec
+            );
+          }
           break;
         case 'study_research':
           studySec += sec;
-          if (!log.creditedToSkill) uncreditedFocusSec += sec;
+          if (bucket) bucket.studySec += sec;
+          focusSecByHour.set(vnHour, (focusSecByHour.get(vnHour) || 0) + sec);
+          if (!log.creditedToSkill) {
+            uncreditedFocusSec += sec;
+            uncreditedStudySec += sec;
+            uncreditedAppTotals.set(
+              log.processName,
+              (uncreditedAppTotals.get(log.processName) || 0) + sec
+            );
+          }
           break;
         case 'communication':
           commSec += sec;
+          if (bucket) bucket.commSec += sec;
           break;
         case 'distraction':
           distractionSec += sec;
+          if (bucket) bucket.distractionSec += sec;
           break;
         case 'idle':
           idleSec += sec;
           break;
         default:
           otherSec += sec;
+          if (bucket) bucket.otherSec += sec;
           break;
       }
 
@@ -539,6 +922,83 @@ class DesktopTrackerService {
         minutes: Math.max(1, Math.round(a.seconds / 60)),
       }));
 
+    const hourlyBreakdown: NonNullable<DailyActivitySummary['hourlyBreakdown']> = [];
+
+    for (let h = 6; h <= 23; h++) {
+      const b = hourlyBuckets.get(h)!;
+      const deepWorkMins = Math.round(b.deepSec / 60);
+      const studyMins = Math.round(b.studySec / 60);
+      const commMins = Math.round(b.commSec / 60);
+      const distractionMins = Math.round(b.distractionSec / 60);
+      const otherMins = Math.round(b.otherSec / 60);
+
+      const candidates: Array<{ cat: ActivityCategory; mins: number }> = (
+        [
+          { cat: 'deep_work', mins: deepWorkMins },
+          { cat: 'study_research', mins: studyMins },
+          { cat: 'communication', mins: commMins },
+          { cat: 'distraction', mins: distractionMins },
+          { cat: 'other', mins: otherMins },
+        ] satisfies Array<{ cat: ActivityCategory; mins: number }>
+      ).sort((a, c) => c.mins - a.mins);
+
+      const dominantCategory: ActivityCategory | 'none' =
+        candidates[0] && candidates[0].mins > 0 ? candidates[0].cat : 'none';
+
+      hourlyBreakdown.push({
+        hour: h,
+        deepWorkMins,
+        studyMins,
+        commMins,
+        distractionMins,
+        otherMins,
+        dominantCategory,
+      });
+    }
+
+    let bestHour: number | null = null;
+    let bestHourFocusMins = 9; // Require >= 10m to qualify as Peak Focus Hour across all 0..23 hours
+    for (let h = 0; h <= 23; h++) {
+      const focusSum = Math.round((focusSecByHour.get(h) || 0) / 60);
+      if (focusSum > bestHourFocusMins) {
+        bestHourFocusMins = focusSum;
+        bestHour = h;
+      }
+    }
+
+    const peakFocusHour =
+      bestHour !== null
+        ? `${String(bestHour).padStart(2, '0')}:00–${String(bestHour + 1).padStart(2, '0')}:00`
+        : null;
+
+    const uncreditedFocusMinutes = Math.floor(uncreditedFocusSec / 60);
+    let suggestedFocusSession: DailyActivitySummary['suggestedFocusSession'] = null;
+    if (uncreditedFocusMinutes >= 15) {
+      const topUncreditedApp =
+        Array.from(uncreditedAppTotals.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || 'PC Focus';
+      const dominantCategory: 'deep_work' | 'study_research' =
+        uncreditedStudySec > uncreditedDeepSec ? 'study_research' : 'deep_work';
+      const primaryStat: AttributeKey = dominantCategory === 'study_research' ? 'PER' : 'INT';
+      const skills = db.getSkills();
+      const inferredSkillId =
+        dominantCategory === 'study_research'
+          ? 'sk-knw-1'
+          : inferSkillIdForTask(topUncreditedApp, 'deep work', primaryStat, skills) || 'sk-int-1';
+      const skillName = skills.find((s) => s.id === inferredSkillId)?.name;
+
+      suggestedFocusSession = {
+        minutes: uncreditedFocusMinutes,
+        topApp: topUncreditedApp,
+        dominantCategory,
+        suggestedTitle:
+          dominantCategory === 'study_research'
+            ? `Phiên Nghiên cứu & Học sâu (${topUncreditedApp} · ${uncreditedFocusMinutes}p)`
+            : `Phiên Deep Work trên ${topUncreditedApp} (${uncreditedFocusMinutes}p)`,
+        primaryStat,
+        skillName,
+      };
+    }
+
     return {
       dateKey,
       deepWorkMinutes: Math.round(deepWorkSec / 60),
@@ -549,13 +1009,17 @@ class DesktopTrackerService {
       idleMinutes: Math.round(idleSec / 60),
       totalActiveMinutes: Math.round(activeSec / 60),
       focusScore,
-      uncreditedFocusMinutes: Math.floor(uncreditedFocusSec / 60),
+      uncreditedFocusMinutes,
       currentApp:
         this.currentApp && dateKey === getVnTodayKey() && this.isRunning()
           ? this.currentApp
           : null,
       topApps,
       recentLogs: logs.slice(0, 20),
+      hourlyBreakdown,
+      peakFocusHour,
+      distractionBudgetMinutes: settings.distractionBudgetMinutes ?? 45,
+      suggestedFocusSession,
     };
   }
 }

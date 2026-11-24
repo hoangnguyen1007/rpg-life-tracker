@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import type {
+  ActivityCategory,
   AIChatMessage,
   AssistantOverviewPayload,
   ChatContextScope,
@@ -253,6 +254,32 @@ export default function App() {
     setSoundEnabled(next);
     if (next) soundEngine.click();
   }, [soundEnabled]);
+
+  const handleReclassifyApp = useCallback(
+    async (payload: { keyword: string; category: Exclude<ActivityCategory, 'idle'> }) => {
+      const res = await systemApi.reclassifyActivityApp({ ...payload, retroactive: true });
+      setAssistantOverview(res.overview);
+      soundEngine.systemPing();
+      pushAlert('Đã cập nhật phân loại', res.message);
+    },
+    [pushAlert]
+  );
+
+  const handleConvertFocusToQuest = useCallback(
+    async (payload: {
+      mode: 'complete_new' | 'credit_pending';
+      title?: string;
+      questId?: string;
+      primaryStat?: import('./types/system').AttributeKey;
+    }) => {
+      const res = await systemApi.convertActivityToQuest(payload);
+      setAssistantOverview(res.overview);
+      setState(res.state);
+      soundEngine.questComplete();
+      pushAlert('Đồng bộ Focus PC!', res.message);
+    },
+    [pushAlert]
+  );
 
   const triggerLevelUpFx = useCallback(() => {
     soundEngine.levelUp();
@@ -673,7 +700,10 @@ export default function App() {
                   soundEngine.systemPing();
                   const updated = await systemApi.checkin({ energyLevel: energy });
                   setState(updated);
-                  pushAlert('Đã cập nhật năng lượng', `Sinh lực & Trái Tim đồng bộ ở mức ${energy}%.`);
+                  pushAlert(
+                    'Đã cập nhật thể trạng',
+                    `Năng lượng hôm nay: ${energy}% — AI sẽ cân chỉnh độ nặng bài phù hợp (HP giữ nguyên).`
+                  );
                 }}
                 onOrchestrate={async (focusNote) => {
                   soundEngine.systemPing();
@@ -800,6 +830,12 @@ export default function App() {
                 onEnterDungeon={(quest) => {
                   soundEngine.arise();
                   setDungeonQuest(quest);
+                }}
+                assistantOverview={assistantOverview}
+                onConvertFocusToQuest={handleConvertFocusToQuest}
+                onOpenAssistant={() => {
+                  soundEngine.click();
+                  setActiveTab('assistant');
                 }}
               />
             )}
@@ -1100,6 +1136,9 @@ export default function App() {
               <div className="p-4 sm:p-5">
                 <AssistantCenterView
                   overview={assistantOverview}
+                  pendingQuests={state.quests.filter(
+                    (q) => q.dateKey === todayKey && q.status === 'pending'
+                  )}
                   loading={assistantLoading}
                   onRefresh={loadAssistantOverview}
                   onToggleTracker={async (enabled) => {
@@ -1158,6 +1197,8 @@ export default function App() {
                     }
                     pushAlert('Quy đổi Focus -> Skill XP!', res.message);
                   }}
+                  onReclassifyApp={handleReclassifyApp}
+                  onConvertFocusToQuest={handleConvertFocusToQuest}
                   onRunOrchestrate={async () => {
                     soundEngine.systemPing();
                     const updated = await systemApi.orchestrate({});

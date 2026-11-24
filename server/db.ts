@@ -58,6 +58,8 @@ export function buildDefaultAssistantSettings(): AssistantSettings {
     quietHoursEnd: '07:00',
     autoCreditSkillXp: true,
     customRules: [],
+    autoPauseQuestOnIdle: true,
+    distractionBudgetMinutes: 45,
   };
 }
 
@@ -164,108 +166,535 @@ function buildStarterSkills(): SkillNode[] {
 
 function buildStarterShopItems(): ShopItem[] {
   return [
-    // Growth Artifacts (Equipped permanently, earned via Gold or Runestones)
+    // ==================== 18 GROWTH ARTIFACTS (6 SLOTS × 3 TIERS) ====================
+    // WEAPON SLOT
+    {
+      id: 'item-art-kasaka-dagger',
+      name: 'Đoản Kiếm Timebox Kasaka',
+      description: 'Cắt gọn nhiệm vụ thành khối thời gian rõ ràng: +12% Focus Bonus khi vào phiên tập trung.',
+      lore: 'Sắc bén như ý chí cắt đứt trì hoãn ngay từ phút đầu tiên.',
+      category: 'artifact',
+      slot: 'weapon',
+      rarity: 'RARE',
+      iconKey: 'dagger_venom',
+      statFocus: 'AGI',
+      currency: 'gold',
+      price: 320,
+      effectCode: 'BUFF_FOCUS_12',
+      effectLabel: '+12% Focus Bonus',
+    },
     {
       id: 'item-art-igris',
-      name: 'Huy Hiệu Tập Trung Igris',
+      name: 'Trường Kiếm Tập Trung Igris',
       description: 'Trang bị hỗ trợ Huberman 90m Ultradian Deep Work: nhận thêm +15% XP khi hoàn thành mọi nhiệm vụ.',
+      lore: 'Thanh kiếm của kỵ sĩ giữ kỷ luật tuyệt đối trước ngai vàng.',
       category: 'artifact',
+      slot: 'weapon',
+      rarity: 'EPIC',
+      iconKey: 'sword_crimson',
+      statFocus: 'INT',
       currency: 'gold',
-      price: 350,
+      price: 450,
       effectCode: 'BUFF_XP_15',
       effectLabel: '+15% XP mọi nhiệm vụ',
     },
     {
-      id: 'item-art-scholar',
-      name: 'Nhẫn Thông Tuệ & Tổng Hợp (Synthesis Ring)',
-      description: 'Ứng dụng Dunlosky Retrieval Practice & Bjork Spaced Verification: nhận thêm +20% Mastery khi hoàn thành Quest kèm Proof-of-Work.',
+      id: 'item-art-demon-katana',
+      name: 'Hắc Ảnh Katana Phá Boss',
+      description: 'Rèn từ chuỗi Proof-of-Work nghiêm ngặt: +25% sát thương Boss Chương và +10% XP.',
+      lore: 'Chém xuyên mọi cột mốc khó nhằn nhất của chiến dịch.',
       category: 'artifact',
+      slot: 'weapon',
+      rarity: 'LEGENDARY',
+      iconKey: 'katana_shadow',
+      statFocus: 'INT',
+      currency: 'runestones',
+      price: 28,
+      effectCode: 'BUFF_BOSS_25_XP_10',
+      effectLabel: '+25% Boss DMG · +10% XP',
+    },
+
+    // HELM SLOT
+    {
+      id: 'item-art-clarity-glasses',
+      name: 'Kính Quang Học Đọc Sâu',
+      description: 'Lọc nhiễu thông tin và tăng độ tinh tường khi đọc tài liệu: +10% Mastery mọi nhiệm vụ.',
+      lore: 'Mọi trang sách đều hiện rõ cấu trúc cốt lõi.',
+      category: 'artifact',
+      slot: 'helm',
+      rarity: 'COMMON',
+      iconKey: 'glasses_clarity',
+      statFocus: 'PER',
+      currency: 'gold',
+      price: 200,
+      effectCode: 'BUFF_MASTERY_10',
+      effectLabel: '+10% Mastery nhiệm vụ',
+    },
+    {
+      id: 'item-art-circlet-recall',
+      name: 'Vương Miện Active Recall',
+      description: 'Củng cố truy xuất trí nhớ chủ động (Dunlosky): +18% Focus Bonus và +10% Mastery.',
+      lore: 'Vòng nguyệt quế dành cho bộ óc không ngừng tự kiểm chứng.',
+      category: 'artifact',
+      slot: 'helm',
+      rarity: 'EPIC',
+      iconKey: 'circlet_arcane',
+      statFocus: 'PER',
+      currency: 'runestones',
+      price: 16,
+      effectCode: 'BUFF_FOCUS_18_MASTERY_10',
+      effectLabel: '+18% Focus · +10% Mastery',
+    },
+    {
+      id: 'item-art-crown-sovereign',
+      name: 'Vương Miện Quân Vương Trí Tuệ',
+      description: 'Bảo vật tối thượng dung hợp tư duy, kỷ luật và đầu ra: +15% XP, +15% Mastery và +15% Gold.',
+      lore: 'Đỉnh cao của một ngày làm chủ hoàn toàn thời gian và tâm trí.',
+      category: 'artifact',
+      slot: 'helm',
+      rarity: 'MYTHIC',
+      iconKey: 'crown_monarch',
+      statFocus: 'INT',
+      currency: 'runestones',
+      price: 42,
+      effectCode: 'BUFF_OMNI_15',
+      effectLabel: '+15% XP · +15% Mastery · +15% Gold',
+    },
+
+    // ARMOR SLOT
+    {
+      id: 'item-art-tunic-runner',
+      name: 'Áo Khoác Bền Bỉ Zone-2',
+      description: 'Giữ nhịp vận động & sức bền cơ thể mỗi ngày: +15% hiệu quả Hồi phục và +10 Max HP.',
+      lore: 'Nhẹ, thoáng và bền bỉ qua từng dặm đường buổi sáng.',
+      category: 'artifact',
+      slot: 'armor',
+      rarity: 'COMMON',
+      iconKey: 'tunic_emerald',
+      statFocus: 'STR',
+      currency: 'gold',
+      price: 240,
+      effectCode: 'BUFF_RECOVERY_15_HP_10',
+      effectLabel: '+15% Hồi phục · +10 Max HP',
+    },
+    {
+      id: 'item-art-vitality',
+      name: 'Áo Giáp Sinh Lực NSDR',
+      description: 'Tối ưu phục hồi theo cơ chế NSDR (Huberman): giảm 25% mức Fatigue tích tụ và tăng +20 Max HP (+1 Tim).',
+      lore: 'Che chở hệ thần kinh khỏi kiệt sức giữa những tuần cao điểm.',
+      category: 'artifact',
+      slot: 'armor',
+      rarity: 'EPIC',
+      iconKey: 'armor_vitality',
+      statFocus: 'VIT',
+      currency: 'gold',
+      price: 500,
+      effectCode: 'BUFF_FATIGUE_REDUCE_25',
+      effectLabel: '-25% Fatigue · +20 Max HP',
+    },
+    {
+      id: 'item-art-aegis-sleep',
+      name: 'Thánh Giáp Giấc Ngủ 23:30',
+      description: 'Kỷ luật giấc ngủ vàng giúp tái tạo tối đa: +40 Max HP (+2 Trái Tim) và giảm 20% Fatigue.',
+      lore: 'Khi đồng hồ điểm 23:30, tấm khiên hồi sinh tự động kích hoạt.',
+      category: 'artifact',
+      slot: 'armor',
+      rarity: 'LEGENDARY',
+      iconKey: 'armor_aegis',
+      statFocus: 'VIT',
+      currency: 'runestones',
+      price: 30,
+      effectCode: 'BUFF_HEARTS_2_FATIGUE_20',
+      effectLabel: '+40 Max HP (+2 Tim) · -20% Fatigue',
+    },
+
+    // ACCESSORY SLOT
+    {
+      id: 'item-art-coin-amulet',
+      name: 'Bùa Hộ Mệnh Đòn Bẩy Vàng',
+      description: 'Mọi nhiệm vụ hoàn thành mang về giá trị cao hơn: +20% Gold nhận được.',
+      lore: 'Biến từng giờ kỷ luật thành tài sản tích lũy bền vững.',
+      category: 'artifact',
+      slot: 'accessory',
+      rarity: 'RARE',
+      iconKey: 'amulet_gold',
+      statFocus: 'CHA',
+      currency: 'gold',
+      price: 300,
+      effectCode: 'BUFF_GOLD_20',
+      effectLabel: '+20% Gold mọi nhiệm vụ',
+    },
+    {
+      id: 'item-art-scholar',
+      name: 'Nhẫn Thông Tuệ Tổng Hợp',
+      description: 'Ứng dụng Dunlosky Retrieval Practice & Bjork Spaced Verification: nhận thêm +20% Mastery khi có Proof.',
+      lore: 'Chiếc nhẫn khắc ký hiệu liên kết mọi mảnh tri thức rời rạc.',
+      category: 'artifact',
+      slot: 'accessory',
+      rarity: 'EPIC',
+      iconKey: 'ring_synthesis',
+      statFocus: 'PER',
       currency: 'runestones',
       price: 12,
       effectCode: 'BUFF_MASTERY_20',
       effectLabel: '+20% Mastery khi có Proof',
     },
     {
-      id: 'item-art-vitality',
-      name: 'Áo Giáp Sinh Lực (Vitality Plate)',
-      description: 'Tối ưu phục hồi theo cơ chế NSDR (Huberman): giảm 25% mức độ tăng Fatigue sau mỗi phiên tập trung cường độ cao.',
+      id: 'item-art-heart-pendant',
+      name: 'Mặt Dây Chuyền Phượng Hoàng',
+      description: 'Tái sinh nhanh sau ngày dài căng thẳng: +25% hiệu quả Hồi phục và +15% Gold.',
+      lore: 'Ánh lửa dịu dàng giữ ngọn lửa động lực không bao giờ tắt.',
       category: 'artifact',
+      slot: 'accessory',
+      rarity: 'LEGENDARY',
+      iconKey: 'pendant_phoenix',
+      statFocus: 'VIT',
+      currency: 'runestones',
+      price: 24,
+      effectCode: 'BUFF_RECOVERY_25_GOLD_15',
+      effectLabel: '+25% Hồi phục · +15% Gold',
+    },
+
+    // TOME SLOT
+    {
+      id: 'item-art-pomodoro-orb',
+      name: 'Đồng Hồ Cát Pomodoro Pha Lê',
+      description: 'Giữ nhịp sprint 25–50 phút đều đặn suốt ngày: +10% XP khi hoàn thành nhiệm vụ.',
+      lore: 'Từng hạt cát rơi xuống là một phút tập trung không tạp niệm.',
+      category: 'artifact',
+      slot: 'tome',
+      rarity: 'COMMON',
+      iconKey: 'hourglass_crystal',
+      statFocus: 'AGI',
       currency: 'gold',
-      price: 500,
-      effectCode: 'BUFF_FATIGUE_REDUCE_25',
-      effectLabel: '-25% Fatigue tích tụ',
+      price: 180,
+      effectCode: 'BUFF_XP_10',
+      effectLabel: '+10% XP mọi nhiệm vụ',
     },
     {
       id: 'item-art-archmage',
       name: 'Sổ Tay Kiến Trúc Sư',
-      description: 'Kết hợp Oakley Focused & Diffused Mode: tăng thêm +1 INT hoặc +1 PER mỗi khi bạn hoàn thành Main Quest hoặc Hidden Quest.',
+      description: 'Kết hợp Oakley Focused & Diffused Mode: cộng thêm +1 INT mỗi khi hoàn thành Main hoặc Hidden Quest.',
+      lore: 'Những bản vẽ hệ thống tinh xảo nhất bắt đầu từ cuốn sổ này.',
       category: 'artifact',
+      slot: 'tome',
+      rarity: 'LEGENDARY',
+      iconKey: 'tome_architect',
+      statFocus: 'INT',
       currency: 'runestones',
       price: 25,
       effectCode: 'BUFF_BONUS_STAT',
-      effectLabel: '+1 INT/PER mỗi Main Quest',
+      effectLabel: '+1 INT mỗi Main/Hidden Quest',
     },
-    // Consumables (Self-development & recovery boosters)
+    {
+      id: 'item-art-grimoire-feynman',
+      name: 'Cổ Thư Feynman Vô Cực',
+      description: 'Diễn giải đơn giản mọi vấn đề phức tạp: +25% Mastery và +15% sát thương Boss Chương.',
+      lore: 'Nếu giải thích được cho người mới hiểu, ngươi đã thực sự làm chủ nó.',
+      category: 'artifact',
+      slot: 'tome',
+      rarity: 'MYTHIC',
+      iconKey: 'grimoire_void',
+      statFocus: 'PER',
+      currency: 'runestones',
+      price: 38,
+      effectCode: 'BUFF_MASTERY_25_BOSS_15',
+      effectLabel: '+25% Mastery · +15% Boss DMG',
+    },
+
+    // BOOTS SLOT
+    {
+      id: 'item-art-sandals-2min',
+      name: 'Giày Khởi Động 2 Phút',
+      description: 'Vượt qua sức ỳ ban đầu theo quy tắc Atomic Habits: +10% Gold và +8% Focus Bonus.',
+      lore: 'Chỉ cần xỏ giày vào và bước 2 phút đầu tiên.',
+      category: 'artifact',
+      slot: 'boots',
+      rarity: 'COMMON',
+      iconKey: 'boots_leather',
+      statFocus: 'AGI',
+      currency: 'gold',
+      price: 190,
+      effectCode: 'BUFF_GOLD_10_FOCUS_8',
+      effectLabel: '+10% Gold · +8% Focus',
+    },
+    {
+      id: 'item-art-greaves-flow',
+      name: 'Chiến Hài Kênh Flow',
+      description: 'Duy trì nhịp làm việc trôi chảy liên tục: +15% Focus Bonus và giảm 10% Fatigue.',
+      lore: 'Lướt qua những nhiệm vụ khó mà không mất nhịp thở.',
+      category: 'artifact',
+      slot: 'boots',
+      rarity: 'RARE',
+      iconKey: 'boots_swift',
+      statFocus: 'AGI',
+      currency: 'gold',
+      price: 380,
+      effectCode: 'BUFF_FOCUS_15_FATIGUE_10',
+      effectLabel: '+15% Focus · -10% Fatigue',
+    },
+    {
+      id: 'item-art-boots-shadowstep',
+      name: 'Hắc Ảnh Bộ Pháp (Shadow Step)',
+      description: 'Tốc độ thực thi cực hạn không xao nhãng: +18% XP và +15% Focus Bonus.',
+      lore: 'Hoàn thành xong mục tiêu trước khi cơn lười kịp nhận ra.',
+      category: 'artifact',
+      slot: 'boots',
+      rarity: 'LEGENDARY',
+      iconKey: 'boots_shadow',
+      statFocus: 'AGI',
+      currency: 'runestones',
+      price: 26,
+      effectCode: 'BUFF_XP_18_FOCUS_15',
+      effectLabel: '+18% XP · +15% Focus',
+    },
+
+    // ==================== 10 CONSUMABLES ====================
+    {
+      id: 'item-con-water',
+      name: 'Bình Nước Điện Giải Tỉnh Táo',
+      description: 'Nạp nước & đánh thức tỉnh táo tức thì giữa phiên học: +15 HP, +15% Energy và -10% Fatigue.',
+      lore: 'Đơn giản nhưng cứu sống mọi buổi chiều buồn ngủ.',
+      category: 'consumable',
+      rarity: 'COMMON',
+      iconKey: 'potion_water',
+      statFocus: 'VIT',
+      currency: 'gold',
+      price: 45,
+      effectCode: 'USE_HYDRATION',
+      effectLabel: '+15 HP · +15% Energy · -10% Fatigue',
+    },
+    {
+      id: 'item-con-coffee-potion',
+      name: 'Độc Dược Espresso Tập Trung',
+      description: 'Tăng tỉnh táo nhanh cho phiên Deep Work kế tiếp: +20% Energy và +15% XP cho Quest tiếp theo.',
+      lore: 'Hương cà phê rang đậm đánh thức mọi neuron.',
+      category: 'consumable',
+      rarity: 'COMMON',
+      iconKey: 'potion_espresso',
+      statFocus: 'AGI',
+      currency: 'gold',
+      price: 75,
+      effectCode: 'USE_ESPRESSO',
+      effectLabel: '+20% Energy · +15% XP Quest kế',
+    },
     {
       id: 'item-con-elixir',
       name: 'Elixir NSDR Phục Hồi Sâu',
       description: 'Hồi phục mạnh mẽ sau phiên làm việc căng thẳng: +40 Sinh lực (HP), +25% Energy & giảm 30% Fatigue.',
+      lore: 'Tinh chất của 20 phút nghỉ sâu không ngủ.',
       category: 'consumable',
+      rarity: 'RARE',
+      iconKey: 'potion_elixir',
+      statFocus: 'VIT',
       currency: 'gold',
       price: 120,
       effectCode: 'USE_ELIXIR',
       effectLabel: '+40 HP · +25% Energy · -30% Fatigue',
     },
     {
-      id: 'item-con-overdrive',
-      name: 'Chìa Khóa Deliberate Overdrive (1.5x)',
-      description: 'Kích hoạt phiên Ericsson Deliberate Practice cường độ cao: x1.5 XP và x1.5 Gold cho nhiệm vụ tiếp theo.',
+      id: 'item-con-phoenix-brew',
+      name: 'Linh Dược Hồi Đầy Trái Tim',
+      description: 'Tái tạo toàn bộ thể trạng ngay lập tức: đầy 100% HP, 100% Energy và xóa sạch Fatigue.',
+      lore: 'Một giọt lửa phượng hoàng đưa phong độ trở lại đỉnh cao.',
       category: 'consumable',
+      rarity: 'EPIC',
+      iconKey: 'potion_phoenix',
+      statFocus: 'VIT',
+      currency: 'gold',
+      price: 240,
+      effectCode: 'USE_FULL_RESTORE',
+      effectLabel: 'Đầy 100% HP & Energy · 0% Fatigue',
+    },
+    {
+      id: 'item-con-overdrive',
+      name: 'Chìa Khóa Deliberate Overdrive',
+      description: 'Kích hoạt phiên Ericsson Deliberate Practice cường độ cao: x1.5 XP và x1.5 Gold cho nhiệm vụ tiếp theo.',
+      lore: 'Mở khóa giới hạn tập trung trong một nhiệm vụ quan trọng.',
+      category: 'consumable',
+      rarity: 'RARE',
+      iconKey: 'key_overdrive',
+      statFocus: 'INT',
       currency: 'gold',
       price: 180,
       effectCode: 'USE_OVERDRIVE',
       effectLabel: 'x1.5 XP & Gold Quest kế tiếp',
     },
     {
-      id: 'item-con-scroll',
-      name: 'Cuộn Triệu Hồi Desirable Difficulty',
-      description: 'Mở ra ngay 1 Hidden Quest độ khó tối ưu theo Bjork (+150 XP, +30 Mastery) vào danh sách hôm nay.',
+      id: 'item-con-focus-crystal',
+      name: 'Tinh Thể Siêu Tập Trung (x2 XP)',
+      description: 'Cộng hưởng tuyệt đối cho phiên Deep Work lớn nhất trong ngày: x2.0 XP ở Quest kế tiếp.',
+      lore: 'Chỉ dùng cho trận đánh lớn nhất đáng giá nhất.',
       category: 'consumable',
+      rarity: 'EPIC',
+      iconKey: 'crystal_focus',
+      statFocus: 'INT',
+      currency: 'runestones',
+      price: 8,
+      effectCode: 'USE_DOUBLE_XP',
+      effectLabel: 'x2.0 XP Quest kế tiếp',
+    },
+    {
+      id: 'item-con-scroll',
+      name: 'Cuộn Triệu Hồi Hidden Quest',
+      description: 'Mở ra ngay 1 Hidden Quest Rank A (45p, +150 XP, +30 Mastery) theo nguyên lý Desirable Difficulty.',
+      lore: 'Lời mời thử thách bí mật chỉ hiện ra cho người sẵn sàng.',
+      category: 'consumable',
+      rarity: 'EPIC',
+      iconKey: 'scroll_hidden',
+      statFocus: 'PER',
       currency: 'runestones',
       price: 6,
       effectCode: 'USE_HIDDEN_SCROLL',
-      effectLabel: 'Sinh 1 Hidden Quest ngay lập tức',
+      effectLabel: 'Sinh 1 Hidden Quest Rank A',
     },
-    // Real-Life Rewards (Guilt-Free Self-Care & Investment)
+    {
+      id: 'item-con-boss-scroll',
+      name: 'Ấn Ký Phá Giáp Boss (Raid 60p)',
+      description: 'Triệu hồi ngay 1 Raid Sprint 60p Rank S (+220 XP, +45 Mastery, +160G) để bứt phá cột mốc.',
+      lore: 'Không gì ngăn cản nổi một giờ làm việc không khoan nhượng.',
+      category: 'consumable',
+      rarity: 'LEGENDARY',
+      iconKey: 'scroll_raid',
+      statFocus: 'STR',
+      currency: 'runestones',
+      price: 10,
+      effectCode: 'USE_RAID_SCROLL',
+      effectLabel: 'Sinh Raid Sprint 60p Rank S',
+    },
+    {
+      id: 'item-con-shield-grace',
+      name: 'Khiên Bảo Hộ Grace Day',
+      description: 'Kích hoạt chế độ Nghỉ Chủ Động hôm nay (không trừ HP khi chốt ngày, bảo toàn chuỗi) và hồi +25 HP.',
+      lore: 'Chiến binh khôn ngoan biết lúc nào cần lùi một nhịp để giữ đà.',
+      category: 'consumable',
+      rarity: 'RARE',
+      iconKey: 'shield_grace',
+      statFocus: 'VIT',
+      currency: 'gold',
+      price: 160,
+      effectCode: 'USE_GRACE_SHIELD',
+      effectLabel: 'Bật Nghỉ Chủ Động · +25 HP',
+    },
+    {
+      id: 'item-con-sp-tome',
+      name: 'Mảnh Tinh Hoa Kỹ Năng (+1 SP)',
+      description: 'Kết tinh từ kinh nghiệm thực chiến: cộng thẳng +1 Điểm Kĩ Năng (SP) & +30 Mastery để mở khóa cây skill.',
+      lore: 'Khoảnh khắc ngộ ra nguyên lý mới giúp mở khóa tầng sức mạnh tiếp theo.',
+      category: 'consumable',
+      rarity: 'LEGENDARY',
+      iconKey: 'gem_sp',
+      statFocus: 'INT',
+      currency: 'runestones',
+      price: 14,
+      effectCode: 'USE_SP_SHARD',
+      effectLabel: '+1 Điểm Kĩ Năng (SP) · +30 Mastery',
+    },
+
+    // ==================== 8 REAL-LIFE GUILT-FREE REWARDS ====================
     {
       id: 'item-rew-break',
       name: 'Voucher 45p Giải Trí Không Áy Náy',
       description: 'Phần thưởng xứng đáng sau ngày rèn luyện nghiêm túc: xem 1 tập phim, nghe nhạc hoặc chơi game 45 phút.',
+      lore: 'Giải trí có chủ đích giúp não tái nạp dopamine lành mạnh.',
       category: 'real_reward',
+      rarity: 'COMMON',
+      iconKey: 'gamepad_retro',
       currency: 'gold',
       price: 150,
       effectCode: 'REDEEM_VOUCHER',
-      effectLabel: 'Phần thưởng tinh thần (45p)',
+      effectLabel: 'Thưởng tinh thần (45p)',
+    },
+    {
+      id: 'item-rew-nap',
+      name: 'Quyền Nghỉ Ngơi / Ngủ Trưa 60p',
+      description: 'Tặng bản thân 1 giờ nghỉ ngơi hoàn toàn khỏi màn hình và deadline giữa ngày.',
+      lore: 'Giấc ngủ ngắn giữa trưa nhân đôi độ minh mẫn buổi chiều.',
+      category: 'real_reward',
+      rarity: 'COMMON',
+      iconKey: 'pillow_rest',
+      currency: 'gold',
+      price: 110,
+      effectCode: 'REDEEM_VOUCHER',
+      effectLabel: 'Nghỉ ngơi thư giãn (60p)',
+    },
+    {
+      id: 'item-rew-snack',
+      name: 'Voucher Bữa Ăn Ngon Tự Thưởng',
+      description: 'Thưởng cho bản thân món ăn yêu thích sau khi hoàn thành trọn vẹn mục tiêu ngày.',
+      lore: 'Nạp năng lượng tử tế sau một ngày chiến đấu hết mình.',
+      category: 'real_reward',
+      rarity: 'COMMON',
+      iconKey: 'ramen_bowl',
+      currency: 'gold',
+      price: 180,
+      effectCode: 'REDEEM_VOUCHER',
+      effectLabel: 'Ẩm thực tự thưởng',
     },
     {
       id: 'item-rew-coffee',
       name: 'Voucher Cà Phê / Đồ Uống Yêu Thích',
       description: 'Tự thưởng cho bản thân một ly đồ uống ngon khi vượt qua tuần rèn luyện hiệu quả.',
+      lore: 'Một ly cà phê ngon giữa không gian yên tĩnh là phần thưởng ngọt ngào.',
       category: 'real_reward',
+      rarity: 'COMMON',
+      iconKey: 'coffee_cup',
       currency: 'gold',
       price: 260,
       effectCode: 'REDEEM_VOUCHER',
-      effectLabel: 'Tự thưởng ngoài đời thực',
+      effectLabel: 'Đồ uống tự thưởng',
+    },
+    {
+      id: 'item-rew-movie',
+      name: 'Vé Xem 1 Bộ Phim / Anime Trọn Vẹn',
+      description: 'Dành trọn một buổi tối cuối tuần thưởng thức bộ phim yêu thích mà không cảm thấy tội lỗi.',
+      lore: 'Câu chuyện hay mở rộng góc nhìn và nuôi dưỡng cảm hứng.',
+      category: 'real_reward',
+      rarity: 'RARE',
+      iconKey: 'movie_ticket',
+      currency: 'gold',
+      price: 320,
+      effectCode: 'REDEEM_VOUCHER',
+      effectLabel: 'Buổi tối điện ảnh',
     },
     {
       id: 'item-rew-book',
       name: 'Quỹ Đầu Tư Sách / Khóa Học Mới',
       description: 'Dành Runestones tích lũy từ Proof-of-Work để tự thưởng cho mình 1 cuốn sách hoặc khóa học mới.',
+      lore: 'Khoản đầu tư sinh lời cao nhất luôn là tri thức của chính mình.',
       category: 'real_reward',
+      rarity: 'RARE',
+      iconKey: 'book_stack',
       currency: 'runestones',
       price: 18,
       effectCode: 'REDEEM_VOUCHER',
       effectLabel: 'Đầu tư phát triển bản thân',
+    },
+    {
+      id: 'item-rew-gear',
+      name: 'Quỹ Nâng Cấp Gear / Góc Làm Việc',
+      description: 'Tích lũy để mua phụ kiện bàn học, tai nghe, bàn phím hoặc đồ công nghệ tăng cảm hứng.',
+      lore: 'Không gian gọn gàng, dụng cụ xịn giúp bước vào Flow dễ hơn.',
+      category: 'real_reward',
+      rarity: 'EPIC',
+      iconKey: 'headphones_pixel',
+      currency: 'runestones',
+      price: 35,
+      effectCode: 'REDEEM_VOUCHER',
+      effectLabel: 'Nâng cấp góc làm việc',
+    },
+    {
+      id: 'item-rew-dayoff',
+      name: 'Thẻ Du Lịch / 1 Ngày Xả Hơi Trọn Vẹn',
+      description: 'Phần thưởng lớn sau một chặng đường dài: 1 ngày tự do hoàn toàn, đi chơi hoặc dã ngoại.',
+      lore: 'Càng đi xa càng cần những điểm dừng trọn vẹn để quay lại mạnh hơn.',
+      category: 'real_reward',
+      rarity: 'LEGENDARY',
+      iconKey: 'chest_treasure',
+      currency: 'gold',
+      price: 900,
+      effectCode: 'REDEEM_VOUCHER',
+      effectLabel: '1 ngày xả hơi trọn vẹn',
     },
   ];
 }
@@ -664,8 +1093,26 @@ class SystemDatabase {
       }
 
       const existingShop = this.getShopItems();
-      if (existingShop.length === 0) {
-        for (const item of buildStarterShopItems()) this.saveShopItem(item);
+      const customShopItems = existingShop.filter((item) => item.isCustom);
+      const starterItems = buildStarterShopItems();
+      const starterMap = new Map(starterItems.map((it) => [it.id, it]));
+      for (const item of starterItems) {
+        this.saveShopItem(item);
+      }
+      for (const customItem of customShopItems) {
+        this.saveShopItem(customItem);
+      }
+
+      // Non-destructive backfill of rarity / slot / iconKey / statFocus on existing inventory
+      for (const inv of this.getInventory()) {
+        const ref = starterMap.get(inv.itemId);
+        if (ref && (!inv.iconKey || !inv.rarity || (ref.slot && !inv.slot))) {
+          inv.rarity = inv.rarity || ref.rarity;
+          inv.slot = inv.slot || ref.slot;
+          inv.iconKey = inv.iconKey || ref.iconKey;
+          inv.statFocus = inv.statFocus || ref.statFocus;
+          this.saveInventoryItem(inv);
+        }
       }
 
       const existingSkills = this.getSkills();
@@ -713,6 +1160,9 @@ class SystemDatabase {
           this.saveTimetableBlock(blk);
         }
       }
+
+      // Clean up legacy bogus Idle rows caused by earlier Win32 [ref] bug
+      this.db.exec("DELETE FROM activity_logs WHERE process_name = 'Idle' AND category = 'other'");
       return;
     }
     this.seedCleanState(false);
@@ -788,7 +1238,7 @@ class SystemDatabase {
   savePlayer(player: PlayerState): PlayerState {
     player.rank = computeRankFromMastery(player.masteryScore);
     player.xpToNextLevel = computeXpToNextLevel(player.level);
-    const computedMax = computePlayerMaxHp(player, this.getSkills());
+    const computedMax = computePlayerMaxHp(player, this.getSkills(), this.getInventory());
     player.maxHp = Math.max(100, computedMax);
     player.hp = Math.max(0, Math.min(player.maxHp, player.hp ?? player.maxHp));
     player.skillPoints = Math.max(0, player.skillPoints ?? 0);
@@ -1639,6 +2089,30 @@ class SystemDatabase {
       )
       .run(dateKey);
     this.touchLastSaved();
+  }
+
+  reclassifyTodayActivityLogs(
+    keyword: string,
+    category: Exclude<ActivityCategory, 'idle'>,
+    dateKey: string
+  ): number {
+    const cleanKw = keyword.trim().toLowerCase();
+    if (!cleanKw) return 0;
+    const rows = this.getActivityLogsByDate(dateKey);
+    const updateStmt = this.db.prepare('UPDATE activity_logs SET category = ? WHERE id = ?');
+    let updatedRows = 0;
+    for (const row of rows) {
+      const procMatch = row.processName.toLowerCase().includes(cleanKw);
+      const titleMatch = row.windowTitle.toLowerCase().includes(cleanKw);
+      if ((procMatch || titleMatch) && row.category !== category) {
+        updateStmt.run(category, row.id);
+        updatedRows += 1;
+      }
+    }
+    if (updatedRows > 0) {
+      this.touchLastSaved();
+    }
+    return updatedRows;
   }
 
   addAssistantNudge(nudge: AssistantNudge): void {

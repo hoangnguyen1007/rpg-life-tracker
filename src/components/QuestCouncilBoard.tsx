@@ -36,6 +36,7 @@ import type {
   AIChatThread,
   AISettings,
   AgentMemoryLog,
+  AssistantOverviewPayload,
   AttributeKey,
   BossMission,
   ChatContextScope,
@@ -117,6 +118,14 @@ interface QuestCouncilBoardProps {
   onMicroStartQuest: (questId: string) => Promise<unknown>;
   onReflect: (payload: { reflectionNote?: string; plannedRestMode?: boolean }) => Promise<unknown>;
   onEnterDungeon: (quest: Quest) => void;
+  assistantOverview?: AssistantOverviewPayload | null;
+  onConvertFocusToQuest?: (payload: {
+    mode: 'complete_new' | 'credit_pending';
+    title?: string;
+    questId?: string;
+    primaryStat?: AttributeKey;
+  }) => Promise<void>;
+  onOpenAssistant?: () => void;
 }
 
 const TYPE_PILLS: Record<string, { label: string; cls: string }> = {
@@ -310,6 +319,9 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
   onMicroStartQuest,
   onReflect,
   onEnterDungeon,
+  assistantOverview,
+  onConvertFocusToQuest,
+  onOpenAssistant,
 }) => {
   const [focusNote, setFocusNote] = useState('');
   const [showFocusNote, setShowFocusNote] = useState(false);
@@ -317,6 +329,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
   const [settling, setSettling] = useState(false);
   const [failingId, setFailingId] = useState<string | null>(null);
   const [sessionBusyId, setSessionBusyId] = useState<string | null>(null);
+  const [convertingFocus, setConvertingFocus] = useState(false);
 
   // Live 1-second stopwatch tick for flexible task sessions
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -516,22 +529,31 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center border-2 p-0.5 studio-subtle rpg-divider rounded-[2px]">
-              {[100, 75, 45, 20].map((val) => {
-                const selected = Math.abs(player.energyLevel - val) <= 12;
+            <div
+              className="flex items-center gap-1 border-2 px-1.5 py-0.5 studio-subtle rpg-divider rounded-[2px]"
+              title="Chọn thể trạng để AI điều chỉnh độ nặng kế hoạch hôm nay — KHÔNG trừ HP!"
+            >
+              <span className="px-1 text-[11px] font-bold text-sub">Thể trạng:</span>
+              {[
+                { val: 100, label: 'Sung sức' },
+                { val: 75, label: 'Ổn định' },
+                { val: 45, label: 'Hơi mệt' },
+                { val: 20, label: 'Cạn pin' },
+              ].map((opt) => {
+                const selected = Math.abs(player.energyLevel - opt.val) <= 12;
                 return (
                   <button
-                    key={val}
+                    key={opt.val}
                     type="button"
-                    onClick={() => onCheckinEnergy(val)}
-                    className={`px-2 py-1 font-mono text-[11px] font-bold transition rounded-[2px] ${
+                    onClick={() => onCheckinEnergy(opt.val)}
+                    className={`px-2 py-1 text-[11px] font-bold transition rounded-[2px] ${
                       selected
                         ? 'bg-amber-500 text-[#180f03]'
                         : 'text-sub hover:text-main'
                     }`}
-                    title={`Check-in năng lượng ${val}% (đồng bộ Trái Tim HP)`}
+                    title="Chọn thể trạng để AI điều chỉnh độ nặng kế hoạch hôm nay — KHÔNG trừ HP!"
                   >
-                    {val}%
+                    {opt.label}
                   </button>
                 );
               })}
@@ -671,6 +693,18 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     <span className="truncate font-display text-xs font-extrabold text-main">
                       {activeSession.title}
                     </span>
+                    {(activeSession.verifiedFocusSeconds ?? 0) >= 60 && (
+                      <span
+                        className={`border px-1.5 py-0.5 font-mono text-[10px] font-bold rounded-[2px] ${
+                          (activeSession.focusIntegrityPct ?? 100) >= 80
+                            ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
+                            : 'border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                        }`}
+                        title="Chất lượng tập trung đo bởi Windows Activity Tracker"
+                      >
+                        Tập trung {activeSession.focusIntegrityPct ?? 100}%
+                      </span>
+                    )}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[11px] text-sub">
                     <span>
@@ -807,6 +841,62 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
               )}
             </div>
           )}
+
+          {/* Smart Unlogged PC Focus Banner */}
+          {assistantOverview &&
+            assistantOverview.activity.uncreditedFocusMinutes >= 15 &&
+            assistantOverview.activity.suggestedFocusSession &&
+            onConvertFocusToQuest && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs sm:px-5">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <Zap className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                  <span className="truncate text-main">
+                    PC ghi nhận{' '}
+                    <strong className="font-mono text-emerald-600 dark:text-emerald-300">
+                      {assistantOverview.activity.uncreditedFocusMinutes}p
+                    </strong>{' '}
+                    tập trung ({assistantOverview.activity.suggestedFocusSession.topApp})
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={convertingFocus}
+                    onClick={async () => {
+                      const sf = assistantOverview.activity.suggestedFocusSession;
+                      if (!sf) return;
+                      setConvertingFocus(true);
+                      try {
+                        await onConvertFocusToQuest({
+                          mode: 'complete_new',
+                          title: sf.suggestedTitle,
+                          primaryStat: sf.primaryStat,
+                        });
+                      } finally {
+                        setConvertingFocus(false);
+                      }
+                    }}
+                    className="btn-emerald flex items-center gap-1 px-2.5 py-1 text-[11px]"
+                  >
+                    {convertingFocus ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Check className="h-3 w-3" />
+                    )}
+                    <span>Ghi nhận thành Quest</span>
+                  </button>
+                  {onOpenAssistant && (
+                    <button
+                      type="button"
+                      onClick={onOpenAssistant}
+                      className="btn-secondary px-2 py-1 text-[11px]"
+                    >
+                      Chi tiết
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
           {/* Instant 1-Line Quick-Add Bar + AI Gợi Ý Điểm + Stat Guide Reference */}
           <form onSubmit={handleQuickAdd} className="border-b-2 p-3.5 studio-subtle sm:px-5 rpg-divider">
