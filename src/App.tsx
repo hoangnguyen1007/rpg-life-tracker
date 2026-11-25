@@ -7,12 +7,24 @@ import type {
   AssistantOverviewPayload,
   ChatContextScope,
   Quest,
+  RaidChestId,
+  RaidDifficultyTier,
   RejectionReason,
   SystemResetMode,
   SystemStatePayload,
   WeeklyBlueprintBlockDraft,
+  WeeklyRaidPayload,
 } from './types/system';
-import { isLanAuthError, isTauriDesktop, setLanToken, systemApi } from './utils/api';
+import {
+  claimWeeklyRaidChest,
+  fetchWeeklyRaid,
+  isLanAuthError,
+  isTauriDesktop,
+  regenerateWeeklyRaidAi,
+  setLanToken,
+  setWeeklyRaidDifficulty,
+  systemApi,
+} from './utils/api';
 import { soundEngine } from './utils/soundEngine';
 import { getVnTodayKey } from './utils/timeVn';
 import { TopSystemHud } from './components/TopSystemHud';
@@ -106,6 +118,9 @@ export default function App() {
   const [questUtilityTab, setQuestUtilityTab] = useState<'advisor' | 'rhythm' | 'reflect'>('advisor');
   const [assistantOverview, setAssistantOverview] = useState<AssistantOverviewPayload | null>(null);
   const [assistantLoading, setAssistantLoading] = useState(false);
+  const [weeklyRaid, setWeeklyRaid] = useState<WeeklyRaidPayload | null>(null);
+  const [weeklyRaidLoading, setWeeklyRaidLoading] = useState(false);
+  const lastSettledPenaltyWeekRef = useRef<string | null>(null);
 
   const [activeChatThreadId, setActiveChatThreadId] = useState<string | null>(() => {
     return typeof window !== 'undefined'
@@ -243,6 +258,48 @@ export default function App() {
     void loadAssistantOverview();
   }, [loadAssistantOverview]);
 
+  const loadWeeklyRaid = useCallback(
+    async (silent = false) => {
+      if (!silent) setWeeklyRaidLoading(true);
+      try {
+        const payload = await fetchWeeklyRaid();
+        setWeeklyRaid(payload);
+        if (
+          payload.justSettledPenalty &&
+          lastSettledPenaltyWeekRef.current !== payload.justSettledPenalty.weekKey
+        ) {
+          lastSettledPenaltyWeekRef.current = payload.justSettledPenalty.weekKey;
+          const p = payload.justSettledPenalty;
+          soundEngine.monsterHit();
+          pushAlert(
+            'Boss Tuần Trước Tung Đòn Cuối!',
+            `Boss ${p.bossName} (${p.weekKey}): -${p.hpLost} HP, -${p.goldLost} G${
+              p.died ? ' — Bạn gục ngã & hồi sinh tại Checkpoint!' : '!'
+            }`
+          );
+          void loadState(true);
+        }
+      } catch (err) {
+        if (isLanAuthError(err)) {
+          setLanAuthRequired(true);
+        }
+      } finally {
+        if (!silent) setWeeklyRaidLoading(false);
+      }
+    },
+    [loadState, pushAlert]
+  );
+
+  useEffect(() => {
+    void loadWeeklyRaid(false);
+  }, [loadWeeklyRaid]);
+
+  useEffect(() => {
+    if (activeTab === 'campaign') {
+      void loadWeeklyRaid(true);
+    }
+  }, [activeTab, loadWeeklyRaid]);
+
   useEffect(() => {
     if (activeTab !== 'assistant') return;
     void loadAssistantOverview();
@@ -340,10 +397,11 @@ export default function App() {
       const res = await systemApi.convertActivityToQuest(payload);
       setAssistantOverview(res.overview);
       setState(res.state);
+      void loadWeeklyRaid(true);
       soundEngine.questComplete();
       pushAlert('Đồng bộ Focus PC!', res.message);
     },
-    [pushAlert]
+    [loadWeeklyRaid, pushAlert]
   );
 
   const triggerLevelUpFx = useCallback(() => {
@@ -362,11 +420,11 @@ export default function App() {
       if (res.ok) {
         if (res.token) setLanToken(res.token);
         setLanAuthRequired(false);
-        await Promise.all([loadState(false), loadAssistantOverview()]);
+        await Promise.all([loadState(false), loadAssistantOverview(), loadWeeklyRaid(true)]);
       }
       return { ok: res.ok, error: res.error };
     },
-    [loadState, loadAssistantOverview]
+    [loadAssistantOverview, loadState, loadWeeklyRaid]
   );
 
   const handleStartQuest = useCallback(
@@ -393,6 +451,7 @@ export default function App() {
     async (questId: string, proofNote?: string) => {
       const res = await systemApi.completeQuest(questId, { proofNote });
       setState(res.state);
+      void loadWeeklyRaid(true);
       const extraDetail = `${res.actualDurationMinutes ? ` · ${res.actualDurationMinutes}p thực` : ''}${
         res.contributedSkillName
           ? ` · +${res.skillPracticeXpGain ?? 0} Skill XP (${res.contributedSkillName})`
@@ -414,7 +473,7 @@ export default function App() {
         );
       }
     },
-    [pushAlert, triggerLevelUpFx]
+    [loadWeeklyRaid, pushAlert, triggerLevelUpFx]
   );
 
   const handleCheckinEnergy = useCallback(
@@ -494,6 +553,59 @@ export default function App() {
     }
     setViewMode('main');
   }, []);
+
+  const handleChangeRaidDifficulty = useCallback(
+    async (tier: RaidDifficultyTier) => {
+      soundEngine.click();
+      const updated = await setWeeklyRaidDifficulty(tier);
+      setWeeklyRaid(updated);
+      pushAlert(
+        'Đã đổi độ khó Raid Boss',
+        `${updated.raid.name} đã chuyển sang ${tier}-Rank (${updated.raid.maxHp.toLocaleString('vi-VN')} HP).`
+      );
+    },
+    [pushAlert]
+  );
+
+  const handleClaimRaidChest = useCallback(
+    async (chestId: RaidChestId) => {
+      const res = await claimWeeklyRaidChest(chestId);
+      setWeeklyRaid(res.payload);
+      await loadState(true);
+      const s = res.rewardSummary;
+      const parts = [
+        s.gold > 0 ? `+${s.gold} G` : '',
+        s.runestones > 0 ? `+${s.runestones} 💎` : '',
+        s.sp > 0 ? `+${s.sp} SP` : '',
+        s.lootItemName ? `Vật phẩm: ${s.lootItemName}` : '',
+        s.unlockedTitle ? `Danh hiệu: ${s.unlockedTitle}` : '',
+      ].filter(Boolean);
+      if (chestId === 'victory' || chestId === 'overkill') {
+        triggerLevelUpFx();
+      } else {
+        soundEngine.coinLoot();
+      }
+      pushAlert('Đã mở Rương Raid Boss!', parts.join(' · ') || 'Phần thưởng đã được chuyển vào Kho Đồ.');
+    },
+    [loadState, pushAlert, triggerLevelUpFx]
+  );
+
+  const handleRegenerateRaidAi = useCallback(async () => {
+    const res = await regenerateWeeklyRaidAi();
+    setWeeklyRaid(res.payload);
+    soundEngine.systemPing();
+    pushAlert(
+      res.usedAi ? 'Đã triệu hồi Boss AI mới!' : 'Boss Đột Kích Tuần',
+      res.usedAi
+        ? `${res.payload.raid.name} (${res.payload.raid.weaknessLabel}) đã xuất trận!`
+        : res.note || 'Đang dùng bộ Boss nội bộ.'
+    );
+  }, [pushAlert]);
+
+  const handleRefreshRaid = useCallback(async () => {
+    soundEngine.click();
+    await loadWeeklyRaid(false);
+  }, [loadWeeklyRaid]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || viewMode !== 'main') return;
@@ -1039,6 +1151,8 @@ export default function App() {
     assistantOverview?.nudges.filter((n) => !n.dismissed).length ??
     state.assistantSummary?.unreadNudges ??
     0;
+  const unclaimedRaidChests =
+    weeklyRaid?.raid.chests.filter((c) => c.unlocked && !c.claimed).length ?? 0;
 
   return (
     <div className="min-h-screen pb-10">
@@ -1134,6 +1248,14 @@ export default function App() {
                       {unreadNudges}
                     </span>
                   )}
+                  {tab.key === 'campaign' && unclaimedRaidChests > 0 && (
+                    <span
+                      className="font-pixel rounded-none border border-[var(--border-ink)] bg-[var(--px-gold)] px-1 py-0.5 text-[9px] font-bold leading-none text-[#140e04]"
+                      title="Rương Raid Boss tuần chưa mở"
+                    >
+                      {unclaimedRaidChests} Rương
+                    </span>
+                  )}
                   {showSpDot && (
                     <span
                       className="font-pixel rounded-none border border-[var(--border-ink)] bg-[var(--px-gold)] px-1.5 py-0.5 text-[9px] font-bold leading-none text-[#140e04]"
@@ -1214,30 +1336,7 @@ export default function App() {
                   const updated = await systemApi.toggleSubtask(questId, subtaskId);
                   setState(updated);
                 }}
-                onCompleteQuest={async (questId, proofNote) => {
-                  const res = await systemApi.completeQuest(questId, { proofNote });
-                  setState(res.state);
-                  const extraDetail = `${res.actualDurationMinutes ? ` · ${res.actualDurationMinutes}p thực` : ''}${
-                    res.contributedSkillName
-                      ? ` · +${res.skillPracticeXpGain ?? 0} Skill XP (${res.contributedSkillName})`
-                      : ''
-                  }`;
-                  if (res.leveledUp || res.rankPromoted) {
-                    triggerLevelUpFx();
-                    pushAlert(
-                      'THĂNG CẤP!',
-                      `Level ${res.state.player.level} (${res.state.player.rank}) · +${res.spGain ?? 2} SP${extraDetail}!`
-                    );
-                  } else {
-                    soundEngine.questComplete();
-                    pushAlert(
-                      'Hoàn thành nhiệm vụ',
-                      `+${res.xpGain} XP · +${res.goldGain}G · +${res.spGain ?? 1} SP${
-                        res.runestoneGain > 0 ? ` · +${res.runestoneGain} 💎` : ''
-                      }${extraDetail}`
-                    );
-                  }
-                }}
+                onCompleteQuest={handleCompleteQuest}
                 onStartQuest={async (questId) => {
                   soundEngine.systemPing();
                   const updated = await systemApi.startQuest(questId);
@@ -1318,6 +1417,11 @@ export default function App() {
                   setDungeonQuest(quest);
                 }}
                 assistantOverview={assistantOverview}
+                weeklyRaid={weeklyRaid}
+                onOpenRaidArena={() => {
+                  soundEngine.click();
+                  setActiveTab('campaign');
+                }}
                 onConvertFocusToQuest={handleConvertFocusToQuest}
                 onOpenAssistant={() => {
                   soundEngine.click();
@@ -1382,6 +1486,12 @@ export default function App() {
                   bosses={state.bosses}
                   skills={state.skills}
                   streakDays={state.player.streakDays}
+                  weeklyRaid={weeklyRaid}
+                  weeklyRaidLoading={weeklyRaidLoading}
+                  onChangeRaidDifficulty={handleChangeRaidDifficulty}
+                  onClaimRaidChest={handleClaimRaidChest}
+                  onRegenerateRaidAi={handleRegenerateRaidAi}
+                  onRefreshRaid={handleRefreshRaid}
                   onVerifyBossStage={async (bossId, stageId, proofText) => {
                     const res = await systemApi.verifyBossStage(bossId, stageId, proofText);
                     setState(res.state);
@@ -1627,7 +1737,9 @@ export default function App() {
                     (q) => q.dateKey === todayKey && q.status === 'pending'
                   )}
                   loading={assistantLoading}
-                  onRefresh={loadAssistantOverview}
+                  onRefresh={async () => {
+                    await Promise.all([loadAssistantOverview(), loadWeeklyRaid(true)]);
+                  }}
                   onSetDnd={handleSetDnd}
                   onStateChanged={(nextState) => setState(nextState)}
                   hudVisible={hudVisible}
@@ -1682,6 +1794,7 @@ export default function App() {
                     const res = await systemApi.syncActivityToSkill();
                     setAssistantOverview(res.overview);
                     setState(res.state);
+                    void loadWeeklyRaid(true);
                     if (res.bonusSp > 0) {
                       triggerLevelUpFx();
                     } else {
@@ -1757,6 +1870,7 @@ export default function App() {
           onClearDungeon={async (questId, proofNote) => {
             const res = await systemApi.completeQuest(questId, { proofNote, dungeonCleared: true });
             setState(res.state);
+            void loadWeeklyRaid(true);
             setDungeonQuest(null);
             if (res.leveledUp || res.rankPromoted) triggerLevelUpFx();
             else soundEngine.questComplete();

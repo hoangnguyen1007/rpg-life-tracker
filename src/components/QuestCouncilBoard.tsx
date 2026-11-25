@@ -45,11 +45,13 @@ import type {
   StatMap,
   StoryChapter,
   TaskDraftAnalysis,
+  WeeklyRaidPayload,
 } from '../types/system';
 import { systemApi } from '../utils/api';
 import { getVnTodayKey } from '../utils/timeVn';
 import { DayAllocationDonut } from './VisualIllustrations';
 import { PixelDungeonDiorama } from './DungeonSprites';
+import { PxTreasureChest, RaidBossSprite } from './RaidBossSprites';
 import { MarkdownContent } from './MarkdownContent';
 
 interface QuestCouncilBoardProps {
@@ -120,6 +122,8 @@ interface QuestCouncilBoardProps {
     primaryStat?: AttributeKey;
   }) => Promise<void>;
   onOpenAssistant?: () => void;
+  weeklyRaid?: WeeklyRaidPayload | null;
+  onOpenRaidArena?: () => void;
 }
 
 const TYPE_PILLS: Record<string, { label: string; cls: string }> = {
@@ -334,6 +338,8 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
   assistantOverview,
   onConvertFocusToQuest,
   onOpenAssistant,
+  weeklyRaid,
+  onOpenRaidArena,
 }) => {
   const [focusNote, setFocusNote] = useState('');
   const [showFocusNote, setShowFocusNote] = useState(false);
@@ -688,6 +694,119 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
         activeBoss={activeBoss}
         onOpenCampaign={onNavigateBosses}
       />
+
+      {/* 2b) Compact 1-Line Live Weekly Raid Boss HP Strip */}
+      {weeklyRaid?.raid &&
+        (() => {
+          const raid = weeklyRaid.raid;
+          const isDefeated = raid.status === 'defeated' || raid.currentHp <= 0;
+          const hpPct =
+            raid.maxHp > 0
+              ? Math.max(0, Math.min(100, Math.round((raid.currentHp / raid.maxHp) * 100)))
+              : 0;
+          const isEnraged = !isDefeated && hpPct < 30 && raid.status === 'active';
+          const unclaimedCount = raid.chests.filter((c) => c.unlocked && !c.claimed).length;
+          const days = Math.floor(Math.max(0, weeklyRaid.secondsUntilReset) / 86400);
+          const hours = Math.floor((Math.max(0, weeklyRaid.secondsUntilReset) % 86400) / 3600);
+          const weakShort =
+            raid.weaknessCategory === 'deep_work'
+              ? 'Deep Work'
+              : raid.weaknessCategory === 'study'
+                ? 'Study'
+                : 'Quests';
+
+          return (
+            <section
+              aria-label="Weekly Raid Boss Strip"
+              className="relative bg-[var(--bg-surface-2)] px-4 py-2 sm:px-5"
+            >
+              <PixelRivets />
+              <div className="flex items-center justify-between gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => onOpenRaidArena?.()}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left hover:opacity-90"
+                  title={`${raid.name} (${raid.title}) — Mở Đấu Trường Raid`}
+                >
+                  <span className="px-inset flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-[#12101a] p-0.5">
+                    <RaidBossSprite
+                      archetype={raid.archetype}
+                      size={28}
+                      enraged={isEnraged}
+                      defeated={isDefeated}
+                    />
+                  </span>
+
+                  <span
+                    className={`font-pixel shrink-0 rounded-none border-2 px-1.5 py-0.5 text-[9px] font-bold ${
+                      isDefeated
+                        ? 'border-[var(--px-gold)] bg-[var(--bg-subtle)] text-[var(--px-gold-text)]'
+                        : 'border-[var(--px-red)] bg-[var(--bg-subtle)] text-[var(--px-red-text)]'
+                    }`}
+                  >
+                    {raid.difficultyTier}-RANK
+                  </span>
+
+                  <span className="min-w-0 truncate font-display text-xs font-extrabold text-main">
+                    {raid.name}
+                  </span>
+
+                  <span className="hidden shrink-0 items-center rounded-none border border-[var(--px-blue)] bg-[var(--bg-subtle)] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--px-blue-text)] xl:inline-flex">
+                    {weakShort} x{raid.weaknessMultiplier.toFixed(2)}
+                  </span>
+                </button>
+
+                <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="rpg-bar-track h-2.5 w-24 rounded-none sm:w-32">
+                      <div
+                        className="h-full transition-all"
+                        style={{
+                          width: `${hpPct}%`,
+                          backgroundColor: isDefeated
+                            ? 'var(--border-strong)'
+                            : isEnraged
+                              ? '#d94154'
+                              : 'var(--px-red)',
+                        }}
+                      />
+                    </div>
+                    <span
+                      className={`font-mono text-[11px] font-extrabold ${
+                        isDefeated
+                          ? 'text-[var(--px-plum-text)]'
+                          : isEnraged
+                            ? 'text-[var(--px-red-text)]'
+                            : 'text-main'
+                      }`}
+                    >
+                      {isDefeated ? `OVERKILL +${raid.overkillDamage}` : `${hpPct}%`}
+                    </span>
+                  </div>
+
+                  <span className="hidden font-mono text-[11px] text-sub md:inline-block">
+                    Còn {days}n {hours}g
+                  </span>
+
+                  {unclaimedCount > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-none border-2 border-[var(--px-gold)] bg-[var(--bg-subtle)] px-1.5 py-0.5 font-mono text-[10px] font-extrabold text-[var(--px-gold-text)]">
+                      <PxTreasureChest state="ready" size={14} />
+                      <span>{unclaimedCount} Rương!</span>
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => onOpenRaidArena?.()}
+                    className={`${unclaimedCount > 0 ? 'btn-primary' : 'btn-secondary'} px-2.5 py-1 font-mono text-xs font-bold`}
+                  >
+                    Raid →
+                  </button>
+                </div>
+              </div>
+            </section>
+          );
+        })()}
 
       {/* 3) Flush 2-Page Tracker Workspace (Left 7 cols + Right 5 cols) */}
       <div className="grid grid-cols-1 divide-y-2 lg:grid-cols-12 lg:divide-x-2 lg:divide-y-0 rpg-divider">

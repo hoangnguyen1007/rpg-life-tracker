@@ -19,6 +19,8 @@ import type {
   Quest,
   QuestRank,
   QuestType,
+  RaidChestId,
+  RaidDifficultyTier,
   RejectionReason,
   StatMap,
   StorageInfoPayload,
@@ -28,6 +30,7 @@ import type {
   TimetableBlock,
   WeeklyBlueprintBlockDraft,
   WeeklyBlueprintDraft,
+  WeeklyRaidPayload,
   WeeklyReviewRecord,
 } from '../types/system';
 
@@ -759,4 +762,62 @@ export const systemApi = {
       method: 'POST',
       body: JSON.stringify({ action }),
     }),
+
+  fetchWeeklyRaid: () => request<WeeklyRaidPayload>('/api/raid/current'),
+
+  setWeeklyRaidDifficulty: (tier: RaidDifficultyTier) =>
+    request<WeeklyRaidPayload>('/api/raid/difficulty', {
+      method: 'POST',
+      body: JSON.stringify({ tier }),
+    }),
+
+  claimWeeklyRaidChest: (chestId: RaidChestId) =>
+    request<{
+      ok: boolean;
+      payload: WeeklyRaidPayload;
+      rewardSummary: {
+        gold: number;
+        runestones: number;
+        sp: number;
+        lootItemName?: string;
+        unlockedTitle?: string;
+      };
+    }>('/api/raid/claim-chest', {
+      method: 'POST',
+      body: JSON.stringify({ chestId }),
+    }),
+
+  regenerateWeeklyRaidAi: () =>
+    request<{
+      ok: boolean;
+      payload: WeeklyRaidPayload;
+      usedAi: boolean;
+      note?: string;
+    }>('/api/raid/regenerate-ai', { method: 'POST' }),
 };
+
+export const fetchWeeklyRaid = (): Promise<WeeklyRaidPayload> => systemApi.fetchWeeklyRaid();
+
+export const setWeeklyRaidDifficulty = (tier: RaidDifficultyTier): Promise<WeeklyRaidPayload> =>
+  systemApi.setWeeklyRaidDifficulty(tier);
+
+export const claimWeeklyRaidChest = (
+  chestId: RaidChestId
+): Promise<{
+  ok: boolean;
+  payload: WeeklyRaidPayload;
+  rewardSummary: {
+    gold: number;
+    runestones: number;
+    sp: number;
+    lootItemName?: string;
+    unlockedTitle?: string;
+  };
+}> => systemApi.claimWeeklyRaidChest(chestId);
+
+export const regenerateWeeklyRaidAi = (): Promise<{
+  ok: boolean;
+  payload: WeeklyRaidPayload;
+  usedAi: boolean;
+  note?: string;
+}> => systemApi.regenerateWeeklyRaidAi();

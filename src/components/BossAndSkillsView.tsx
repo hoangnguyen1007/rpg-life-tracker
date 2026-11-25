@@ -3,8 +3,11 @@ import type {
   BossMission,
   ChapterStageNode,
   MonsterArchetype,
+  RaidChestId,
+  RaidDifficultyTier,
   SkillNode,
   StoryChapter,
+  WeeklyRaidPayload,
 } from '../types/system';
 import { PixelMonsterSprite } from './DungeonSprites';
 import {
@@ -19,6 +22,7 @@ import {
   PxSparkle,
   PxSword,
 } from './PixelIcons';
+import { WeeklyRaidBossArena } from './WeeklyRaidBossArena';
 
 interface BossAndSkillsViewProps {
   chapters: StoryChapter[];
@@ -28,7 +32,15 @@ interface BossAndSkillsViewProps {
   onVerifyBossStage: (bossId: string, stageId: string, proofText: string) => Promise<void>;
   onVerifySkill: (skillId: string, proofNote: string) => Promise<void>;
   onVerifyMinionStage?: (chapterId: string, stageId: string, proofText: string) => Promise<void>;
+  weeklyRaid?: WeeklyRaidPayload | null;
+  weeklyRaidLoading?: boolean;
+  onChangeRaidDifficulty?: (tier: RaidDifficultyTier) => Promise<void>;
+  onClaimRaidChest?: (chestId: RaidChestId) => Promise<void>;
+  onRegenerateRaidAi?: () => Promise<void>;
+  onRefreshRaid?: () => Promise<void>;
 }
+
+const noopAsync = async () => {};
 
 const SPRITE_POOL: MonsterArchetype[] = [
   'slime',
@@ -54,6 +66,12 @@ export const BossAndSkillsView: React.FC<BossAndSkillsViewProps> = ({
   streakDays,
   onVerifyBossStage,
   onVerifyMinionStage,
+  weeklyRaid,
+  weeklyRaidLoading,
+  onChangeRaidDifficulty,
+  onClaimRaidChest,
+  onRegenerateRaidAi,
+  onRefreshRaid,
 }) => {
   const [activeStageKey, setActiveStageKey] = useState<string | null>(null);
   const [bossProof, setBossProof] = useState('');
@@ -118,6 +136,18 @@ export const BossAndSkillsView: React.FC<BossAndSkillsViewProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* 16-Bit Weekly Raid Boss Arena (Embedded Above Campaign Chapters) */}
+      {(weeklyRaid !== undefined || Boolean(weeklyRaidLoading)) && (
+        <WeeklyRaidBossArena
+          data={weeklyRaid ?? null}
+          loading={weeklyRaidLoading}
+          onChangeDifficulty={onChangeRaidDifficulty ?? noopAsync}
+          onClaimChest={onClaimRaidChest ?? noopAsync}
+          onRegenerateAi={onRegenerateRaidAi ?? noopAsync}
+          onRefresh={onRefreshRaid ?? noopAsync}
+        />
+      )}
+
       {/* 16-Bit Campaign Header Plaque + Fog-of-War Chapter Stepper (CH.1..CH.8) */}
       <section className="studio-surface relative rounded-none p-4 sm:p-5">
         <PixelRivets />

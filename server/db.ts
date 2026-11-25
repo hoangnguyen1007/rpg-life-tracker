@@ -37,6 +37,7 @@ import type {
   SuggestedQuestItem,
   SystemResetMode,
   TimetableBlock,
+  WeeklyRaidBoss,
   WeeklyReviewRecord,
 } from './types.ts';
 
@@ -859,6 +860,13 @@ class SystemDatabase {
         created_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS weekly_raids (
+        id TEXT PRIMARY KEY,
+        week_key TEXT UNIQUE NOT NULL,
+        data TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_quests_date_status ON quests(date_key, status);
       CREATE INDEX IF NOT EXISTS idx_timetable_day_start ON timetable_blocks(day_of_week, start_time);
       CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_logs(timestamp DESC);
@@ -867,6 +875,7 @@ class SystemDatabase {
       CREATE INDEX IF NOT EXISTS idx_activity_date ON activity_logs(date_key, started_at DESC);
       CREATE INDEX IF NOT EXISTS idx_nudges_date ON assistant_nudges(date_key, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_weekly_reviews_created ON weekly_reviews(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_weekly_raids_week ON weekly_raids(week_key DESC);
     `);
   }
 
@@ -2008,6 +2017,7 @@ class SystemDatabase {
       DELETE FROM ai_chat_threads;
       DELETE FROM activity_logs;
       DELETE FROM assistant_nudges;
+      DELETE FROM weekly_raids;
     `);
     if (prevAi) {
       this.setKV('ai_settings', prevAi);
@@ -2275,6 +2285,69 @@ class SystemDatabase {
         review.createdAt
       );
     this.touchLastSaved();
+  }
+
+  getWeeklyRaids(): WeeklyRaidBoss[] {
+    const rows = this.db
+      .prepare('SELECT data FROM weekly_raids ORDER BY week_key DESC')
+      .all() as Array<{ data: string }>;
+    return rows.map((r) => JSON.parse(r.data) as WeeklyRaidBoss);
+  }
+
+  getWeeklyRaidByWeek(weekKey: string): WeeklyRaidBoss | null {
+    const row = this.db
+      .prepare('SELECT data FROM weekly_raids WHERE week_key = ?')
+      .get(weekKey) as { data: string } | undefined;
+    return row ? (JSON.parse(row.data) as WeeklyRaidBoss) : null;
+  }
+
+  saveWeeklyRaid(raid: WeeklyRaidBoss): void {
+    this.db
+      .prepare(
+        `INSERT INTO weekly_raids (id, week_key, data, updated_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(week_key) DO UPDATE SET
+           id = excluded.id,
+           data = excluded.data,
+           updated_at = excluded.updated_at`
+      )
+      .run(raid.id, raid.weekKey, JSON.stringify(raid), raid.updatedAt);
+    this.touchLastSaved();
+  }
+
+  getActivityMinutesRange(
+    startDateKey: string,
+    endDateKey: string
+  ): Array<{
+    dateKey: string;
+    deepWorkMinutes: number;
+    studyMinutes: number;
+    distractionMinutes: number;
+  }> {
+    const rows = this.db
+      .prepare(
+        `SELECT date_key,
+                SUM(CASE WHEN category = 'deep_work' THEN duration_seconds ELSE 0 END) AS deep_sec,
+                SUM(CASE WHEN category = 'study_research' THEN duration_seconds ELSE 0 END) AS study_sec,
+                SUM(CASE WHEN category = 'distraction' THEN duration_seconds ELSE 0 END) AS distraction_sec
+         FROM activity_logs
+         WHERE date_key >= ? AND date_key <= ?
+         GROUP BY date_key
+         ORDER BY date_key ASC`
+      )
+      .all(startDateKey, endDateKey) as Array<{
+      date_key: string;
+      deep_sec: number;
+      study_sec: number;
+      distraction_sec: number;
+    }>;
+
+    return rows.map((r) => ({
+      dateKey: r.date_key,
+      deepWorkMinutes: Math.floor((r.deep_sec || 0) / 60),
+      studyMinutes: Math.floor((r.study_sec || 0) / 60),
+      distractionMinutes: Math.floor((r.distraction_sec || 0) / 60),
+    }));
   }
 
   restoreFromBackupFile(

@@ -28,6 +28,13 @@ import {
   generateWeeklyBlueprint,
 } from './ai-analytics.ts';
 import {
+  claimWeeklyRaidChest,
+  getOrCreateCurrentWeeklyRaid,
+  regenerateWeeklyRaidWithAi,
+  setWeeklyRaidDifficulty,
+  syncWeeklyRaidSyncOnly,
+} from './weekly-raid.ts';
+import {
   installWindowsStartup,
   launchSystemTray,
   uninstallWindowsStartup,
@@ -85,6 +92,8 @@ import type {
   Quest,
   QuestRank,
   QuestType,
+  RaidChestId,
+  RaidDifficultyTier,
   RejectionReason,
   StoryChapter,
   SystemResetMode,
@@ -164,7 +173,8 @@ export function computeQuestMissDamage(quest: Quest, fatigueReductionPct: number
 function triggerPlayerDeathAndCheckpointRollback(
   player: PlayerState,
   missedQuests: Array<{ title: string; type: QuestType; hpDamage: number }>,
-  totalHpDamage: number
+  totalHpDamage: number,
+  customCauseSummary?: string
 ): DeathReport {
   const goldLost = Math.floor(player.gold * 0.25);
   player.gold = Math.max(0, player.gold - goldLost);
@@ -233,9 +243,10 @@ function triggerPlayerDeathAndCheckpointRollback(
   player.hp = Math.max(15, Math.round(player.maxHp * 0.75));
 
   const causeSummary =
-    missedQuests.length > 0
+    customCauseSummary ||
+    (missedQuests.length > 0
       ? `Kiệt sức do bỏ lỡ ${missedQuests.length} nhiệm vụ (-${totalHpDamage} HP)`
-      : `Kiệt sức trong hành trình (-${totalHpDamage} HP)`;
+      : `Kiệt sức trong hành trình (-${totalHpDamage} HP)`);
 
   const report: DeathReport = {
     id: uid('death'),
@@ -2033,6 +2044,7 @@ app.post('/api/quests/:id/complete', (req, res) => {
     };
   });
 
+  syncWeeklyRaidSyncOnly({ onPlayerDeath: triggerPlayerDeathAndCheckpointRollback });
   db.checkpointWal();
 
   res.json({
@@ -3271,6 +3283,7 @@ app.post('/api/assistant/activity/convert-to-quest', (req, res) => {
     };
   });
 
+  syncWeeklyRaidSyncOnly({ onPlayerDeath: triggerPlayerDeathAndCheckpointRollback });
   db.checkpointWal();
   const state = buildStatePayload();
   res.json({
@@ -3531,6 +3544,71 @@ app.post('/api/schedule/weekly-blueprint/apply', (req, res) => {
     });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Apply blueprint failed' });
+  }
+});
+
+// ==================== WEEKLY RAID BOSS SYSTEM ====================
+app.get('/api/raid/current', async (_req, res) => {
+  try {
+    const payload = await getOrCreateCurrentWeeklyRaid({
+      onPlayerDeath: triggerPlayerDeathAndCheckpointRollback,
+    });
+    db.checkpointWal();
+    res.json(payload);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Không thể tải Weekly Raid' });
+  }
+});
+
+app.post('/api/raid/difficulty', (req, res) => {
+  try {
+    const { tier } = (req.body || {}) as { tier?: RaidDifficultyTier };
+    if (tier !== 'B' && tier !== 'A' && tier !== 'S') {
+      res.status(400).json({ error: 'Độ khó không hợp lệ (chỉ B, A, S).' });
+      return;
+    }
+    const payload = setWeeklyRaidDifficulty(tier, {
+      onPlayerDeath: triggerPlayerDeathAndCheckpointRollback,
+    });
+    db.checkpointWal();
+    res.json(payload);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Không thể đổi độ khó Raid' });
+  }
+});
+
+app.post('/api/raid/claim-chest', (req, res) => {
+  try {
+    const { chestId } = (req.body || {}) as { chestId?: RaidChestId };
+    if (
+      chestId !== 'm75' &&
+      chestId !== 'm50' &&
+      chestId !== 'm25' &&
+      chestId !== 'victory' &&
+      chestId !== 'overkill'
+    ) {
+      res.status(400).json({ error: 'Mã rương không hợp lệ.' });
+      return;
+    }
+    const outcome = claimWeeklyRaidChest(chestId, {
+      onPlayerDeath: triggerPlayerDeathAndCheckpointRollback,
+    });
+    db.checkpointWal();
+    res.json(outcome);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Không thể nhận rương Raid' });
+  }
+});
+
+app.post('/api/raid/regenerate-ai', async (_req, res) => {
+  try {
+    const outcome = await regenerateWeeklyRaidWithAi({
+      onPlayerDeath: triggerPlayerDeathAndCheckpointRollback,
+    });
+    db.checkpointWal();
+    res.json(outcome);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Không thể tái triệu hồi Boss AI' });
   }
 });
 
