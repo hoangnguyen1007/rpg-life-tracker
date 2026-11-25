@@ -1,18 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Brain,
-  CheckCircle2,
-  CheckSquare,
-  Lightbulb,
-  Pause,
-  Play,
-  ShieldAlert,
-  Square,
-  Swords,
-  X,
-  Zap,
-} from 'lucide-react';
 import type { Quest } from '../types/system';
+import {
+  PixelRivets,
+  PxBolt,
+  PxBook,
+  PxCheck,
+  PxClose,
+  PxPause,
+  PxPlay,
+  PxSparkle,
+  PxSword,
+  PxWarn,
+} from './PixelIcons';
 
 interface DungeonFocusModalProps {
   quest: Quest;
@@ -67,14 +66,21 @@ export const DungeonFocusModal: React.FC<DungeonFocusModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-      <div className="rpg-window relative max-h-[92vh] w-full max-w-lg overflow-y-auto p-6">
-        <button onClick={onClose} className="absolute right-4 top-4 p-1.5 text-dim hover:text-main">
-          <X className="h-5 w-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+      <div className="rpg-window relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-none p-6">
+        <PixelRivets />
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="btn-secondary absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-none"
+          aria-label="Đóng"
+        >
+          <PxClose size={13} />
         </button>
 
-        <div className="text-center">
-          <span className="font-pixel border border-amber-500/50 bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold uppercase text-amber-600 dark:text-amber-300 rounded-[2px]">
+        <div className="pr-8 text-center">
+          <span className="font-pixel inline-block rounded-none border-2 border-[var(--border-ink)] bg-[var(--px-gold)] px-2.5 py-1 text-[10px] font-bold uppercase text-[#140e04]">
             FOCUS MODE · +25% XP &amp; +SP
           </span>
           <h2 className="mt-2 font-display text-lg font-extrabold text-main">{quest.title}</h2>
@@ -82,12 +88,15 @@ export const DungeonFocusModal: React.FC<DungeonFocusModalProps> = ({
         </div>
 
         <div className="my-5 flex flex-col items-center">
-          <div className="flex h-36 w-36 items-center justify-center border-4 border-amber-500/85 bg-[#0d111d] rounded-[2px]">
+          <div className="px-inset flex h-36 w-36 items-center justify-center rounded-none border-2 border-[var(--px-gold)]">
             <div className="text-center">
-              <div className="font-mono text-3xl font-extrabold text-white">
+              <div className="font-mono text-3xl font-extrabold tabular-nums text-main">
                 {mins}:{secs}
               </div>
-              <span className="font-pixel text-[9px] text-amber-400">
+              <span
+                className="font-pixel mt-1 inline-block text-[9px]"
+                style={{ color: running ? 'var(--px-gold-text)' : 'var(--px-blue-text)' }}
+              >
                 {running ? 'FOCUS ON' : 'PAUSED'}
               </span>
             </div>
@@ -96,43 +105,48 @@ export const DungeonFocusModal: React.FC<DungeonFocusModalProps> = ({
           <div className="mt-4 w-full max-w-sm">
             <div className="mb-1 flex justify-between font-mono text-xs text-sub">
               <span>Tiến độ phiên tập trung</span>
-              <span>{progressPct}%</span>
+              <span className="font-bold text-main">{progressPct}%</span>
             </div>
-            <div className="rpg-bar-track h-2.5 w-full">
+            <div className="rpg-bar-track h-3 w-full">
               <div
-                className="h-full bg-amber-500 transition-all"
-                style={{ width: `${progressPct}%` }}
+                className="h-full"
+                style={{ width: `${progressPct}%`, backgroundColor: 'var(--px-gold)' }}
               />
             </div>
           </div>
         </div>
 
         {quest.subtasks.length > 0 && (
-          <div className="mb-4 space-y-2 border-2 p-3.5 studio-subtle rpg-divider rounded-[2px]">
+          <div className="px-inset mb-4 space-y-2 rounded-none p-3.5">
             {quest.subtasks.map((st) => (
               <button
                 key={st.id}
-                onClick={() => onToggleSubtask(quest.id, st.id)}
+                type="button"
+                onClick={() => void onToggleSubtask(quest.id, st.id)}
                 className="flex w-full items-center gap-2 text-left text-xs text-main"
               >
-                {st.done ? (
-                  <CheckSquare className="h-4 w-4 shrink-0 text-emerald-500" />
-                ) : (
-                  <Square className="h-4 w-4 shrink-0 text-dim" />
-                )}
-                <span className={st.done ? 'line-through text-dim' : ''}>{st.label}</span>
+                <span
+                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded-none border-2 border-[var(--border-ink)]"
+                  style={{
+                    backgroundColor: st.done ? 'var(--px-green)' : 'var(--bg-surface)',
+                    color: '#ffffff',
+                  }}
+                >
+                  {st.done && <PxCheck size={10} />}
+                </span>
+                <span className={st.done ? 'text-dim line-through' : ''}>{st.label}</span>
               </button>
             ))}
           </div>
         )}
 
         {microGapLeft !== null && (
-          <div className="mb-4 border-2 border-violet-500/60 bg-violet-500/15 p-3.5 text-center rounded-[2px]">
-            <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-violet-600 dark:text-violet-300">
-              <Brain className="h-4 w-4 animate-pulse" />
+          <div className="mb-4 rounded-none border-2 border-[var(--px-plum)] bg-[var(--px-plum)]/15 p-3.5 text-center">
+            <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-[var(--px-plum-text)]">
+              <PxSparkle size={14} color="var(--px-plum-text)" />
               <span>10s Micro-Gap Neural Replay · 20x Hippocampal Replay</span>
             </div>
-            <div className="font-pixel my-1.5 text-2xl font-bold text-violet-600 dark:text-violet-200">
+            <div className="font-pixel my-1.5 text-2xl font-bold text-[var(--px-plum-text)]">
               {microGapLeft}s
             </div>
             <p className="text-xs text-sub">
@@ -141,7 +155,7 @@ export const DungeonFocusModal: React.FC<DungeonFocusModalProps> = ({
             <button
               type="button"
               onClick={() => setMicroGapLeft(null)}
-              className="btn-secondary mt-2 px-3 py-1 text-xs"
+              className="btn-secondary mt-2 rounded-none px-3 py-1 text-xs"
             >
               Quay lại ngay
             </button>
@@ -149,8 +163,8 @@ export const DungeonFocusModal: React.FC<DungeonFocusModalProps> = ({
         )}
 
         {microGapLeft === null && microGapCount > 0 && (
-          <div className="mb-3 flex items-center justify-center gap-1.5 border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs text-emerald-700 dark:text-emerald-300 rounded-[2px]">
-            <CheckCircle2 className="h-3.5 w-3.5" />
+          <div className="mb-3 flex items-center justify-center gap-1.5 rounded-none border-2 border-[var(--px-green)] bg-[var(--px-green)]/15 px-3 py-1.5 text-xs font-semibold text-[var(--px-green-text)]">
+            <PxCheck size={13} />
             <span>Đã hoàn tất {microGapCount} chu kỳ Tái tạo Thần kinh 10s (20x Replay).</span>
           </div>
         )}
@@ -159,39 +173,52 @@ export const DungeonFocusModal: React.FC<DungeonFocusModalProps> = ({
           value={proofNote}
           onChange={(e) => setProofNote(e.target.value)}
           placeholder="Ghi ngắn gọn kết quả đạt được sau phiên tập trung..."
-          className="w-full px-3 py-2 text-xs"
+          className="w-full rounded-none px-3 py-2 text-xs"
         />
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => setRunning((r) => !r)} className="btn-secondary flex items-center gap-1.5 px-3 py-2 text-xs">
-              {running ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            <button
+              type="button"
+              onClick={() => setRunning((r) => !r)}
+              className="btn-secondary flex items-center gap-1.5 rounded-none px-3 py-2 text-xs"
+            >
+              {running ? <PxPause size={12} /> : <PxPlay size={12} />}
               <span>{running ? 'Tạm dừng' : 'Tiếp tục'}</span>
             </button>
-            <button onClick={() => setDistractions((d) => d + 1)} className="btn-secondary flex items-center gap-1 px-2.5 py-2 text-xs">
-              <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
-              <span>{distractions}</span>
+            <button
+              type="button"
+              onClick={() => setDistractions((d) => d + 1)}
+              className="btn-secondary flex items-center gap-1.5 rounded-none px-2.5 py-2 text-xs"
+              title="Ghi nhận 1 lần xao nhãng"
+            >
+              <PxWarn size={13} />
+              <span className="font-mono font-bold">{distractions}</span>
             </button>
             <button
               type="button"
               disabled={microGapLeft !== null}
               onClick={() => setMicroGapLeft(10)}
-              className="btn-secondary flex items-center gap-1 px-2.5 py-2 text-xs text-violet-600 dark:text-violet-300"
+              className="btn-secondary flex items-center gap-1 rounded-none px-2.5 py-2 text-xs text-[var(--px-plum-text)]"
               title="Nghỉ 10 giây Tái tạo Thần kinh — 20x Hippocampal Replay"
             >
-              <Zap className="h-3.5 w-3.5" />
+              <PxBolt size={13} color="var(--px-plum-text)" />
               <span>Nghỉ 10s</span>
             </button>
           </div>
 
-          <button onClick={() => onClearDungeon(quest.id, proofNote)} className="btn-primary flex items-center gap-1.5 px-4 py-2 text-xs">
-            <Swords className="h-4 w-4" />
+          <button
+            type="button"
+            onClick={() => void onClearDungeon(quest.id, proofNote)}
+            className="btn-primary flex items-center gap-1.5 rounded-none px-4 py-2 text-xs"
+          >
+            <PxSword size={14} />
             <span>Hoàn thành (+25% XP)</span>
           </button>
         </div>
 
-        <div className="mt-4 flex items-start gap-2 border-2 px-3 py-2 text-[11px] text-sub studio-subtle rpg-divider rounded-[2px]">
-          <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+        <div className="px-inset mt-4 flex items-start gap-2 rounded-none px-3 py-2 text-[11px] text-sub">
+          <PxBook size={14} color="var(--px-gold-text)" className="mt-0.5" />
           <span>
             <strong>Focused vs. Diffused Mode (Barbara Oakley):</strong> Tập trung sâu 25–90 phút ở Focused Mode; nếu gặp điểm nghẽn quá 15 phút, hãy tạm rời màn hình đi bộ để não chuyển sang Diffused Mode kết nối ý tưởng.
           </span>

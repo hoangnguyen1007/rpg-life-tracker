@@ -11,7 +11,10 @@
     "build": "vite build",
     "start": "tsx server/index.ts",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri:check": "powershell -ExecutionPolicy Bypass -File scripts/build-tauri-light.ps1 -Mode check",
+    "tauri:build": "powershell -ExecutionPolicy Bypass -File scripts/build-tauri-light.ps1 -Mode release",
+    "tauri:launch": "powershell -ExecutionPolicy Bypass -File scripts/build-tauri-light.ps1 -Mode release -SkipFrontendBuild -Launch"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.3",

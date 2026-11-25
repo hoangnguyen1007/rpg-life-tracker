@@ -1,37 +1,31 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Copy } from 'lucide-react';
 import {
-  Activity,
-  Bell,
-  BellOff,
-  Bot,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  Copy,
-  Cpu,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  Flame,
-  FolderSync,
-  HardDrive,
-  Monitor,
-  Plus,
-  Power,
-  QrCode,
-  RefreshCw,
-  RotateCw,
-  ShieldCheck,
-  Smartphone,
-  Sparkles,
-  Sun,
-  Trash2,
-  Upload,
-  Wand2,
-  X,
-  Zap,
-} from 'lucide-react';
+  PixelRivets,
+  PxAutomaton,
+  PxBell,
+  PxBolt,
+  PxCheck,
+  PxChevron,
+  PxClock,
+  PxClose,
+  PxDashboard,
+  PxEye,
+  PxEyeOff,
+  PxFlame,
+  PxGear,
+  PxMiniToggle,
+  PxPhone,
+  PxPlus,
+  PxRefresh,
+  PxSave,
+  PxShield,
+  PxSparkle,
+  PxSun,
+  PxTarget,
+  PxTrash,
+  PxWarn,
+} from './PixelIcons';
 import type {
   ActivityCategory,
   ActivityRule,
@@ -43,7 +37,7 @@ import type {
   Quest,
   SystemStatePayload,
 } from '../types/system';
-import { systemApi } from '../utils/api';
+import { isTauriDesktop, systemApi } from '../utils/api';
 
 export interface AssistantCenterViewProps {
   overview: AssistantOverviewPayload | null;
@@ -82,33 +76,33 @@ const CATEGORY_META: Record<
 > = {
   deep_work: {
     label: 'Deep Work',
-    badgeCls: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400',
-    barCls: 'bg-emerald-500',
+    badgeCls: 'border-[var(--px-green)] bg-[var(--bg-surface-2)] text-[var(--px-green-text)]',
+    barCls: 'bg-[var(--px-green)]',
   },
   study_research: {
     label: 'Học tập',
-    badgeCls: 'border-cyan-500/40 bg-cyan-500/15 text-cyan-400',
-    barCls: 'bg-cyan-500',
+    badgeCls: 'border-[var(--px-blue)] bg-[var(--bg-surface-2)] text-[var(--px-blue-text)]',
+    barCls: 'bg-[var(--px-blue)]',
   },
   communication: {
     label: 'Giao tiếp',
-    badgeCls: 'border-indigo-500/40 bg-indigo-500/15 text-indigo-400',
-    barCls: 'bg-indigo-500',
+    badgeCls: 'border-[var(--px-plum)] bg-[var(--bg-surface-2)] text-[var(--px-plum-text)]',
+    barCls: 'bg-[var(--px-plum)]',
   },
   distraction: {
     label: 'Xao nhãng',
-    badgeCls: 'border-rose-500/40 bg-rose-500/15 text-rose-400',
-    barCls: 'bg-rose-500',
+    badgeCls: 'border-[var(--px-red)] bg-[var(--bg-surface-2)] text-[var(--px-red-text)]',
+    barCls: 'bg-[var(--px-red)]',
   },
   other: {
     label: 'Khác',
-    badgeCls: 'studio-divider studio-subtle text-sub',
-    barCls: 'bg-slate-500',
+    badgeCls: 'border-[var(--border-strong)] bg-[var(--bg-subtle)] text-sub',
+    barCls: 'bg-[var(--border-strong)]',
   },
   idle: {
     label: 'Nghỉ / Idle',
-    badgeCls: 'studio-divider studio-subtle text-dim',
-    barCls: 'bg-slate-700',
+    badgeCls: 'border-[var(--border-hairline)] bg-[var(--bg-subtle)] text-dim',
+    barCls: 'bg-[var(--border-hairline)]',
   },
 };
 
@@ -204,8 +198,9 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
 
   if (!overview) {
     return (
-      <section className="studio-surface p-8 text-center">
-        <Bot className="mx-auto h-7 w-7 text-amber-400" />
+      <section className="studio-surface relative p-8 text-center">
+        <PixelRivets />
+        <PxAutomaton size={28} className="mx-auto text-[var(--px-gold-text)]" />
         <h2 className="mt-2 font-display text-base font-extrabold text-main">
           Trợ Lý PC &amp; Theo Dõi Hoạt Động
         </h2>
@@ -218,7 +213,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
           disabled={loading || busyKey === 'refresh'}
           className="btn-primary mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <PxRefresh size={14} className={loading ? 'animate-spin' : ''} />
           <span>Tải Trạng Thái</span>
         </button>
       </section>
@@ -376,18 +371,19 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
   return (
     <div className="space-y-4">
       {/* Section 1: Morning Briefing & Smart Status Strip */}
-      <section className="studio-surface p-5">
+      <section className="studio-surface relative p-5">
+        <PixelRivets />
         <div className="flex flex-col gap-3 border-b-2 pb-4 lg:flex-row lg:items-center lg:justify-between studio-divider">
           <div className="flex items-start gap-3">
-            <div className="rounded-[2px] border-2 border-amber-500/40 bg-amber-500/10 p-2 text-amber-400">
-              <Sun className="h-5 w-5" />
+            <div className="px-inset rounded-none border-[var(--px-gold)] p-2 text-[var(--px-gold-text)]">
+              <PxSun size={20} />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-display text-base font-extrabold text-main">
                   {briefing.greeting}
                 </h2>
-                <span className="font-mono text-[11px] text-amber-400">
+                <span className="font-mono text-[11px] font-bold text-[var(--px-gold-text)]">
                   {briefing.dayLabel} · {briefing.activeChapterLabel}
                 </span>
               </div>
@@ -403,7 +399,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                 onClick={() => runBusy('orch', onRunOrchestrate)}
                 className="btn-primary flex items-center gap-1.5 px-3.5 py-2 text-xs"
               >
-                <Wand2 className="h-3.5 w-3.5" />
+                <PxSparkle size={14} />
                 <span>AI Lập Kế Hoạch</span>
               </button>
             )}
@@ -416,32 +412,32 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
               })}
               className="btn-secondary flex items-center gap-1.5 px-3 py-2 text-xs"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${busyKey === 'refresh' ? 'animate-spin' : ''}`} />
+              <PxRefresh size={14} className={busyKey === 'refresh' ? 'animate-spin' : ''} />
               <span>Làm mới</span>
             </button>
           </div>
         </div>
 
         <div className="mt-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          <div className="rounded-[2px] border-2 px-3 py-2 studio-subtle studio-divider">
+          <div className="px-inset rounded-none px-3 py-2">
             <div className="font-mono text-[10px] uppercase text-dim">Lịch cố định</div>
             <div className="mt-0.5 font-mono text-sm font-extrabold text-main">
               {briefing.fixedBlocksCount} khối
             </div>
           </div>
-          <div className="rounded-[2px] border-2 px-3 py-2 studio-subtle studio-divider">
+          <div className="px-inset rounded-none px-3 py-2">
             <div className="font-mono text-[10px] uppercase text-dim">Giờ rảnh</div>
-            <div className="mt-0.5 font-mono text-sm font-extrabold text-emerald-400">
+            <div className="mt-0.5 font-mono text-sm font-extrabold text-[var(--px-green-text)]">
               {briefing.freeHours.toFixed(1)}h
             </div>
           </div>
-          <div className="rounded-[2px] border-2 px-3 py-2 studio-subtle studio-divider">
+          <div className="px-inset rounded-none px-3 py-2">
             <div className="font-mono text-[10px] uppercase text-dim">Khung vàng Deep Work</div>
-            <div className="mt-0.5 truncate font-mono text-xs font-extrabold text-amber-400">
+            <div className="mt-0.5 truncate font-mono text-xs font-extrabold text-[var(--px-gold-text)]">
               {briefing.bestDeepWorkWindow || 'Chưa có'}
             </div>
           </div>
-          <div className="rounded-[2px] border-2 px-3 py-2 studio-subtle studio-divider">
+          <div className="px-inset rounded-none px-3 py-2">
             <div className="font-mono text-[10px] uppercase text-dim">Việc chờ</div>
             <div className="mt-0.5 font-mono text-sm font-extrabold text-main">
               {briefing.pendingQuestsCount} việc
@@ -451,19 +447,21 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
       </section>
 
       {/* Calm Guard Status + DND Snooze + Floating Mini HUD Launcher Bar */}
-      <section className="studio-surface p-4 sm:p-5">
+      <section className="studio-surface relative p-4 sm:p-5">
+        <PixelRivets />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-display text-xs font-extrabold uppercase tracking-wide text-main">
-              Calm Guard &amp; Mini HUD:
+            <span className="inline-flex items-center gap-1.5 font-display text-xs font-extrabold uppercase tracking-wide text-main">
+              <PxShield size={14} className="text-[var(--px-gold-text)]" />
+              <span>Calm Guard &amp; Mini HUD:</span>
             </span>
             <span
-              className={`rounded-[2px] border px-2.5 py-1 font-mono text-[11px] font-bold ${
+              className={`rounded-none border-2 px-2.5 py-1 font-mono text-[11px] font-bold ${
                 alertLevel === 'toast'
-                  ? 'border-rose-500/50 bg-rose-500/15 text-rose-400'
+                  ? 'border-[var(--px-red)] bg-[var(--bg-surface-2)] text-[var(--px-red-text)]'
                   : alertLevel === 'soft_hud'
-                    ? 'border-amber-500/50 bg-amber-500/15 text-amber-300'
-                    : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
+                    ? 'border-[var(--px-gold)] bg-[var(--bg-surface-2)] text-[var(--px-gold-text)]'
+                    : 'border-[var(--px-green)] bg-[var(--bg-surface-2)] text-[var(--px-green-text)]'
               }`}
             >
               Guard:{' '}
@@ -474,10 +472,10 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   : 'Ổn định (None)'}
             </span>
             <span
-              className={`rounded-[2px] border px-2.5 py-1 font-mono text-[11px] font-bold ${
+              className={`rounded-none border-2 px-2.5 py-1 font-mono text-[11px] font-bold ${
                 overview.externalTrackerActive
-                  ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-300'
-                  : 'studio-divider studio-subtle text-sub'
+                  ? 'border-[var(--px-blue)] bg-[var(--bg-surface-2)] text-[var(--px-blue-text)]'
+                  : 'border-[var(--border-ink)] bg-[var(--bg-subtle)] text-sub'
               }`}
             >
               Engine: {overview.externalTrackerActive ? 'Rust Win32 Native' : 'Windows PowerShell'}
@@ -487,7 +485,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             {overview.dndActive ? (
               <div className="flex items-center gap-2">
-                <span className="rounded-[2px] border border-amber-500/50 bg-amber-500/15 px-2.5 py-1 font-mono text-[11px] font-bold text-amber-300">
+                <span className="rounded-none border-2 border-[var(--px-gold)] bg-[var(--bg-surface-2)] px-2.5 py-1 font-mono text-[11px] font-bold text-[var(--px-gold-text)]">
                   Đang tạm im ({dndRemainingMins}p)
                 </span>
                 <button
@@ -496,7 +494,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   onClick={() => handleSetDndAction(0)}
                   className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs"
                 >
-                  <Bell className="h-3.5 w-3.5 text-emerald-400" />
+                  <PxBell size={14} className="text-[var(--px-green-text)]" />
                   <span>Tắt DND</span>
                 </button>
               </div>
@@ -507,7 +505,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                 onClick={() => handleSetDndAction(60)}
                 className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
-                <BellOff className="h-3.5 w-3.5 text-amber-400" />
+                <PxBell size={14} muted className="text-[var(--px-gold-text)]" />
                 <span>Tạm im 1 giờ (DND)</span>
               </button>
             )}
@@ -528,12 +526,12 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
             >
               {hudVisible ? (
                 <>
-                  <EyeOff className="h-3.5 w-3.5 text-amber-400" />
+                  <PxEyeOff size={14} className="text-[var(--px-gold-text)]" />
                   <span>Ẩn Mini HUD</span>
                 </>
               ) : (
                 <>
-                  <Eye className="h-3.5 w-3.5" />
+                  <PxEye size={14} />
                   <span>Hiện Mini HUD</span>
                 </>
               )}
@@ -546,7 +544,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                 className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs"
                 title="Đưa Mini HUD về lại góc phải phía trên thanh Taskbar"
               >
-                <ExternalLink className="h-3.5 w-3.5 text-cyan-400" />
+                <PxMiniToggle size={14} className="text-[var(--px-blue-text)]" />
                 <span>Về góc Taskbar</span>
               </button>
             )}
@@ -556,15 +554,16 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
 
       {/* Smart Unlogged Focus -> Quest Bridge Card */}
       {activity.uncreditedFocusMinutes >= 10 && (
-        <section className="studio-surface border-emerald-500/60 bg-emerald-500/5 p-4 sm:p-5">
+        <section className="studio-surface relative border-[var(--px-green)] bg-[var(--bg-surface-2)] p-4 sm:p-5">
+          <PixelRivets />
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-3">
-              <div className="rounded-[2px] border-2 border-emerald-500/50 bg-emerald-500/15 p-2 text-emerald-400">
-                <Flame className="h-5 w-5" />
+              <div className="px-inset rounded-none border-[var(--px-green)] p-2 text-[var(--px-green-text)]">
+                <PxFlame size={20} />
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-pixel rounded-[2px] border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-bold text-emerald-400">
+                  <span className="font-pixel rounded-none border-2 border-[var(--px-green)] bg-[var(--bg-subtle)] px-2 py-0.5 text-[9px] font-bold text-[var(--px-green-text)]">
                     FOCUS BRIDGE · +{activity.uncreditedFocusMinutes} PHÚT CHƯA QUY ĐỔI
                   </span>
                   {suggestedSession?.topApp && (
@@ -573,7 +572,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                     </span>
                   )}
                   {suggestedSession?.skillName && (
-                    <span className="font-mono text-[11px] text-cyan-400">
+                    <span className="font-mono text-[11px] font-bold text-[var(--px-blue-text)]">
                       → {suggestedSession.skillName}
                     </span>
                   )}
@@ -603,7 +602,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   }
                   className="btn-primary flex items-center gap-1.5 px-3.5 py-2 text-xs"
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <PxCheck size={14} />
                   <span>Ghi nhận thành Quest đã xong</span>
                 </button>
               )}
@@ -613,7 +612,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   <select
                     value={effectiveQuestId}
                     onChange={(e) => setSelectedPendingQuestId(e.target.value)}
-                    className="max-w-[180px] px-2 py-1.5 text-xs"
+                    className="max-w-[180px] rounded-none px-2 py-1.5 text-xs"
                     aria-label="Chọn Quest đang chờ"
                   >
                     {pendingQuests.map((q) => (
@@ -646,7 +645,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                 onClick={() => runBusy('sync-skill', onSyncFocusToSkill)}
                 className="btn-emerald flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
-                <Zap className="h-3.5 w-3.5" />
+                <PxBolt size={14} />
                 <span>Chỉ cộng Skill XP</span>
               </button>
             </div>
@@ -655,44 +654,56 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
       )}
 
       {/* Section 2: Khởi động cùng PC & Chế độ Desktop */}
-      <section className="studio-surface p-5">
+      <section className="studio-surface relative p-5">
+        <PixelRivets />
         <div className="flex flex-col gap-3 border-b-2 pb-3.5 lg:flex-row lg:items-center lg:justify-between studio-divider">
           <div className="flex items-center gap-2.5">
-            <Monitor className="h-4 w-4 shrink-0 text-amber-400" />
+            <PxDashboard size={16} className="text-[var(--px-gold-text)]" />
             <div>
               <h3 className="font-display text-sm font-extrabold text-main">
                 Khởi động cùng PC &amp; Chế độ Desktop
               </h3>
               <p className="text-xs text-sub">
-                Chạy ngầm nhẹ trên Windows, mở cửa sổ Desktop độc lập (Edge/Chrome Standalone) và System Tray.
+                Ứng dụng Desktop Tauri v2 (rpg-life-tracker.exe · ~29MB RAM) với 2D Pixel Mini HUD luôn nổi, System Tray bản địa và Rust Win32 Tracker.
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
             <span
-              className={`rounded-[2px] border px-2.5 py-1 font-bold ${
+              className={`rounded-none border-2 px-2.5 py-1 font-bold ${
+                overview.externalTrackerActive || isTauriDesktop()
+                  ? 'border-[var(--px-green)] bg-[var(--bg-surface-2)] text-[var(--px-green-text)]'
+                  : 'border-[var(--px-plum)] bg-[var(--bg-surface-2)] text-[var(--px-plum-text)]'
+              }`}
+            >
+              {overview.externalTrackerActive || isTauriDesktop()
+                ? 'Tauri v2 Native (.exe)'
+                : 'Sẵn sàng (.exe)'}
+            </span>
+            <span
+              className={`rounded-none border-2 px-2.5 py-1 font-bold ${
                 startup.startupInstalled
-                  ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
-                  : 'studio-divider studio-subtle text-dim'
+                  ? 'border-[var(--px-green)] bg-[var(--bg-surface-2)] text-[var(--px-green-text)]'
+                  : 'border-[var(--border-ink)] bg-[var(--bg-subtle)] text-dim'
               }`}
             >
               Tự chạy khi bật PC: {startup.startupInstalled ? 'Đã cài' : 'Chưa cài'}
             </span>
             <span
-              className={`rounded-[2px] border px-2.5 py-1 font-bold ${
+              className={`rounded-none border-2 px-2.5 py-1 font-bold ${
                 startup.desktopShortcutInstalled
-                  ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-400'
-                  : 'studio-divider studio-subtle text-dim'
+                  ? 'border-[var(--px-blue)] bg-[var(--bg-surface-2)] text-[var(--px-blue-text)]'
+                  : 'border-[var(--border-ink)] bg-[var(--bg-subtle)] text-dim'
               }`}
             >
               Shortcut Desktop App: {startup.desktopShortcutInstalled ? 'Đã có' : 'Chưa có'}
             </span>
             <span
-              className={`rounded-[2px] border px-2.5 py-1 font-bold ${
+              className={`rounded-none border-2 px-2.5 py-1 font-bold ${
                 startup.traySupported
-                  ? 'border-amber-500/40 bg-amber-500/15 text-amber-400'
-                  : 'studio-divider studio-subtle text-dim'
+                  ? 'border-[var(--px-gold)] bg-[var(--bg-surface-2)] text-[var(--px-gold-text)]'
+                  : 'border-[var(--border-ink)] bg-[var(--bg-subtle)] text-dim'
               }`}
             >
               System Tray: {startup.traySupported ? 'Sẵn sàng' : 'Không hỗ trợ'}
@@ -712,7 +723,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
               }
               className="btn-primary flex items-center gap-1.5 px-3.5 py-2 text-xs"
             >
-              <Power className="h-3.5 w-3.5" />
+              <PxBolt size={14} />
               <span>Cài Tự Khởi Động cùng Windows (+ Shortcut App)</span>
             </button>
           ) : (
@@ -725,9 +736,9 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                     onUninstallStartup({ removeDesktopShortcut: false })
                   )
                 }
-                className="btn-secondary flex items-center gap-1.5 px-3.5 py-2 text-xs text-rose-400"
+                className="btn-secondary flex items-center gap-1.5 px-3.5 py-2 text-xs text-[var(--px-red-text)]"
               >
-                <Power className="h-3.5 w-3.5" />
+                <PxClose size={14} />
                 <span>Gỡ Tự Khởi Động</span>
               </button>
               <button
@@ -736,7 +747,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                 onClick={() => runBusy('tray', onLaunchTray)}
                 className="btn-secondary flex items-center gap-1.5 px-3.5 py-2 text-xs"
               >
-                <Cpu className="h-3.5 w-3.5 text-amber-400" />
+                <PxGear size={14} className="text-[var(--px-gold-text)]" />
                 <span>Mở Icon Khay Hệ Thống</span>
               </button>
             </>
@@ -748,27 +759,33 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
             onClick={() => runBusy('toast', onTestNotification)}
             className="btn-secondary flex items-center gap-1.5 px-3.5 py-2 text-xs"
           >
-            <Bell className="h-3.5 w-3.5 text-cyan-400" />
+            <PxBell size={14} className="text-[var(--px-blue-text)]" />
             <span>Thử Thông Báo Windows</span>
           </button>
         </div>
+
+        <p className="mt-2.5 font-mono text-[11px] text-sub">
+          Phím tắt: <span className="font-bold text-[var(--px-gold-text)]">Ctrl+Shift+Space</span> Ẩn/Hiện Mini HUD ·{' '}
+          <span className="font-bold text-[var(--px-blue-text)]">Ctrl+Shift+Alt+H</span> Mở Dashboard · Click trái icon Khay Hệ Thống.
+        </p>
       </section>
 
       {/* Sections 3 & 4: Two-Column Ledger (Live PC Tracker + 24h Timeline | Proactive Rules) */}
-      <section className="studio-surface overflow-hidden">
+      <section className="studio-surface relative overflow-hidden">
+        <PixelRivets />
         <div className="grid grid-cols-1 lg:grid-cols-12">
           {/* Section 3: Theo dõi Hoạt động Thông minh (Live PC Tracker) */}
           <div className="space-y-4 p-5 lg:col-span-7">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 pb-3 studio-divider">
               <div className="flex items-center gap-2">
-                <Activity className="h-4 w-4 text-emerald-400" />
+                <PxTarget size={16} className="text-[var(--px-green-text)]" />
                 <h3 className="font-display text-sm font-extrabold text-main">
                   Theo dõi Hoạt động Thông minh (Live PC Tracker)
                 </h3>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-[2px] border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-mono text-xs font-bold text-amber-400">
+                <span className="px-inset rounded-none border-[var(--px-gold)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--px-gold-text)]">
                   Focus Score: {activity.focusScore}%
                 </span>
                 <button
@@ -787,9 +804,9 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
             </div>
 
             {activity.currentApp && (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-[2px] border-2 px-3 py-2 text-xs studio-subtle studio-divider">
+              <div className="px-inset flex flex-wrap items-center justify-between gap-2 rounded-none px-3 py-2 text-xs">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                  <span className="h-2 w-2 shrink-0 rounded-none bg-[var(--px-green)]" />
                   <span className="truncate font-mono font-bold text-main">
                     {activity.currentApp.processName}
                   </span>
@@ -798,7 +815,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   </span>
                 </div>
                 <span
-                  className={`shrink-0 rounded-[2px] border px-2 py-0.5 font-mono text-[10px] font-bold ${
+                  className={`shrink-0 rounded-none border-2 px-2 py-0.5 font-mono text-[10px] font-bold ${
                     CATEGORY_META[activity.currentApp.category].badgeCls
                   }`}
                 >
@@ -809,7 +826,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
 
             {/* Segmented Horizontal Pixel Bar */}
             <div>
-              <div className="flex h-4 w-full overflow-hidden rounded-[2px] border-2 studio-divider studio-subtle">
+              <div className="rpg-bar-track flex h-4 w-full rounded-none">
                 {segments.map((seg) => {
                   if (seg.mins <= 0) return null;
                   const pct = (seg.mins / segTotal) * 100;
@@ -826,7 +843,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
               <div className="mt-2 flex flex-wrap gap-3 font-mono text-[11px] text-sub">
                 {segments.map((seg) => (
                   <span key={seg.key} className="inline-flex items-center gap-1.5">
-                    <span className={`h-2.5 w-2.5 ${CATEGORY_META[seg.key].barCls}`} />
+                    <span className={`h-2.5 w-2.5 rounded-none border border-[var(--border-ink)] ${CATEGORY_META[seg.key].barCls}`} />
                     <span>
                       {CATEGORY_META[seg.key].label}: <strong className="text-main">{seg.mins}p</strong>
                     </span>
@@ -836,13 +853,13 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
             </div>
 
             {/* 24h Pixel Focus Timeline (06h -> 23h) + Peak Focus Hour + Distraction Budget */}
-            <div className="space-y-3 rounded-[2px] border-2 p-3 studio-subtle studio-divider">
+            <div className="px-inset space-y-3 rounded-none p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 text-xs font-extrabold text-main">
-                  <Clock className="h-3.5 w-3.5 text-cyan-400" />
+                  <PxClock size={14} className="text-[var(--px-blue-text)]" />
                   <span>Nhịp Tập Trung Theo Giờ (06h → 23h)</span>
                 </div>
-                <div className="font-mono text-[11px] text-amber-400">
+                <div className="font-mono text-[11px] text-[var(--px-gold-text)]">
                   Giờ Vàng Thực Tế: <strong>{activity.peakFocusHour || 'Chưa đủ dữ liệu'}</strong>
                 </div>
               </div>
@@ -861,14 +878,14 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   const heightPx = total > 0 ? Math.max(6, Math.round((total / maxHourTotal) * 44)) : 3;
                   const barCls =
                     h.dominantCategory === 'none'
-                      ? 'bg-slate-700/50'
-                      : CATEGORY_META[h.dominantCategory]?.barCls || 'bg-slate-500';
+                      ? 'bg-[var(--border-hairline)]'
+                      : CATEGORY_META[h.dominantCategory]?.barCls || 'bg-[var(--border-strong)]';
                   const tip = `${String(h.hour).padStart(2, '0')}h: Deep Work ${h.deepWorkMins}p · Học tập ${h.studyMins}p · Giao tiếp ${h.commMins}p · Xao nhãng ${h.distractionMins}p · Khác ${h.otherMins}p`;
                   return (
                     <div key={h.hour} className="flex flex-col items-center gap-1" title={tip}>
                       <div className="flex h-11 w-full items-end">
                         <div
-                          className={`w-full rounded-[1px] transition-all ${barCls}`}
+                          className={`w-full rounded-none transition-all ${barCls}`}
                           style={{ height: `${heightPx}px` }}
                         />
                       </div>
@@ -881,24 +898,25 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
               </div>
 
               {/* Distraction Budget Bar */}
-              <div className="border-t pt-2.5 studio-divider">
+              <div className="border-t-2 pt-2.5 studio-divider">
                 <div className="mb-1 flex items-center justify-between font-mono text-[11px]">
                   <span className="font-semibold text-sub">Ngân Sách Xao Nhãng Hôm Nay</span>
-                  <span className={isOverBudget ? 'font-bold text-rose-400' : 'font-bold text-main'}>
+                  <span className={isOverBudget ? 'font-bold text-[var(--px-red-text)]' : 'font-bold text-main'}>
                     {activity.distractionMinutes}p / {distractionBudget}p
                     {isOverBudget ? ' (Vượt ngưỡng!)' : ''}
                   </span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-[2px] border studio-divider bg-[var(--bg-surface)]">
+                <div className="rpg-bar-track h-2.5 w-full rounded-none">
                   <div
-                    className={`h-full transition-all ${
-                      isOverBudget
-                        ? 'bg-rose-500'
+                    className="h-full transition-all"
+                    style={{
+                      width: `${distractionPct}%`,
+                      backgroundColor: isOverBudget
+                        ? 'var(--px-red)'
                         : distractionPct >= 75
-                          ? 'bg-amber-400'
-                          : 'bg-emerald-500'
-                    }`}
-                    style={{ width: `${distractionPct}%` }}
+                          ? 'var(--px-gold)'
+                          : 'var(--px-green)',
+                    }}
                   />
                 </div>
               </div>
@@ -916,7 +934,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   Chưa ghi nhận hoạt động PC nào hôm nay. Bật Tracker để tự động phân loại thời gian làm việc/học tập.
                 </p>
               ) : (
-                <div className="divide-y-2 border-2 studio-divider">
+                <div className="divide-y-2 border-2 border-[var(--border-ink)]">
                   {activity.topApps.slice(0, 6).map((app) => (
                     <div
                       key={`${app.processName}-${app.category}`}
@@ -927,7 +945,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                           {app.processName}
                         </span>
                         <span
-                          className={`shrink-0 rounded-[2px] border px-1.5 py-0.5 font-mono text-[10px] font-bold ${
+                          className={`shrink-0 rounded-none border-2 px-1.5 py-0.5 font-mono text-[10px] font-bold ${
                             CATEGORY_META[app.category].badgeCls
                           }`}
                         >
@@ -958,10 +976,10 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                                     })
                                   )
                                 }
-                                className={`rounded-[2px] border px-1.5 py-0.5 font-mono text-[10px] transition ${
+                                className={`rounded-none border-2 px-1.5 py-0.5 font-mono text-[10px] transition ${
                                   active
                                     ? `${CATEGORY_META[choice.category].badgeCls} font-bold`
-                                    : 'studio-divider bg-[var(--bg-surface)] text-dim hover:border-amber-400 hover:text-main'
+                                    : 'border-[var(--border-ink)] bg-[var(--bg-surface)] text-dim hover:border-[var(--px-gold)] hover:text-main'
                                 }`}
                               >
                                 {choice.label}
@@ -986,28 +1004,24 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                 <span>
                   Tùy chỉnh Quy tắc phân loại ({settings.customRules?.length || 0} quy tắc riêng)
                 </span>
-                {showRulesDrawer ? (
-                  <ChevronUp className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                )}
+                <PxChevron size={13} dir={showRulesDrawer ? 'up' : 'down'} />
               </button>
 
               {showRulesDrawer && (
-                <div className="mt-3 space-y-3 rounded-[2px] border-2 p-3 studio-subtle studio-divider">
+                <div className="px-inset mt-3 space-y-3 rounded-none p-3">
                   <form onSubmit={handleAddRule} className="flex flex-col gap-2 sm:flex-row">
                     <input
                       value={newRuleKeyword}
                       onChange={(e) => setNewRuleKeyword(e.target.value)}
                       placeholder="Từ khóa (vd: figma, blender, docs)..."
-                      className="flex-1 px-2.5 py-1.5 text-xs"
+                      className="flex-1 rounded-none px-2.5 py-1.5 text-xs"
                     />
                     <select
                       value={newRuleCategory}
                       onChange={(e) =>
                         setNewRuleCategory(e.target.value as Exclude<ActivityCategory, 'idle'>)
                       }
-                      className="px-2.5 py-1.5 text-xs"
+                      className="rounded-none px-2.5 py-1.5 text-xs"
                     >
                       <option value="deep_work">Deep Work</option>
                       <option value="study_research">Học tập</option>
@@ -1020,13 +1034,13 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                       disabled={!newRuleKeyword.trim() || busyKey === 'rules'}
                       className="btn-primary flex shrink-0 items-center justify-center gap-1 px-3 py-1.5 text-xs"
                     >
-                      <Plus className="h-3.5 w-3.5" />
+                      <PxPlus size={13} />
                       <span>Thêm</span>
                     </button>
                   </form>
 
                   {(settings.customRules || []).length > 0 && (
-                    <div className="divide-y studio-divider">
+                    <div className="divide-y-2 studio-divider">
                       {settings.customRules.map((rule) => (
                         <div
                           key={rule.id}
@@ -1035,7 +1049,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-bold text-main">{rule.keyword}</span>
                             <span
-                              className={`rounded-[2px] border px-1.5 py-0.5 font-mono text-[10px] ${
+                              className={`rounded-none border-2 px-1.5 py-0.5 font-mono text-[10px] ${
                                 CATEGORY_META[rule.category].badgeCls
                               }`}
                             >
@@ -1045,10 +1059,10 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                           <button
                             type="button"
                             onClick={() => handleRemoveRule(rule.id)}
-                            className="p-1 text-dim hover:text-rose-400"
+                            className="p-1 text-dim hover:text-[var(--px-red-text)]"
                             title="Xóa quy tắc"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <PxTrash size={13} />
                           </button>
                         </div>
                       ))}
@@ -1063,7 +1077,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
           <div className="space-y-4 border-t-2 p-5 lg:col-span-5 lg:border-l-2 lg:border-t-0 studio-divider">
             <div className="flex items-center justify-between gap-2 border-b-2 pb-3 studio-divider">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-amber-400" />
+                <PxShield size={16} className="text-[var(--px-gold-text)]" />
                 <h3 className="font-display text-sm font-extrabold text-main">
                   Trợ lý Chủ động &amp; Quy tắc Nhắc nhở
                 </h3>
@@ -1073,7 +1087,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
               </span>
             </div>
 
-            <div className="divide-y-2 border-2 studio-divider">
+            <div className="divide-y-2 border-2 border-[var(--border-ink)]">
               <label className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 text-xs studio-subtle">
                 <span className="font-semibold text-main">
                   Tự hiện 2D Pixel HUD khi mở app (Ctrl+Shift+Space)
@@ -1084,7 +1098,6 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   onChange={(e) =>
                     onUpdateSettings({ hudVisibleOnStart: e.target.checked })
                   }
-                  className="h-4 w-4 accent-amber-500"
                 />
               </label>
 
@@ -1102,7 +1115,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                         dailyFocusGoalMinutes: Math.max(30, Number(e.target.value) || 180),
                       })
                     }
-                    className="w-16 px-1.5 py-0.5 text-center text-xs"
+                    className="w-16 rounded-none px-1.5 py-0.5 text-center text-xs"
                   />
                   <span className="text-dim">phút</span>
                 </div>
@@ -1116,7 +1129,6 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   onChange={(e) =>
                     onUpdateSettings({ windowsToastEnabled: e.target.checked })
                   }
-                  className="h-4 w-4 accent-amber-500"
                 />
               </label>
 
@@ -1130,7 +1142,6 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   onChange={(e) =>
                     onUpdateSettings({ autoPauseQuestOnIdle: e.target.checked })
                   }
-                  className="h-4 w-4 accent-amber-500"
                 />
               </label>
 
@@ -1147,7 +1158,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                         distractionBudgetMinutes: Math.max(5, Number(e.target.value) || 45),
                       })
                     }
-                    className="w-14 px-1.5 py-0.5 text-center text-xs"
+                    className="w-14 rounded-none px-1.5 py-0.5 text-center text-xs"
                   />
                   <span className="text-dim">phút</span>
                 </div>
@@ -1161,7 +1172,6 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                     onChange={(e) =>
                       onUpdateSettings({ distractionGuardEnabled: e.target.checked })
                     }
-                    className="h-4 w-4 accent-amber-500"
                   />
                   <span className="font-semibold text-main">
                     Chống xao nhãng khi đang chạy Quest
@@ -1178,7 +1188,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                         distractionThresholdMinutes: Math.max(1, Number(e.target.value) || 3),
                       })
                     }
-                    className="w-12 px-1.5 py-0.5 text-center text-xs"
+                    className="w-12 rounded-none px-1.5 py-0.5 text-center text-xs"
                   />
                   <span className="text-dim">phút</span>
                 </div>
@@ -1194,7 +1204,6 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   onChange={(e) =>
                     onUpdateSettings({ upcomingBlockReminderEnabled: e.target.checked })
                   }
-                  className="h-4 w-4 accent-amber-500"
                 />
               </label>
 
@@ -1208,7 +1217,6 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   onChange={(e) =>
                     onUpdateSettings({ ultradianBreakEnabled: e.target.checked })
                   }
-                  className="h-4 w-4 accent-amber-500"
                 />
               </label>
 
@@ -1222,7 +1230,6 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   onChange={(e) =>
                     onUpdateSettings({ eveningWinddownEnabled: e.target.checked })
                   }
-                  className="h-4 w-4 accent-amber-500"
                 />
               </label>
             </div>
@@ -1236,11 +1243,11 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
               </div>
 
               {nudges.filter((n) => !n.dismissed).length === 0 ? (
-                <p className="rounded-[2px] border-2 p-3 text-xs text-dim studio-subtle studio-divider">
+                <p className="px-inset rounded-none p-3 text-xs text-dim">
                   Không có nhắc nhở mới. Hệ thống sẽ nhẹ nhàng nhắc khi gần tới khung giờ hoặc khi bạn xao nhãng quá lâu.
                 </p>
               ) : (
-                <div className="divide-y-2 border-2 studio-divider">
+                <div className="divide-y-2 border-2 border-[var(--border-ink)]">
                   {nudges
                     .filter((n) => !n.dismissed)
                     .slice(0, 6)
@@ -1251,7 +1258,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <Sparkles className="h-3 w-3 shrink-0 text-amber-400" />
+                            <PxSparkle size={12} className="text-[var(--px-gold-text)]" />
                             <span className="font-bold text-main">{n.title}</span>
                           </div>
                           <p className="mt-0.5 text-[11px] leading-snug text-sub">{n.message}</p>
@@ -1262,7 +1269,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                           className="p-1 text-dim hover:text-main"
                           title="Đóng nhắc nhở"
                         >
-                          <X className="h-3.5 w-3.5" />
+                          <PxClose size={13} />
                         </button>
                       </div>
                     ))}
@@ -1274,25 +1281,26 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
       </section>
 
       {/* Sections 5 & 6: Two-Column Ledger (LAN QR Mobile Pairing | Rotating SQLite Auto-Backup) */}
-      <section className="studio-surface overflow-hidden">
+      <section className="studio-surface relative overflow-hidden">
+        <PixelRivets />
         <div className="grid grid-cols-1 lg:grid-cols-12">
           {/* Kết nối Điện thoại qua QR Mạng LAN / Tailscale */}
-          <div className="space-y-4 p-5 lg:col-span-6">
+          <div id="lan-qr-card" className="space-y-4 p-5 lg:col-span-6">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 pb-3 studio-divider">
               <div className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4 text-cyan-400" />
+                <PxPhone size={16} className="text-[var(--px-blue-text)]" />
                 <h3 className="font-display text-sm font-extrabold text-main">
                   Kết nối Điện thoại qua QR Mạng LAN / Tailscale
                 </h3>
               </div>
               {lanInfo?.tailscaleIp && (
-                <span className="rounded-[2px] border border-cyan-500/40 bg-cyan-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-cyan-300">
+                <span className="rounded-none border-2 border-[var(--px-blue)] bg-[var(--bg-surface-2)] px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--px-blue-text)]">
                   Tailscale: {lanInfo.tailscaleIp}
                 </span>
               )}
             </div>
 
-            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-[2px] border-2 px-3 py-2.5 text-xs studio-subtle studio-divider">
+            <label className="px-inset flex cursor-pointer items-center justify-between gap-3 rounded-none px-3 py-2.5 text-xs">
               <span className="font-semibold text-main">
                 Cho phép truy cập từ điện thoại trong LAN
               </span>
@@ -1301,20 +1309,19 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                 checked={Boolean(lanInfo?.enabled)}
                 disabled={busyKey === 'lan-toggle'}
                 onChange={(e) => handleToggleLan(e.target.checked)}
-                className="h-4 w-4 accent-amber-500"
               />
             </label>
 
             {lanNotice && (
-              <p className="rounded-[2px] border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[11px] text-emerald-400">
+              <p className="px-inset rounded-none border-[var(--px-green)] px-3 py-1.5 font-mono text-[11px] text-[var(--px-green-text)]">
                 {lanNotice}
               </p>
             )}
 
             {lanInfo?.enabled ? (
-              <div className="flex flex-col gap-4 rounded-[2px] border-2 p-3.5 sm:flex-row sm:items-start studio-subtle studio-divider">
+              <div className="px-inset flex flex-col gap-4 rounded-none p-3.5 sm:flex-row sm:items-start">
                 {lanInfo.qrSvg ? (
-                  <div className="shrink-0 self-center rounded-[2px] border-2 border-slate-300 bg-white p-2 sm:self-start">
+                  <div className="shrink-0 self-center rounded-none border-2 border-[var(--border-ink)] bg-white p-2 sm:self-start">
                     {lanInfo.qrSvg.trim().startsWith('<svg') ? (
                       <div
                         className="h-32 w-32 [&>svg]:h-full [&>svg]:w-full"
@@ -1329,8 +1336,8 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                     )}
                   </div>
                 ) : (
-                  <div className="flex h-32 w-32 shrink-0 items-center justify-center rounded-[2px] border-2 studio-divider">
-                    <QrCode className="h-8 w-8 text-dim" />
+                  <div className="flex h-32 w-32 shrink-0 items-center justify-center rounded-none border-2 border-[var(--border-ink)]">
+                    <PxPhone size={28} className="text-dim" />
                   </div>
                 )}
 
@@ -1344,7 +1351,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                         <input
                           readOnly
                           value={lanInfo.mobileUrl}
-                          className="min-w-0 flex-1 px-2 py-1 font-mono text-[11px]"
+                          className="min-w-0 flex-1 rounded-none px-2 py-1 font-mono text-[11px]"
                         />
                         <button
                           type="button"
@@ -1365,7 +1372,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <span className="font-mono text-[10px] uppercase text-dim">Mã PIN 6 số: </span>
-                      <span className="rounded-[2px] border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-mono text-sm font-extrabold tracking-widest text-amber-400">
+                      <span className="rounded-none border-2 border-[var(--px-gold)] bg-[var(--bg-surface-2)] px-2 py-0.5 font-mono text-sm font-extrabold tracking-widest text-[var(--px-gold-text)]">
                         {lanInfo.pairPin}
                       </span>
                     </div>
@@ -1375,7 +1382,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                       onClick={handleRotateLanToken}
                       className="btn-secondary flex items-center gap-1 px-2.5 py-1 text-[11px]"
                     >
-                      <RotateCw className="h-3 w-3" />
+                      <PxRefresh size={12} />
                       <span>Đổi mã bảo mật mới</span>
                     </button>
                   </div>
@@ -1386,7 +1393,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                 </div>
               </div>
             ) : (
-              <p className="rounded-[2px] border-2 p-3 text-xs text-dim studio-subtle studio-divider">
+              <p className="px-inset rounded-none p-3 text-xs text-dim">
                 Bật công tắc trên để tạo mã QR &amp; PIN 6 số giúp check-in Quest nhanh từ điện thoại qua Wi-Fi nội bộ hoặc Tailscale.
               </p>
             )}
@@ -1396,7 +1403,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
           <div className="space-y-4 border-t-2 p-5 lg:col-span-6 lg:border-l-2 lg:border-t-0 studio-divider">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 pb-3 studio-divider">
               <div className="flex items-center gap-2">
-                <HardDrive className="h-4 w-4 text-emerald-400" />
+                <PxSave size={16} className="text-[var(--px-green-text)]" />
                 <h3 className="font-display text-sm font-extrabold text-main">
                   Tự động Sao lưu SQLite Xoay Vòng (Auto-Backup)
                 </h3>
@@ -1409,7 +1416,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
             </div>
 
             {backupStatus && (
-              <div className="rounded-[2px] border-2 px-3 py-2 font-mono text-[11px] text-sub studio-subtle studio-divider">
+              <div className="px-inset rounded-none px-3 py-2 font-mono text-[11px] text-sub">
                 Thư mục đích: <strong className="break-all text-main">{backupStatus.resolvedDir}</strong>
               </div>
             )}
@@ -1424,7 +1431,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                     value={backupDirInput}
                     onChange={(e) => setBackupDirInput(e.target.value)}
                     placeholder="Để trống = mặc định data/backups/"
-                    className="w-full px-2.5 py-1.5 font-mono text-xs"
+                    className="w-full rounded-none px-2.5 py-1.5 font-mono text-xs"
                   />
                 </div>
                 <div>
@@ -1437,7 +1444,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                     max={90}
                     value={retentionInput}
                     onChange={(e) => setRetentionInput(Number(e.target.value) || 14)}
-                    className="w-full px-2.5 py-1.5 font-mono text-xs"
+                    className="w-full rounded-none px-2.5 py-1.5 font-mono text-xs"
                   />
                 </div>
               </div>
@@ -1448,7 +1455,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   disabled={busyKey === 'bak-cfg'}
                   className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs"
                 >
-                  <FolderSync className="h-3.5 w-3.5 text-cyan-400" />
+                  <PxSave size={13} className="text-[var(--px-blue-text)]" />
                   <span>Lưu cấu hình</span>
                 </button>
                 <button
@@ -1457,14 +1464,14 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                   onClick={handleRunBackupNow}
                   className="btn-emerald flex items-center gap-1.5 px-3 py-1.5 text-xs"
                 >
-                  <Upload className="h-3.5 w-3.5" />
+                  <PxRefresh size={13} />
                   <span>Sao lưu ngay</span>
                 </button>
               </div>
             </form>
 
             {backupNotice && (
-              <p className="rounded-[2px] border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[11px] text-emerald-400">
+              <p className="px-inset rounded-none border-[var(--px-green)] px-3 py-1.5 font-mono text-[11px] text-[var(--px-green-text)]">
                 {backupNotice}
               </p>
             )}
@@ -1474,11 +1481,11 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                 Bản Sao Lưu Gần Đây ({backupStatus?.backups.length || 0})
               </h4>
               {!backupStatus || backupStatus.backups.length === 0 ? (
-                <p className="rounded-[2px] border-2 p-2.5 text-xs text-dim studio-subtle studio-divider">
+                <p className="px-inset rounded-none p-2.5 text-xs text-dim">
                   Chưa có file sao lưu nào. Bấm &ldquo;Sao lưu ngay&rdquo; để tạo bản chụp SQLite an toàn.
                 </p>
               ) : (
-                <div className="divide-y-2 border-2 studio-divider">
+                <div className="divide-y-2 border-2 border-[var(--border-ink)]">
                   {backupStatus.backups.slice(0, 5).map((b) => {
                     const confirming = confirmRestoreFile === b.filename;
                     return (
@@ -1502,9 +1509,10 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                         </div>
 
                         {confirming && (
-                          <div className="flex flex-wrap items-center justify-between gap-2 rounded-[2px] border border-amber-500/50 bg-amber-500/10 p-2 text-[11px]">
-                            <span className="text-amber-300">
-                              Hệ thống sẽ tự động tạo bản sao lưu an toàn hiện tại trước khi khôi phục. Tiếp tục?
+                          <div className="px-inset flex flex-wrap items-center justify-between gap-2 rounded-none border-[var(--px-gold)] p-2 text-[11px]">
+                            <span className="flex items-center gap-1.5 text-[var(--px-gold-text)]">
+                              <PxWarn size={13} />
+                              <span>Hệ thống sẽ tự động tạo bản sao lưu an toàn hiện tại trước khi khôi phục. Tiếp tục?</span>
                             </span>
                             <div className="flex gap-1.5">
                               <button

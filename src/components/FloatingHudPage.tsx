@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ActivityCategory,
   AssistantOverviewPayload,
@@ -10,6 +10,24 @@ import type {
 import { isTauriDesktop } from '../utils/api';
 import { getVnNowMinutes, getVnTodayKey } from '../utils/timeVn';
 import { PixelHeart, PixelHeroSprite } from './DungeonSprites';
+import {
+  PixelRivets,
+  PxBell,
+  PxBolt,
+  PxCheck,
+  PxChevron,
+  PxClock,
+  PxClose,
+  PxDashboard,
+  PxFlame,
+  PxHide,
+  PxMiniToggle,
+  PxPause,
+  PxPlay,
+  PxPlus,
+  PxTarget,
+  PxWarn,
+} from './PixelIcons';
 
 export interface FloatingHudPageProps {
   state: SystemStatePayload | null;
@@ -37,11 +55,40 @@ interface TauriWindowBridge {
     core?: {
       invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
     };
+    event?: {
+      listen?: (
+        event: string,
+        handler: (event: unknown) => void
+      ) => Promise<() => void>;
+    };
   };
   __TAURI_INTERNALS__?: unknown;
 }
 
+const HUD_MODE_STORAGE_KEY = 'rpg_hud_mode';
 const QUICK_DURATIONS = [25, 45, 60] as const;
+
+function readPersistedHudMode(): 'mini' | 'normal' {
+  try {
+    const saved =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem(HUD_MODE_STORAGE_KEY)
+        : null;
+    return saved === 'mini' ? 'mini' : 'normal';
+  } catch {
+    return 'normal';
+  }
+}
+
+function savePersistedHudMode(mode: 'mini' | 'normal'): void {
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(HUD_MODE_STORAGE_KEY, mode);
+    }
+  } catch {
+    // Safe no-op if storage is unavailable
+  }
+}
 
 const CATEGORY_INFO: Record<ActivityCategory, { label: string; color: string }> = {
   deep_work: { label: 'Làm sâu', color: '#38a169' },
@@ -219,210 +266,14 @@ function computeNextScheduleContext(
   };
 }
 
-// ==================== HAND-CRAFTED 16-BIT PIXEL ART SVG ICONS ====================
-
-const PxFlame: React.FC<{ size?: number }> = ({ size = 10 }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="4" y="1" width="2" height="1" fill="#f0c46c" />
-    <rect x="3" y="2" width="4" height="2" fill="#e68a2e" />
-    <rect x="2" y="4" width="6" height="3" fill="#d96426" />
-    <rect x="3" y="7" width="4" height="2" fill="#b83a4b" />
-    <rect x="4" y="4" width="2" height="3" fill="#f5d57a" />
-    <rect x="4" y="6" width="2" height="2" fill="#fff2c2" />
-  </svg>
-);
-
-const PxBolt: React.FC<{ size?: number; color?: string }> = ({ size = 10, color = '#e6c24c' }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="5" y="1" width="3" height="1" fill={color} />
-    <rect x="4" y="2" width="3" height="1" fill={color} />
-    <rect x="3" y="3" width="3" height="1" fill={color} />
-    <rect x="2" y="4" width="6" height="2" fill={color} />
-    <rect x="4" y="6" width="3" height="1" fill={color} />
-    <rect x="3" y="7" width="3" height="1" fill={color} />
-    <rect x="2" y="8" width="2" height="1" fill={color} />
-  </svg>
-);
-
-const PxTarget: React.FC<{ size?: number }> = ({ size = 10 }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="3" y="1" width="4" height="1" fill="#52c484" />
-    <rect x="3" y="8" width="4" height="1" fill="#52c484" />
-    <rect x="1" y="3" width="1" height="4" fill="#52c484" />
-    <rect x="8" y="3" width="1" height="4" fill="#52c484" />
-    <rect x="2" y="2" width="1" height="1" fill="#38a169" />
-    <rect x="7" y="2" width="1" height="1" fill="#38a169" />
-    <rect x="2" y="7" width="1" height="1" fill="#38a169" />
-    <rect x="7" y="7" width="1" height="1" fill="#38a169" />
-    <rect x="4" y="4" width="2" height="2" fill="#f0c46c" />
-  </svg>
-);
-
-const PxWarn: React.FC<{ size?: number; danger?: boolean }> = ({ size = 10, danger = false }) => {
-  const fill = danger ? '#e55365' : '#c99330';
-  return (
-    <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-      <rect x="4" y="1" width="2" height="1" fill={fill} />
-      <rect x="3" y="2" width="4" height="2" fill={fill} />
-      <rect x="2" y="4" width="6" height="2" fill={fill} />
-      <rect x="1" y="6" width="8" height="3" fill={fill} />
-      <rect x="4" y="3" width="2" height="3" fill="#100e18" />
-      <rect x="4" y="7" width="2" height="1" fill="#100e18" />
-    </svg>
-  );
-};
-
-const PxClock: React.FC<{ size?: number; color?: string }> = ({ size = 10, color = '#d4a24c' }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="2" y="1" width="6" height="1" fill={color} />
-    <rect x="2" y="8" width="6" height="1" fill={color} />
-    <rect x="3" y="2" width="4" height="1" fill="#8b80a6" />
-    <rect x="4" y="3" width="2" height="1" fill="#f0c46c" />
-    <rect x="4" y="4" width="2" height="2" fill="#e6c278" />
-    <rect x="3" y="6" width="4" height="2" fill="#f0c46c" />
-  </svg>
-);
-
-const PxBell: React.FC<{ size?: number; muted?: boolean; color?: string }> = ({
-  size = 10,
-  muted = false,
-  color = 'currentColor',
-}) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="4" y="1" width="2" height="1" fill={color} />
-    <rect x="3" y="2" width="4" height="2" fill={color} />
-    <rect x="2" y="4" width="6" height="3" fill={color} />
-    <rect x="1" y="7" width="8" height="1" fill={color} />
-    <rect x="4" y="8" width="2" height="1" fill={color} />
-    {muted && (
-      <>
-        <rect x="1" y="1" width="2" height="1" fill="#140e04" />
-        <rect x="2" y="2" width="2" height="1" fill="#140e04" />
-        <rect x="4" y="4" width="2" height="2" fill="#140e04" />
-        <rect x="6" y="6" width="2" height="1" fill="#140e04" />
-        <rect x="7" y="7" width="2" height="2" fill="#140e04" />
-      </>
-    )}
-  </svg>
-);
-
-const PxHide: React.FC<{ size?: number }> = ({ size = 10 }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="1" y="6" width="8" height="2" fill="currentColor" />
-  </svg>
-);
-
-const PxPlay: React.FC<{ size?: number }> = ({ size = 10 }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="2" y="1" width="2" height="8" fill="currentColor" />
-    <rect x="4" y="2" width="2" height="6" fill="currentColor" />
-    <rect x="6" y="3" width="2" height="4" fill="currentColor" />
-    <rect x="8" y="4" width="1" height="2" fill="currentColor" />
-  </svg>
-);
-
-const PxPause: React.FC<{ size?: number }> = ({ size = 10 }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="2" y="1" width="2" height="8" fill="currentColor" />
-    <rect x="6" y="1" width="2" height="8" fill="currentColor" />
-  </svg>
-);
-
-const PxCheck: React.FC<{ size?: number }> = ({ size = 10 }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="8" y="2" width="1" height="2" fill="currentColor" />
-    <rect x="7" y="3" width="1" height="2" fill="currentColor" />
-    <rect x="6" y="4" width="1" height="2" fill="currentColor" />
-    <rect x="5" y="5" width="1" height="2" fill="currentColor" />
-    <rect x="4" y="6" width="1" height="2" fill="currentColor" />
-    <rect x="3" y="6" width="1" height="2" fill="currentColor" />
-    <rect x="2" y="5" width="1" height="2" fill="currentColor" />
-    <rect x="1" y="4" width="1" height="2" fill="currentColor" />
-  </svg>
-);
-
-const PxPlus: React.FC<{ size?: number }> = ({ size = 10 }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="4" y="1" width="2" height="8" fill="currentColor" />
-    <rect x="1" y="4" width="8" height="2" fill="currentColor" />
-  </svg>
-);
-
-const PxClose: React.FC<{ size?: number }> = ({ size = 10 }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="1" y="1" width="2" height="2" fill="currentColor" />
-    <rect x="3" y="3" width="2" height="2" fill="currentColor" />
-    <rect x="5" y="5" width="2" height="2" fill="currentColor" />
-    <rect x="7" y="7" width="2" height="2" fill="currentColor" />
-    <rect x="7" y="1" width="2" height="2" fill="currentColor" />
-    <rect x="5" y="3" width="2" height="2" fill="currentColor" />
-    <rect x="3" y="5" width="2" height="2" fill="currentColor" />
-    <rect x="1" y="7" width="2" height="2" fill="currentColor" />
-  </svg>
-);
-
-const PxMiniToggle: React.FC<{ size?: number; expand?: boolean }> = ({ size = 10, expand = false }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    {expand ? (
-      <>
-        <rect x="1" y="1" width="4" height="1" fill="currentColor" />
-        <rect x="1" y="1" width="1" height="4" fill="currentColor" />
-        <rect x="2" y="2" width="2" height="2" fill="currentColor" />
-        <rect x="5" y="8" width="4" height="1" fill="currentColor" />
-        <rect x="8" y="5" width="1" height="4" fill="currentColor" />
-        <rect x="6" y="6" width="2" height="2" fill="currentColor" />
-      </>
-    ) : (
-      <>
-        <rect x="1" y="1" width="8" height="1" fill="currentColor" />
-        <rect x="1" y="8" width="8" height="1" fill="currentColor" />
-        <rect x="1" y="1" width="1" height="8" fill="currentColor" />
-        <rect x="8" y="1" width="1" height="8" fill="currentColor" />
-        <rect x="2" y="5" width="6" height="2" fill="#d4a24c" />
-      </>
-    )}
-  </svg>
-);
-
-const PxDashboard: React.FC<{ size?: number }> = ({ size = 10 }) => (
-  <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    <rect x="4" y="1" width="5" height="2" fill="currentColor" />
-    <rect x="7" y="1" width="2" height="5" fill="currentColor" />
-    <rect x="5" y="3" width="2" height="2" fill="currentColor" />
-    <rect x="3" y="5" width="2" height="2" fill="currentColor" />
-    <rect x="1" y="7" width="2" height="2" fill="currentColor" />
-  </svg>
-);
-
-const PxChevron: React.FC<{ dir: 'left' | 'right'; size?: number }> = ({ dir, size = 8 }) => (
-  <svg width={size} height={size} viewBox="0 0 8 8" shapeRendering="crispEdges" className="pixel-art shrink-0" aria-hidden="true">
-    {dir === 'left' ? (
-      <>
-        <rect x="5" y="1" width="1" height="6" fill="currentColor" />
-        <rect x="4" y="2" width="1" height="4" fill="currentColor" />
-        <rect x="3" y="3" width="1" height="2" fill="currentColor" />
-      </>
-    ) : (
-      <>
-        <rect x="2" y="1" width="1" height="6" fill="currentColor" />
-        <rect x="3" y="2" width="1" height="4" fill="currentColor" />
-        <rect x="4" y="3" width="1" height="2" fill="currentColor" />
-      </>
-    )}
-  </svg>
-);
+// ==================== BUSY INDICATOR & SHARED PIXEL RIVETS ====================
 
 const PxBusyDots: React.FC = () => (
   <span className="font-pixel text-[8px] leading-none">..</span>
 );
 
 const PixelCornerRivets: React.FC = () => (
-  <>
-    <span className="pointer-events-none absolute left-[3px] top-[3px] h-[2px] w-[2px] bg-[#d4a24c]" />
-    <span className="pointer-events-none absolute right-[3px] top-[3px] h-[2px] w-[2px] bg-[#d4a24c]" />
-    <span className="pointer-events-none absolute bottom-[3px] left-[3px] h-[2px] w-[2px] bg-[#d4a24c]" />
-    <span className="pointer-events-none absolute bottom-[3px] right-[3px] h-[2px] w-[2px] bg-[#d4a24c]" />
-  </>
+  <PixelRivets className="bg-[#d4a24c]" />
 );
 
 // ==================== MAIN 16-BIT 2D PIXEL DISCIPLINE HUD ====================
@@ -440,7 +291,7 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
   onOpenMainApp,
 }) => {
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [hudMode, setHudMode] = useState<HudMode>('normal');
+  const [hudMode, setHudMode] = useState<HudMode>(() => readPersistedHudMode());
   const [selectedPendingIdx, setSelectedPendingIdx] = useState(0);
   const [quickTitle, setQuickTitle] = useState('');
   const [quickDuration, setQuickDuration] = useState<number>(25);
@@ -448,6 +299,11 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
   const [previewBg, setPreviewBg] = useState<PreviewBg>('dark');
   const [previewHidden, setPreviewHidden] = useState(false);
   const quickInputRef = useRef<HTMLInputElement | null>(null);
+  const hudModeRef = useRef<HudMode>(hudMode);
+
+  useEffect(() => {
+    hudModeRef.current = hudMode;
+  }, [hudMode]);
 
   const inTauri = isRunningInTauri();
 
@@ -567,10 +423,59 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
     return undefined;
   }, [hudMode]);
 
-  const switchHudMode = (nextMode: HudMode) => {
+  const switchHudMode = useCallback((nextMode: HudMode) => {
     setHudMode(nextMode);
+    if (nextMode === 'mini' || nextMode === 'normal') {
+      savePersistedHudMode(nextMode);
+    }
     invokeTauriSafe('resize_hud', { mode: nextMode });
-  };
+  }, []);
+
+  // Restore persisted compact 'mini' mode on Tauri cold launch
+  useEffect(() => {
+    if (!inTauri) return;
+    if (readPersistedHudMode() === 'mini') {
+      invokeTauriSafe('resize_hud', { mode: 'mini' });
+    }
+  }, [inTauri]);
+
+  // Listen to Tauri System Tray "tauri-hud-toggle-mode" event (mini <-> normal)
+  useEffect(() => {
+    if (!inTauri) return;
+    let disposed = false;
+    let unlistenFn: (() => void) | null = null;
+    const w = window as unknown as TauriWindowBridge;
+    const listen = w.__TAURI__?.event?.listen;
+    if (typeof listen !== 'function') return;
+
+    Promise.resolve(
+      listen('tauri-hud-toggle-mode', () => {
+        const next: 'mini' | 'normal' = hudModeRef.current === 'mini' ? 'normal' : 'mini';
+        switchHudMode(next);
+      })
+    )
+      .then((fn) => {
+        if (disposed) {
+          fn?.();
+        } else {
+          unlistenFn = fn;
+        }
+      })
+      .catch(() => {
+        // Safe no-op if Tauri event bridge is unavailable
+      });
+
+    return () => {
+      disposed = true;
+      if (unlistenFn) {
+        try {
+          unlistenFn();
+        } catch {
+          // Ignore cleanup error
+        }
+      }
+    };
+  }, [inTauri, switchHudMode]);
 
   const handleHideClick = () => {
     if (onHideHud) {
@@ -1295,7 +1200,7 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
             onKeyDown={(e) => {
               if (e.key === 'Escape') switchHudMode('normal');
             }}
-            placeholder="Nhập việc kỉ luật cần làm ngay..."
+            placeholder="Thêm việc kỉ luật..."
             disabled={busyAction === 'add'}
             className="px-hud-inset h-[30px] min-w-0 flex-1 rounded-none px-[7px] font-mono text-[10.5px] text-[#f3ead8] placeholder:text-[#736987] focus:border-[#d4a24c] focus:shadow-none"
           />

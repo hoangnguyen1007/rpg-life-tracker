@@ -1,25 +1,27 @@
 import React, { useRef, useState } from 'react';
-import {
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Cpu,
-  Database,
-  Download,
-  HardDrive,
-  History,
-  Loader2,
-  RefreshCw,
-  RotateCcw,
-  Save,
-  ShieldCheck,
-  Upload,
-  Wifi,
-  X,
-  XCircle,
-} from 'lucide-react';
-import type { AISettings, AuditLogEntry, StorageInfoPayload, SystemStatePayload } from '../types/system';
+import type {
+  AISettings,
+  AuditLogEntry,
+  StorageInfoPayload,
+  SystemStatePayload,
+} from '../types/system';
 import { systemApi } from '../utils/api';
+import {
+  PixelRivets,
+  PxBook,
+  PxCheck,
+  PxChevron,
+  PxClock,
+  PxClose,
+  PxGear,
+  PxRefresh,
+  PxReset,
+  PxSave,
+  PxScroll,
+  PxShield,
+  PxSparkle,
+  PxWarn,
+} from './PixelIcons';
 
 interface SystemSettingsModalProps {
   settings: AISettings;
@@ -55,7 +57,12 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
   const [testing, setTesting] = useState(false);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [testResult, setTestResult] = useState<{ ok: boolean; latencyMs: number; reply?: string; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    latencyMs: number;
+    reply?: string;
+    error?: string;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [backupNotice, setBackupNotice] = useState<string | null>(null);
@@ -133,14 +140,23 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
   const backupCount = storageInfo.backupCount ?? 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-      <div className="rpg-window relative max-h-[92vh] w-full max-w-2xl overflow-y-auto p-6">
-        <button onClick={onClose} className="absolute right-4 top-4 p-1.5 text-dim hover:text-main">
-          <X className="h-5 w-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+      <div className="rpg-window relative max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-none p-6">
+        <PixelRivets />
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="btn-secondary absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-none"
+          aria-label="Đóng"
+        >
+          <PxClose size={13} />
         </button>
 
-        <div className="mb-5 flex items-center gap-2.5 border-b-2 pb-3 rpg-divider">
-          <Cpu className="h-5 w-5 text-amber-500" />
+        <div className="mb-5 flex items-center gap-2.5 border-b-2 pb-3 pr-10 rpg-divider">
+          <div className="px-inset flex h-9 w-9 shrink-0 items-center justify-center rounded-none text-[var(--px-gold-text)]">
+            <PxGear size={18} />
+          </div>
           <div>
             <h2 className="font-display text-lg font-extrabold text-main">
               Cài đặt AI LLM &amp; SQLite
@@ -157,9 +173,14 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
               key={p.label}
               type="button"
               onClick={() =>
-                setForm((f) => ({ ...f, providerName: p.providerName, baseUrl: p.baseUrl, model: p.model }))
+                setForm((f) => ({
+                  ...f,
+                  providerName: p.providerName,
+                  baseUrl: p.baseUrl,
+                  model: p.model,
+                }))
               }
-              className="btn-secondary px-2.5 py-1 text-xs"
+              className="btn-secondary rounded-none px-2.5 py-1 text-xs"
             >
               {p.label}
             </button>
@@ -167,9 +188,11 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
         </div>
 
         <form onSubmit={handleSave} className="space-y-4 text-sm">
-          <label className="flex cursor-pointer items-center justify-between border-2 p-3 studio-subtle rpg-divider rounded-[2px]">
+          <label className="px-inset flex cursor-pointer items-center justify-between gap-3 rounded-none p-3">
             <div>
-              <span className="font-semibold text-main">Kích hoạt Live OpenAI-Compatible LLM</span>
+              <span className="font-semibold text-main">
+                Kích hoạt Live OpenAI-Compatible LLM
+              </span>
               <p className="text-xs text-sub">
                 Tắt nếu muốn chạy miễn phí hoàn toàn bằng Smart Heuristic Offline.
               </p>
@@ -178,72 +201,114 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
               type="checkbox"
               checked={form.useLiveLlm}
               onChange={(e) => setForm({ ...form, useLiveLlm: e.target.checked })}
-              className="h-4 w-4 accent-amber-500"
             />
           </label>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-sub">Provider Name</label>
-              <input value={form.providerName} onChange={(e) => setForm({ ...form, providerName: e.target.value })} className="w-full px-3 py-2 text-sm" />
+              <input
+                value={form.providerName}
+                onChange={(e) => setForm({ ...form, providerName: e.target.value })}
+                className="w-full rounded-none px-3 py-2 text-sm"
+              />
             </div>
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="text-xs font-medium text-sub">Model ID</label>
                 <button
                   type="button"
-                  onClick={handleFetchModels}
+                  onClick={() => void handleFetchModels()}
                   disabled={fetchingModels}
-                  className="flex items-center gap-1 text-xs font-semibold text-amber-600 dark:text-amber-400"
+                  className="flex items-center gap-1 text-xs font-bold text-[var(--px-gold-text)]"
                 >
-                  <RefreshCw className={`h-3 w-3 ${fetchingModels ? 'animate-spin' : ''}`} />
+                  <PxRefresh size={12} className={fetchingModels ? 'animate-spin' : ''} />
                   <span>Tải danh sách model</span>
                 </button>
               </div>
               {availableModels.length > 0 ? (
-                <select value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} className="w-full px-3 py-2 font-mono text-xs">
+                <select
+                  value={form.model}
+                  onChange={(e) => setForm({ ...form, model: e.target.value })}
+                  className="w-full rounded-none px-3 py-2 font-mono text-xs"
+                >
                   {availableModels.map((m) => (
-                    <option key={m} value={m}>{m}</option>
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
                   ))}
                 </select>
               ) : (
-                <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} className="w-full px-3 py-2 text-sm" />
+                <input
+                  value={form.model}
+                  onChange={(e) => setForm({ ...form, model: e.target.value })}
+                  className="w-full rounded-none px-3 py-2 text-sm"
+                />
               )}
             </div>
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-sub">Custom Base URL</label>
-            <input value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} className="w-full px-3 py-2 font-mono text-xs" />
+            <input
+              value={form.baseUrl}
+              onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+              className="w-full rounded-none px-3 py-2 font-mono text-xs"
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-sub">API Key (Lưu local trong SQLite)</label>
-              <input type="password" value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder="sk-..." className="w-full px-3 py-2 font-mono text-xs" />
+              <label className="mb-1 block text-xs font-medium text-sub">
+                API Key (Lưu local trong SQLite)
+              </label>
+              <input
+                type="password"
+                value={form.apiKey}
+                onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+                placeholder="sk-..."
+                className="w-full rounded-none px-3 py-2 font-mono text-xs"
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-sub">Temperature</label>
-              <input type="number" step="0.1" min="0" max="1.5" value={form.temperature} onChange={(e) => setForm({ ...form, temperature: Number(e.target.value) })} className="w-full px-3 py-2 font-mono text-xs" />
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="1.5"
+                value={form.temperature}
+                onChange={(e) => setForm({ ...form, temperature: Number(e.target.value) })}
+                className="w-full rounded-none px-3 py-2 font-mono text-xs"
+              />
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 border-2 p-3 studio-subtle rpg-divider rounded-[2px]">
-            <button type="button" onClick={handleTest} disabled={testing} className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs">
-              {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
+          <div className="px-inset flex flex-wrap items-center justify-between gap-2 rounded-none p-3">
+            <button
+              type="button"
+              onClick={() => void handleTest()}
+              disabled={testing}
+              className="btn-secondary flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs"
+            >
+              {testing ? (
+                <PxRefresh size={13} className="animate-spin" />
+              ) : (
+                <PxSparkle size={13} />
+              )}
               <span>Kiểm tra kết nối</span>
             </button>
 
             {testResult && (
               <div className="font-mono text-xs">
                 {testResult.ok ? (
-                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="h-4 w-4" />
+                  <span className="flex items-center gap-1 font-bold text-[var(--px-green-text)]">
+                    <PxCheck size={14} />
                     OK ({testResult.latencyMs}ms): {testResult.reply}
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400">
-                    <XCircle className="h-4 w-4" />
+                  <span className="flex items-center gap-1 font-bold text-[var(--px-red-text)]">
+                    <PxWarn size={14} danger />
                     {testResult.error}
                   </span>
                 )}
@@ -251,13 +316,13 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
             )}
           </div>
 
-          {/* Upgraded SQLite Vault & Disk Backup Block */}
-          <div className="space-y-2.5 border-2 p-4 studio-subtle rpg-divider rounded-[2px]">
+          {/* Upgraded 16-Bit SQLite Vault & Disk Backup Block */}
+          <div className="px-inset space-y-2.5 rounded-none p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs font-semibold text-main">
-                <Database className="h-4 w-4 text-amber-500" />
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-main">
+                <PxBook size={15} color="var(--px-gold-text)" />
                 <span>SQLite Vault</span>
-                <span className="border px-2 py-0.5 font-mono text-[10px] text-sub rpg-divider rounded-[2px]">
+                <span className="rounded-none border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2 py-0.5 font-mono text-[10px] text-sub">
                   {journalMode} · FK: {fkStatus} · Integrity: {integrityOk ? 'OK' : 'WARN'}
                 </span>
               </div>
@@ -265,10 +330,14 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
               <button
                 type="button"
                 disabled={backingUp}
-                onClick={handleDiskBackup}
-                className="btn-secondary flex items-center gap-1.5 px-3 py-1 text-xs"
+                onClick={() => void handleDiskBackup()}
+                className="btn-secondary flex items-center gap-1.5 rounded-none px-3 py-1 text-xs"
               >
-                {backingUp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <HardDrive className="h-3.5 w-3.5 text-amber-500" />}
+                {backingUp ? (
+                  <PxRefresh size={13} className="animate-spin" />
+                ) : (
+                  <PxSave size={13} color="var(--px-gold-text)" />
+                )}
                 <span>Backup Ổ Cứng Ngay</span>
               </button>
             </div>
@@ -284,8 +353,8 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
             </div>
 
             {backupNotice && (
-              <div className="flex items-center gap-1.5 border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1.5 font-mono text-[11px] text-emerald-700 dark:text-emerald-300 rounded-[2px]">
-                <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+              <div className="flex items-center gap-1.5 rounded-none border-2 border-[var(--px-green)] bg-[var(--px-green)]/15 px-2.5 py-1.5 font-mono text-[11px] font-bold text-[var(--px-green-text)]">
+                <PxShield size={13} />
                 <span>{backupNotice}</span>
               </div>
             )}
@@ -297,10 +366,10 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
                 className="flex w-full items-center justify-between text-xs font-medium text-sub hover:text-main"
               >
                 <span className="flex items-center gap-1.5">
-                  <History className="h-3.5 w-3.5 text-amber-500" />
+                  <PxClock size={13} color="var(--px-gold-text)" />
                   <span>Nhật ký Giao dịch (Audit Log) ({auditLogs.length})</span>
                 </span>
-                {showAuditPreview ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                <PxChevron dir={showAuditPreview ? 'up' : 'down'} size={13} />
               </button>
               {showAuditPreview && (
                 <div className="mt-2 max-h-36 space-y-1.5 overflow-y-auto pr-1 text-[11px]">
@@ -308,9 +377,12 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
                     <p className="text-dim">Chưa có giao dịch nào được ghi.</p>
                   ) : (
                     auditLogs.slice(0, 8).map((entry) => (
-                      <div key={entry.id} className="flex items-start justify-between gap-2 px-2 py-1 hover:bg-slate-500/10">
+                      <div
+                        key={entry.id}
+                        className="flex items-start justify-between gap-2 border-b px-2 py-1 last:border-b-0 rpg-divider"
+                      >
                         <div className="min-w-0">
-                          <span className="font-mono text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                          <span className="font-mono text-[10px] font-bold text-[var(--px-gold-text)]">
                             [{entry.actionType}]
                           </span>{' '}
                           <span className="text-main">{entry.summary}</span>
@@ -328,13 +400,27 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t-2 pt-4 rpg-divider">
             <div className="flex flex-wrap items-center gap-2">
-              <a href="/api/system/export" download="the-system-backup.json" className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs">
-                <Download className="h-3.5 w-3.5" />
+              <a
+                href="/api/system/export"
+                download="the-system-backup.json"
+                className="btn-secondary flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs"
+              >
+                <PxSave size={13} />
                 <span>Export</span>
               </a>
-              <input ref={importInputRef} type="file" accept=".json" onChange={handleImportFile} className="hidden" />
-              <button type="button" onClick={() => importInputRef.current?.click()} className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs">
-                <Upload className="h-3.5 w-3.5" />
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleImportFile}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => importInputRef.current?.click()}
+                className="btn-secondary flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs"
+              >
+                <PxScroll size={13} />
                 <span>Import</span>
               </button>
               <button
@@ -349,9 +435,9 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
                     onClose();
                   }
                 }}
-                className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs text-amber-500 dark:text-amber-300"
+                className="btn-secondary flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs text-[var(--px-gold-text)]"
               >
-                <RotateCcw className="h-3.5 w-3.5" />
+                <PxReset size={13} />
                 <span>Reset Tiến Trình</span>
               </button>
               <button
@@ -366,15 +452,19 @@ export const SystemSettingsModal: React.FC<SystemSettingsModalProps> = ({
                     onClose();
                   }
                 }}
-                className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs text-rose-600 dark:text-rose-400"
+                className="btn-secondary flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs text-[var(--px-red-text)]"
               >
-                <RotateCcw className="h-3.5 w-3.5" />
+                <PxReset size={13} />
                 <span>Reset Toàn Bộ</span>
               </button>
             </div>
 
-            <button type="submit" disabled={saving} className="btn-primary flex items-center gap-1.5 px-5 py-2 text-xs">
-              <Save className="h-4 w-4" />
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-primary flex items-center gap-1.5 rounded-none px-5 py-2 text-xs"
+            >
+              <PxSave size={14} />
               <span>Lưu cấu hình</span>
             </button>
           </div>

@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Loader2, RotateCcw, ShieldCheck, Trash2, X } from 'lucide-react';
+import {
+  PixelRivets,
+  PxClose,
+  PxRefresh,
+  PxReset,
+  PxShield,
+  PxTrash,
+  PxWarn,
+} from './PixelIcons';
 
 interface ResetProgressModalProps {
   onReset: (mode: 'progress' | 'clean', clearChats: boolean) => Promise<void>;
@@ -25,25 +33,29 @@ export const ResetProgressModal: React.FC<ResetProgressModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
       onClick={onClose}
     >
       <div
-        className="rpg-window relative w-full max-w-lg p-5"
+        className="rpg-window relative w-full max-w-lg rounded-none p-5"
         onClick={(e) => e.stopPropagation()}
       >
+        <PixelRivets />
+
         <button
           type="button"
           onClick={onClose}
           disabled={busy}
-          className="absolute right-4 top-4 p-1 text-dim hover:text-main"
+          className="btn-secondary absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-none"
           aria-label="Đóng"
         >
-          <X className="h-5 w-5" />
+          <PxClose size={13} />
         </button>
 
-        <div className="mb-4 flex items-center gap-2.5 border-b-2 pb-3 rpg-divider">
-          <RotateCcw className="h-5 w-5 text-amber-500" />
+        <div className="mb-4 flex items-center gap-2.5 border-b-2 pb-3 pr-10 rpg-divider">
+          <div className="px-inset flex h-9 w-9 shrink-0 items-center justify-center rounded-none text-[var(--px-gold-text)]">
+            <PxReset size={17} />
+          </div>
           <div>
             <h2 className="font-display text-base font-extrabold text-main">
               Reset Tiến Trình &amp; Kiểm Thử
@@ -60,17 +72,17 @@ export const ResetProgressModal: React.FC<ResetProgressModalProps> = ({
             type="button"
             disabled={busy}
             onClick={() => setSelectedMode('progress')}
-            className={`w-full rounded-[2px] border-2 p-3.5 text-left transition ${
+            className={`w-full rounded-none border-2 p-3.5 text-left ${
               selectedMode === 'progress'
-                ? 'border-amber-400 bg-amber-500/15'
-                : 'studio-subtle rpg-divider hover:border-amber-500/50'
+                ? 'border-[var(--px-gold)] bg-[var(--px-gold)]/15'
+                : 'px-inset hover:border-[var(--px-gold)]'
             }`}
           >
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-display text-sm font-extrabold text-main">
                 1. Reset Tiến Trình (Khuyên dùng khi test)
               </span>
-              <span className="font-pixel rounded-[2px] border border-amber-500/50 bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-500 dark:text-amber-300">
+              <span className="font-pixel rounded-none border-2 border-[var(--border-ink)] bg-[var(--px-gold)] px-1.5 py-0.5 text-[9px] font-bold text-[#140e04]">
                 GIỮ LỊCH &amp; HỒ SƠ
               </span>
             </div>
@@ -79,19 +91,18 @@ export const ResetProgressModal: React.FC<ResetProgressModalProps> = ({
                 • <strong className="text-main">Đưa về Level 1</strong>: 0 XP, 0 SP, 0 Gold/Runestones, HP 100, reset Cây Kĩ Năng, Hành Trình Chương I, Quests &amp; Nhật ký ngày.
               </li>
               <li>
-                • <strong className="text-emerald-600 dark:text-emerald-400">Giữ nguyên</strong>: Hồ sơ cá nhân, Thời khóa biểu đã nhập, Mục tiêu (về 0%) &amp; Cài đặt AI.
+                • <strong className="text-[var(--px-green-text)]">Giữ nguyên</strong>: Hồ sơ cá nhân, Thời khóa biểu đã nhập, Mục tiêu (về 0%) &amp; Cài đặt AI.
               </li>
             </ul>
           </button>
 
           {selectedMode === 'progress' && (
-            <label className="flex cursor-pointer items-center gap-2 rounded-[2px] border px-3 py-2 text-xs text-sub studio-subtle rpg-divider">
+            <label className="px-inset flex cursor-pointer items-center gap-2 rounded-none px-3 py-2 text-xs text-sub">
               <input
                 type="checkbox"
                 checked={clearChats}
                 onChange={(e) => setClearChats(e.target.checked)}
                 disabled={busy}
-                className="h-3.5 w-3.5 accent-amber-500"
               />
               <span>Xóa luôn lịch sử chat AI</span>
             </label>
@@ -102,17 +113,17 @@ export const ResetProgressModal: React.FC<ResetProgressModalProps> = ({
             type="button"
             disabled={busy}
             onClick={() => setSelectedMode('clean')}
-            className={`w-full rounded-[2px] border-2 p-3.5 text-left transition ${
+            className={`w-full rounded-none border-2 p-3.5 text-left ${
               selectedMode === 'clean'
-                ? 'border-rose-500 bg-rose-500/15'
-                : 'studio-subtle rpg-divider hover:border-rose-500/50'
+                ? 'border-[var(--px-red)] bg-[var(--px-red)]/15'
+                : 'px-inset hover:border-[var(--px-red)]'
             }`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-display text-sm font-extrabold text-rose-500 dark:text-rose-400">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-display text-sm font-extrabold text-[var(--px-red-text)]">
                 2. Reset Toàn Bộ Về Ban Đầu
               </span>
-              <span className="font-pixel rounded-[2px] border border-rose-500/40 bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-bold text-rose-400">
+              <span className="font-pixel rounded-none border-2 border-[var(--border-ink)] bg-[var(--px-red)] px-1.5 py-0.5 text-[9px] font-bold text-white">
                 CLEAN RESET
               </span>
             </div>
@@ -122,8 +133,8 @@ export const ResetProgressModal: React.FC<ResetProgressModalProps> = ({
           </button>
         </div>
 
-        <div className="mt-4 flex items-center gap-2 rounded-[2px] border px-3 py-2 text-[11px] text-dim studio-subtle rpg-divider">
-          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+        <div className="px-inset mt-4 flex items-center gap-2 rounded-none px-3 py-2 text-[11px] text-sub">
+          <PxShield size={15} color="var(--px-green-text)" />
           <span>SQLite tự động tạo bản sao lưu an toàn trên ổ cứng trước khi reset.</span>
         </div>
 
@@ -132,7 +143,7 @@ export const ResetProgressModal: React.FC<ResetProgressModalProps> = ({
             type="button"
             disabled={busy}
             onClick={onClose}
-            className="btn-secondary px-4 py-2 text-xs"
+            className="btn-secondary rounded-none px-4 py-2 text-xs"
           >
             Hủy
           </button>
@@ -142,14 +153,14 @@ export const ResetProgressModal: React.FC<ResetProgressModalProps> = ({
             onClick={() => void handleConfirm()}
             className={`${
               selectedMode === 'clean' ? 'btn-crimson' : 'btn-primary'
-            } flex items-center gap-1.5 px-4 py-2 text-xs`}
+            } flex items-center gap-1.5 rounded-none px-4 py-2 text-xs`}
           >
             {busy ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <PxRefresh size={13} className="animate-spin" />
             ) : selectedMode === 'clean' ? (
-              <Trash2 className="h-3.5 w-3.5" />
+              <PxTrash size={13} />
             ) : (
-              <AlertTriangle className="h-3.5 w-3.5" />
+              <PxWarn size={13} color="#140e04" />
             )}
             <span>
               {busy

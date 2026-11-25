@@ -1,20 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Copy, Loader2 } from 'lucide-react';
 import {
-  Calendar,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  Edit3,
-  FileUp,
-  Layers,
-  Loader2,
-  Plus,
-  Sparkles,
-  Trash2,
-  Wand2,
-  X,
-} from 'lucide-react';
+  PixelRivets,
+  PxBook,
+  PxCalendar,
+  PxCheck,
+  PxChevron,
+  PxClock,
+  PxClose,
+  PxEdit,
+  PxPlus,
+  PxRefresh,
+  PxScroll,
+  PxSparkle,
+  PxTrash,
+} from './PixelIcons';
 import type {
   AIDayPlanResult,
   DayScheduleAnalysis,
@@ -61,33 +61,33 @@ const BLOCK_STYLES: Record<
 > = {
   sleep: {
     label: 'Giờ ngủ',
-    gridCls: 'bg-indigo-100 border-indigo-400 text-indigo-950 dark:bg-indigo-950/85 dark:border-indigo-500/80 dark:text-indigo-100',
-    pillCls: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300',
+    gridCls: 'border-2 bg-[#dcd6f7] border-[#4b428c] text-[#1e1945] dark:bg-[#211f40] dark:border-[#5b53a6] dark:text-[#d8d3ff]',
+    pillCls: 'border bg-[#dcd6f7] border-[#4b428c] text-[#1e1945] dark:bg-[#211f40] dark:border-[#5b53a6] dark:text-[#d8d3ff]',
   },
   class_work: {
     label: 'Công việc / Học tập',
-    gridCls: 'bg-rose-100 border-rose-400 text-rose-950 dark:bg-rose-950/85 dark:border-rose-500/80 dark:text-rose-100',
-    pillCls: 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
+    gridCls: 'border-2 bg-[#f5d5da] border-[#8c2030] text-[#3d0c14] dark:bg-[#3b1c26] dark:border-[#b83a4b] dark:text-[#ffd6dc]',
+    pillCls: 'border bg-[#f5d5da] border-[#8c2030] text-[#3d0c14] dark:bg-[#3b1c26] dark:border-[#b83a4b] dark:text-[#ffd6dc]',
   },
   commute_meal: {
     label: 'Ăn uống / Di chuyển',
-    gridCls: 'bg-amber-100 border-amber-400 text-amber-950 dark:bg-amber-950/80 dark:border-amber-500/80 dark:text-amber-100',
-    pillCls: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+    gridCls: 'border-2 bg-[#f7e5be] border-[#8f5e11] text-[#382304] dark:bg-[#3b2d14] dark:border-[#c99330] dark:text-[#ffe8ba]',
+    pillCls: 'border bg-[#f7e5be] border-[#8f5e11] text-[#382304] dark:bg-[#3b2d14] dark:border-[#c99330] dark:text-[#ffe8ba]',
   },
   fixed_habit: {
     label: 'Thói quen cố định',
-    gridCls: 'bg-emerald-100 border-emerald-400 text-emerald-950 dark:bg-emerald-950/85 dark:border-emerald-500/80 dark:text-emerald-100',
-    pillCls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+    gridCls: 'border-2 bg-[#d2eddc] border-[#1c5c38] text-[#0c2e1b] dark:bg-[#163626] dark:border-[#2e8b57] dark:text-[#c8f5dc]',
+    pillCls: 'border bg-[#d2eddc] border-[#1c5c38] text-[#0c2e1b] dark:bg-[#163626] dark:border-[#2e8b57] dark:text-[#c8f5dc]',
   },
   rest_buffer: {
     label: 'Nghỉ ngơi',
-    gridCls: 'bg-sky-100 border-sky-400 text-sky-950 dark:bg-sky-950/85 dark:border-sky-500/80 dark:text-sky-100',
-    pillCls: 'bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
+    gridCls: 'border-2 bg-[#d4e5f7] border-[#1f4878] text-[#0d223d] dark:bg-[#182e4a] dark:border-[#3267a8] dark:text-[#cde3ff]',
+    pillCls: 'border bg-[#d4e5f7] border-[#1f4878] text-[#0d223d] dark:bg-[#182e4a] dark:border-[#3267a8] dark:text-[#cde3ff]',
   },
   adhoc_event: {
     label: 'Đột xuất',
-    gridCls: 'bg-violet-100 border-violet-400 text-violet-950 dark:bg-violet-950/85 dark:border-violet-500/80 dark:text-violet-100',
-    pillCls: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+    gridCls: 'border-2 bg-[#e8dbf7] border-[#502d73] text-[#27123d] dark:bg-[#2f1e42] dark:border-[#73499e] dark:text-[#e7d6ff]',
+    pillCls: 'border bg-[#e8dbf7] border-[#502d73] text-[#27123d] dark:bg-[#2f1e42] dark:border-[#73499e] dark:text-[#e7d6ff]',
   },
 };
 
@@ -636,10 +636,12 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
   return (
     <div className="space-y-4">
       {/* Top Action Bar & Visual Weekly Balance Chart */}
-      <section className="studio-surface p-5">
+      <section className="studio-surface relative p-5">
+        <PixelRivets />
         <div className="grid grid-cols-1 items-center gap-5 lg:grid-cols-12">
           <div className="space-y-3 lg:col-span-6">
-            <div>
+            <div className="flex items-center gap-2">
+              <PxCalendar size={18} className="text-[var(--px-gold-text)]" />
               <h2 className="font-display text-lg font-extrabold text-main">
                 Thời Khóa Biểu Tuần
               </h2>
@@ -657,8 +659,8 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                 }}
                 className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>✨ AI Lập Lịch Tuần (Blueprint)</span>
+                <PxSparkle size={14} />
+                <span>AI Lập Lịch Tuần (Blueprint)</span>
               </button>
 
               <button
@@ -666,7 +668,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                 onClick={() => setActiveTool(activeTool === 'text' ? 'none' : 'text')}
                 className={activeTool === 'text' ? 'btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs' : 'btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs'}
               >
-                <Wand2 className="h-3.5 w-3.5" />
+                <PxScroll size={14} />
                 <span>Import Text / AI</span>
               </button>
 
@@ -675,8 +677,8 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                 onClick={() => setActiveTool(activeTool === 'batch' ? 'none' : 'batch')}
                 className={activeTool === 'batch' ? 'btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs' : 'btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs'}
               >
-                <Layers className="h-3.5 w-3.5" />
-                <span>+ Thêm hàng loạt</span>
+                <PxPlus size={14} />
+                <span>Thêm hàng loạt</span>
               </button>
 
               <input ref={fileInputRef} type="file" accept=".ics,.csv" onChange={handleFileUpload} className="hidden" />
@@ -685,7 +687,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                 onClick={() => fileInputRef.current?.click()}
                 className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
-                <FileUp className="h-3.5 w-3.5" />
+                <PxBook size={14} />
                 <span>.ICS / .CSV</span>
               </button>
 
@@ -696,14 +698,14 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                     onClearTimetable();
                   }
                 }}
-                className="btn-secondary flex items-center gap-1 px-3 py-1.5 text-xs text-rose-500"
+                className="btn-secondary flex items-center gap-1 px-3 py-1.5 text-xs text-[var(--px-red-text)]"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <PxTrash size={14} />
                 <span>Xóa tuần</span>
               </button>
             </div>
             {importNotice && (
-              <p className="rounded-[2px] border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-xs text-emerald-400">
+              <p className="px-inset rounded-none border-[var(--px-green)] px-3 py-1.5 font-mono text-xs text-[var(--px-green-text)]">
                 {importNotice}
               </p>
             )}
@@ -731,7 +733,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
               rows={4}
               value={rawImportText}
               onChange={(e) => setRawImportText(e.target.value)}
-              className="w-full p-3 font-mono text-xs"
+              className="w-full rounded-none p-3 font-mono text-xs"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label className="flex items-center gap-2 text-xs text-sub">
@@ -780,7 +782,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
               </div>
             </div>
             {previewBlocks && (
-              <div className="grid max-h-36 grid-cols-1 gap-1.5 overflow-y-auto rounded-[2px] border-2 p-3 studio-subtle studio-divider sm:grid-cols-2">
+              <div className="px-inset grid max-h-36 grid-cols-1 gap-1.5 overflow-y-auto rounded-none p-3 sm:grid-cols-2">
                 {previewBlocks.map((b, i) => (
                   <div key={i} className="font-mono text-xs text-main">
                     {DAY_PILLS.find((d) => d.dow === b.dayOfWeek)?.short} • {b.startTime}-{b.endTime}: {b.title}
@@ -835,14 +837,14 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Tên khối lịch (VD: Khối Công việc Sáng, Lớp Kỹ năng...)"
-                className="px-3 py-2 text-sm sm:col-span-2"
+                className="rounded-none px-3 py-2 text-sm sm:col-span-2"
               />
-              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="px-2.5 py-2" />
-              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="px-2.5 py-2" />
+              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="rounded-none px-2.5 py-2" />
+              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="rounded-none px-2.5 py-2" />
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as TimetableBlockType)}
-                className="px-2.5 py-2"
+                className="rounded-none px-2.5 py-2"
               >
                 <option value="class_work">Công việc / Học tập</option>
                 <option value="sleep">Giờ ngủ</option>
@@ -855,7 +857,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
 
             <div className="flex justify-end">
               <button type="submit" disabled={adding || !title.trim()} className="btn-primary flex items-center gap-1.5 px-4 py-2 text-xs">
-                <Plus className="h-4 w-4" />
+                <PxPlus size={14} />
                 <span>Thêm vào {selectedDays.length} ngày đã chọn</span>
               </button>
             </div>
@@ -865,12 +867,13 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
 
       {/* AI Tự Xếp Lịch Theo Ngày Bar */}
       {onAiPlanDaySchedule && (
-        <section className="studio-surface p-4">
+        <section className="studio-surface relative p-4">
+          <PixelRivets />
           <form onSubmit={handleAiPlanDaySubmit} className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <select
               value={aiDayOfWeek}
               onChange={(e) => setAiDayOfWeek(Number(e.target.value))}
-              className="px-2.5 py-2 text-xs font-semibold sm:w-40"
+              className="rounded-none px-2.5 py-2 text-xs font-semibold sm:w-40"
               aria-label="Chọn ngày AI xếp lịch"
             >
               <option value={todayDow}>
@@ -887,7 +890,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
               value={aiDayPrompt}
               onChange={(e) => setAiDayPrompt(e.target.value)}
               placeholder="Nhờ AI xếp lịch: VD 'Chiều tập gym 1h, tối học ngoại ngữ 45p, làm dự án 1.5h lúc rảnh'..."
-              className="flex-1 px-3 py-2 text-xs"
+              className="flex-1 rounded-none px-3 py-2 text-xs"
             />
 
             <button
@@ -895,14 +898,15 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
               disabled={aiPlanning || !aiDayPrompt.trim()}
               className="btn-primary flex shrink-0 items-center justify-center gap-1.5 px-4 py-2 text-xs"
             >
-              {aiPlanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {aiPlanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PxSparkle size={14} />}
               <span>AI Xếp Lịch</span>
             </button>
           </form>
 
           {aiPlanSummary && (
-            <p className="mt-2 font-mono text-xs text-emerald-400">
-              ✓ {aiPlanSummary}
+            <p className="mt-2 flex items-center gap-1.5 font-mono text-xs text-[var(--px-green-text)]">
+              <PxCheck size={13} />
+              <span>{aiPlanSummary}</span>
             </p>
           )}
         </section>
@@ -910,16 +914,20 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
 
       {/* AI Weekly Blueprint Modal / Drawer */}
       {showBlueprintModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
-          <div className="rpg-window studio-surface flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div className="rpg-window relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden">
+            <PixelRivets />
             <div className="flex items-center justify-between border-b-2 px-5 py-4 studio-divider">
-              <div>
-                <h3 className="font-display text-base font-extrabold text-main">
-                  ✨ AI Lập Lịch Tuần Tự Động (Weekly Blueprint)
-                </h3>
-                <p className="text-xs text-sub">
-                  Tự động rà soát 7 ngày trống, né giờ ngủ 23:30–07:00 &amp; lịch cố định, ưu tiên Giờ Vàng và bù các chỉ số còn yếu.
-                </p>
+              <div className="flex items-start gap-2.5">
+                <PxSparkle size={18} className="mt-0.5 text-[var(--px-gold-text)]" />
+                <div>
+                  <h3 className="font-display text-base font-extrabold text-main">
+                    AI Lập Lịch Tuần Tự Động (Weekly Blueprint)
+                  </h3>
+                  <p className="text-xs text-sub">
+                    Tự động rà soát 7 ngày trống, né giờ ngủ 23:30–07:00 &amp; lịch cố định, ưu tiên Giờ Vàng và bù các chỉ số còn yếu.
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
@@ -927,7 +935,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                 className="btn-secondary p-1.5"
                 aria-label="Đóng"
               >
-                <X className="h-4 w-4" />
+                <PxClose size={14} />
               </button>
             </div>
 
@@ -938,7 +946,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                   value={blueprintFocusNote}
                   onChange={(e) => setBlueprintFocusNote(e.target.value)}
                   placeholder="Ghi chú ưu tiên tuần này (VD: Ưu tiên đồ án + ôn ngoại ngữ + tập thể dục)..."
-                  className="flex-1 px-3 py-2 text-xs"
+                  className="flex-1 rounded-none px-3 py-2 text-xs"
                 />
                 <button
                   type="button"
@@ -949,21 +957,21 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                   {blueprintGenerating ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <PxSparkle size={14} />
                   )}
                   <span>{blueprintDraft ? 'Tạo Lại Bản Nháp' : 'Tạo Bản Nháp Tuần'}</span>
                 </button>
               </div>
 
               {blueprintNotice && (
-                <p className="rounded-[2px] border-2 border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
+                <p className="px-inset rounded-none border-[var(--px-red)] px-3 py-2 text-xs text-[var(--px-red-text)]">
                   {blueprintNotice}
                 </p>
               )}
 
               {blueprintGenerating && !blueprintDraft && (
                 <div className="py-10 text-center text-xs text-sub">
-                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-amber-400" />
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-[var(--px-gold-text)]" />
                   <p className="mt-2">AI đang phân tích dữ liệu 7 ngày &amp; sắp xếp khung giờ không trùng lịch...</p>
                 </div>
               )}
@@ -971,16 +979,17 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
               {blueprintDraft && (
                 <>
                   {/* Summary & Empirical Peak Hour */}
-                  <div className="space-y-2 rounded-[2px] border-2 p-3.5 studio-subtle studio-divider">
+                  <div className="px-inset space-y-2 rounded-none p-3.5">
                     <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
-                      <span className="rounded-[2px] border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-bold text-amber-400">
+                      <span className="rounded-none border-2 border-[var(--px-gold)] bg-[var(--bg-surface-2)] px-2 py-0.5 font-bold text-[var(--px-gold-text)]">
                         {blueprintDraft.mode === 'llm' ? 'LIVE LLM' : 'SMART HEURISTIC'}
                       </span>
-                      <span className="text-cyan-400">
+                      <span className="inline-flex items-center gap-1 text-[var(--px-blue-text)]">
+                        <PxClock size={12} />
                         Giờ Vàng Thực Tế: <strong>{blueprintDraft.empiricalPeakHour || 'Chưa đủ dữ liệu'}</strong>
                       </span>
                       {blueprintDraft.weakestStats.length > 0 && (
-                        <span className="text-emerald-400">
+                        <span className="text-[var(--px-green-text)]">
                           Chỉ số cần bù: <strong>{blueprintDraft.weakestStats.join(' · ')}</strong>
                         </span>
                       )}
@@ -997,7 +1006,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                       if (dayBlocks.length === 0) return null;
 
                       return (
-                        <div key={dp.dow} className="rounded-[2px] border-2 studio-divider overflow-hidden">
+                        <div key={dp.dow} className="rpg-pane relative overflow-hidden rounded-none">
                           <div className="border-b-2 px-3.5 py-2 font-display text-xs font-extrabold text-main studio-subtle studio-divider">
                             {dp.full} ({dayBlocks.length} khối đề xuất)
                           </div>
@@ -1016,7 +1025,6 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                                         )
                                       );
                                     }}
-                                    className="h-4 w-4 accent-amber-500"
                                   />
                                   <input
                                     type="time"
@@ -1029,7 +1037,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                                         )
                                       );
                                     }}
-                                    className="px-2 py-1 font-mono text-xs"
+                                    className="rounded-none px-2 py-1 font-mono text-xs"
                                   />
                                   <span className="text-dim">–</span>
                                   <input
@@ -1043,7 +1051,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                                         )
                                       );
                                     }}
-                                    className="px-2 py-1 font-mono text-xs"
+                                    className="rounded-none px-2 py-1 font-mono text-xs"
                                   />
                                   <input
                                     value={blk.title}
@@ -1055,9 +1063,9 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                                         )
                                       );
                                     }}
-                                    className="min-w-[180px] flex-1 px-2.5 py-1 text-xs font-semibold"
+                                    className="min-w-[180px] flex-1 rounded-none px-2.5 py-1 text-xs font-semibold"
                                   />
-                                  <span className="rounded-[2px] border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-400">
+                                  <span className="rounded-none border-2 border-[var(--px-gold)] bg-[var(--bg-surface-2)] px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--px-gold-text)]">
                                     +{blk.primaryStat}
                                   </span>
                                 </div>
@@ -1080,7 +1088,6 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                     type="checkbox"
                     checked={blueprintSyncToday}
                     onChange={(e) => setBlueprintSyncToday(e.target.checked)}
-                    className="h-4 w-4 accent-amber-500"
                   />
                   <span>Đồng bộ luôn thành Quest cho các khối hôm nay</span>
                 </label>
@@ -1099,7 +1106,11 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                     onClick={handleApplyBlueprint}
                     className="btn-primary flex items-center gap-1.5 px-4 py-2 text-xs"
                   >
-                    {blueprintApplying && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {blueprintApplying ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <PxCheck size={14} />
+                    )}
                     <span>
                       Áp dụng cả tuần ({blueprintBlocks.filter((b) => b.selected).length} khối)
                     </span>
@@ -1112,7 +1123,8 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
       )}
 
       {/* Google-Calendar-style 2D Pixel Weekly Time-Grid */}
-      <section className="studio-surface overflow-hidden">
+      <section className="studio-surface relative overflow-hidden">
+        <PixelRivets />
         {/* Calendar Toolbar */}
         <div className="flex flex-col gap-3 border-b-2 px-4 py-3.5 lg:flex-row lg:items-center lg:justify-between studio-divider">
           <div className="flex flex-wrap items-center gap-2">
@@ -1121,11 +1133,11 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
               onClick={() => setWeekOffset((w) => w - 1)}
               className="btn-secondary flex items-center gap-1 px-2.5 py-1.5 text-xs"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
+              <PxChevron size={13} dir="left" />
               <span>Tuần trước</span>
             </button>
-            <div className="flex items-center gap-2 rounded-[2px] border-2 px-3 py-1.5 font-mono text-xs font-bold text-main studio-subtle studio-divider">
-              <Calendar className="h-3.5 w-3.5 text-amber-400" />
+            <div className="px-inset flex items-center gap-2 rounded-none px-3 py-1.5 font-mono text-xs font-bold text-main">
+              <PxCalendar size={14} className="text-[var(--px-gold-text)]" />
               <span>{weekRangeLabel}</span>
             </div>
             <button
@@ -1141,7 +1153,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
               className="btn-secondary flex items-center gap-1 px-2.5 py-1.5 text-xs"
             >
               <span>Tuần sau</span>
-              <ChevronRight className="h-3.5 w-3.5" />
+              <PxChevron size={13} dir="right" />
             </button>
           </div>
 
@@ -1158,7 +1170,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
               onClick={() => setShowTodayQuests((v) => !v)}
               className={showTodayQuests ? 'btn-emerald flex items-center gap-1.5 px-3 py-1.5 text-xs' : 'btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs'}
             >
-              <Sparkles className="h-3.5 w-3.5" />
+              <PxSparkle size={14} />
               <span>Quest hôm nay ({todayQuestsWithSlots.length})</span>
             </button>
           </div>
@@ -1180,27 +1192,27 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                     key={wd.dow}
                     type="button"
                     onClick={() => setSelectedDow(wd.dow)}
-                    className={`border-r last:border-r-0 px-2 py-2 text-left transition studio-divider ${
+                    className={`border-r-2 last:border-r-0 px-2 py-2 text-left transition studio-divider ${
                       wd.isToday
-                        ? 'bg-amber-500/15'
+                        ? 'bg-[var(--bg-surface-2)]'
                         : isSelected
-                          ? 'bg-indigo-500/10'
-                          : 'studio-subtle hover:bg-amber-500/5'
+                          ? 'bg-[var(--bg-muted)]'
+                          : 'studio-subtle hover:bg-[var(--bg-surface-2)]'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <span className={`font-display text-xs font-extrabold ${wd.isToday ? 'text-amber-400' : 'text-main'}`}>
+                      <span className={`font-display text-xs font-extrabold ${wd.isToday ? 'text-[var(--px-gold-text)]' : 'text-main'}`}>
                         {wd.full}
                       </span>
                       {wd.isToday && (
-                        <span className="font-pixel rounded-[2px] border border-amber-400 bg-amber-500/20 px-1 py-0.5 text-[8px] font-bold text-amber-300">
+                        <span className="font-pixel rounded-none border border-[var(--px-gold)] bg-[var(--px-gold)] px-1 py-0.5 text-[8px] font-bold text-[#140e04]">
                           TODAY
                         </span>
                       )}
                     </div>
                     <div className="mt-0.5 flex items-center justify-between font-mono text-[10px]">
                       <span className="text-dim">{wd.fullDateStr}</span>
-                      <span className="font-semibold text-emerald-400">
+                      <span className="font-semibold text-[var(--px-green-text)]">
                         Rảnh {dayData ? (dayData.totalFreeMinutes / 60).toFixed(1) : '0.0'}h
                       </span>
                     </div>
@@ -1285,7 +1297,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                     className="relative border-r last:border-r-0 studio-divider"
                     style={{
                       height: `${totalGridHeight}px`,
-                      backgroundColor: wd.isToday ? 'var(--cal-today-bg, rgba(245,158,11,0.05))' : undefined,
+                      backgroundColor: wd.isToday ? 'var(--cal-today-bg)' : undefined,
                     }}
                   >
                     {/* Clickable Hourly Slots + 30m Dashed Mid-Line */}
@@ -1294,7 +1306,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                         key={hr}
                         onClick={() => handleEmptyCellClick(wd.dow, hr)}
                         title={`Bấm để thêm khối lúc ${pad2(hr)}:00 (${wd.full})`}
-                        className="group relative cursor-pointer border-b transition hover:bg-amber-500/10"
+                        className="group relative cursor-pointer border-b transition hover:bg-[var(--accent-soft)]"
                         style={{
                           height: `${HOUR_HEIGHT}px`,
                           borderColor: 'var(--cal-grid-line, var(--border-hairline))',
@@ -1302,9 +1314,9 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                       >
                         <div
                           className="pointer-events-none absolute left-0 right-0 top-1/2 border-b border-dashed"
-                          style={{ borderColor: 'var(--cal-half-line, rgba(148,163,184,0.18))' }}
+                          style={{ borderColor: 'var(--cal-half-line)' }}
                         />
-                        <span className="pointer-events-none absolute right-1 top-0.5 hidden font-mono text-[9px] text-amber-400 group-hover:inline">
+                        <span className="pointer-events-none absolute right-1 top-0.5 hidden font-mono text-[9px] text-[var(--px-gold-text)] group-hover:inline">
                           + {pad2(hr)}:00
                         </span>
                       </div>
@@ -1324,10 +1336,10 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                           <div
                             key={item.id}
                             title={`[AI Quest] ${questObj.title} (${item.startTime}–${item.endTime})`}
-                            className={`group absolute z-10 overflow-hidden rounded-[2px] border-2 border-dashed px-1.5 py-0.5 text-[10px] leading-tight ${
+                            className={`group absolute z-10 overflow-hidden rounded-none border-2 border-dashed px-1.5 py-0.5 text-[10px] leading-tight ${
                               isDone
-                                ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200 line-through opacity-75'
-                                : 'border-amber-400 bg-amber-500/20 text-amber-100'
+                                ? 'border-[var(--px-green)] bg-[var(--bg-subtle)] text-[var(--px-green-text)] line-through opacity-80'
+                                : 'border-[var(--px-gold)] bg-[var(--bg-surface-2)] text-[var(--px-gold-text)]'
                             }`}
                             style={{
                               top: `${topPx + 1}px`,
@@ -1338,7 +1350,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                           >
                             <div className="flex items-center justify-between gap-1">
                               <span className="truncate font-mono text-[9px] font-bold">
-                                ⚡ {item.startTime}–{item.endTime}
+                                ★ {item.startTime}–{item.endTime}
                               </span>
                               {onDeleteQuest && (
                                 <button
@@ -1349,7 +1361,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                                       void onDeleteQuest(questObj.id);
                                     }
                                   }}
-                                  className="hidden shrink-0 rounded-[2px] bg-rose-600/80 px-1 text-[9px] font-bold text-white hover:bg-rose-500 group-hover:inline-flex"
+                                  className="hidden shrink-0 rounded-none bg-[var(--px-red)] px-1 text-[9px] font-bold text-white hover:brightness-110 group-hover:inline-flex"
                                   title="Xóa nhiệm vụ này"
                                 >
                                   ×
@@ -1372,7 +1384,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                             handleBlockClick(blk);
                           }}
                           title={`${blk.title} (${blk.startTime}–${blk.endTime}) — Bấm để sửa`}
-                          className={`absolute z-10 overflow-hidden rounded-[2px] border px-1.5 py-0.5 text-left text-[10px] leading-tight transition hover:brightness-110 ${st.gridCls}`}
+                          className={`absolute z-10 overflow-hidden rounded-none px-1.5 py-0.5 text-left text-[10px] leading-tight transition hover:brightness-110 ${st.gridCls}`}
                           style={{
                             top: `${topPx + 1}px`,
                             height: `${heightPx}px`,
@@ -1395,12 +1407,12 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                         style={{ top: `${nowLineTop}px` }}
                       >
                         <span
-                          className="h-2.5 w-2.5 -ml-1 rounded-[1px]"
-                          style={{ backgroundColor: 'var(--cal-now-line, #f59e0b)' }}
+                          className="-ml-1 h-2.5 w-2.5 rounded-none"
+                          style={{ backgroundColor: 'var(--cal-now-line)' }}
                         />
                         <div
                           className="h-[2px] flex-1"
-                          style={{ backgroundColor: 'var(--cal-now-line, #f59e0b)' }}
+                          style={{ backgroundColor: 'var(--cal-now-line)' }}
                         />
                       </div>
                     )}
@@ -1414,7 +1426,8 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
 
       {/* Selected Day Detail Ledger & Free Windows */}
       {activeDay && (
-        <section ref={dayDetailRef} className="studio-surface overflow-hidden">
+        <section ref={dayDetailRef} className="studio-surface relative overflow-hidden">
+          <PixelRivets />
           <div className="grid grid-cols-1 lg:grid-cols-12">
             <div className="lg:col-span-7">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 px-5 py-4 studio-divider">
@@ -1449,7 +1462,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                   <button
                     type="button"
                     onClick={() => onClearTimetable(activeDay.dayOfWeek)}
-                    className="btn-secondary px-2.5 py-1 text-xs text-rose-500"
+                    className="btn-secondary px-2.5 py-1 text-xs text-[var(--px-red-text)]"
                   >
                     Xóa ngày
                   </button>
@@ -1469,9 +1482,9 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                       <div key={b.id} className="flex items-center justify-between gap-3 px-5 py-3">
                         {isEditing ? (
                           <div className="flex flex-1 flex-wrap items-center gap-2">
-                            <input type="time" value={editStart} onChange={(e) => setEditStart(e.target.value)} className="px-2 py-1 text-xs" />
-                            <input type="time" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} className="px-2 py-1 text-xs" />
-                            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="flex-1 px-2 py-1 text-xs" />
+                            <input type="time" value={editStart} onChange={(e) => setEditStart(e.target.value)} className="rounded-none px-2 py-1 text-xs" />
+                            <input type="time" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} className="rounded-none px-2 py-1 text-xs" />
+                            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="flex-1 rounded-none px-2 py-1 text-xs" />
                             <button
                               type="button"
                               onClick={async () => {
@@ -1480,7 +1493,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                               }}
                               className="btn-primary p-1.5"
                             >
-                              <Check className="h-3.5 w-3.5" />
+                              <PxCheck size={13} />
                             </button>
                           </div>
                         ) : (
@@ -1489,7 +1502,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                               <span className="font-mono text-xs font-semibold text-main">
                                 {b.startTime}–{b.endTime}
                               </span>
-                              <span className={`rounded-[2px] px-2 py-0.5 text-[11px] font-medium ${st.pillCls}`}>
+                              <span className={`rounded-none px-2 py-0.5 text-[11px] font-bold ${st.pillCls}`}>
                                 {st.label}
                               </span>
                               <span className="truncate text-sm font-medium text-main">{b.title}</span>
@@ -1505,10 +1518,10 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                                 }}
                                 className="p-1 text-dim hover:text-main"
                               >
-                                <Edit3 className="h-3.5 w-3.5" />
+                                <PxEdit size={13} />
                               </button>
-                              <button type="button" onClick={() => onDeleteBlock(b.id)} className="p-1 text-dim hover:text-rose-500">
-                                <Trash2 className="h-3.5 w-3.5" />
+                              <button type="button" onClick={() => onDeleteBlock(b.id)} className="p-1 text-dim hover:text-[var(--px-red-text)]">
+                                <PxTrash size={13} />
                               </button>
                             </div>
                           </>
@@ -1530,7 +1543,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                     <span className="font-mono font-semibold text-main">
                       {w.startTime} – {w.endTime} ({w.durationMinutes}p)
                     </span>
-                    <span className="rounded-[2px] border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 font-medium text-emerald-400">
+                    <span className="rounded-none border border-[var(--px-green)] bg-[var(--bg-subtle)] px-2 py-0.5 font-medium text-[var(--px-green-text)]">
                       {w.windowQuality === 'DEEP_WORK_PRIME'
                         ? 'Deep Work Tốt'
                         : w.windowQuality === 'STANDARD_FOCUS'

@@ -1,24 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  AlertTriangle,
-  Bell,
-  BellOff,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  Coins,
-  Flame,
-  KeyRound,
-  Loader2,
-  Plus,
-  QrCode,
-  RefreshCw,
-  ShieldCheck,
-  Smartphone,
-  Timer,
-  Zap,
-} from 'lucide-react';
 import type {
   AssistantOverviewPayload,
   Quest,
@@ -26,6 +6,26 @@ import type {
 } from '../types/system';
 import { formatVnTimeShort, getVnTodayKey } from '../utils/timeVn';
 import { PixelHeart, PixelHeroSprite } from './DungeonSprites';
+import {
+  PixelRivets,
+  PxBell,
+  PxBolt,
+  PxCheck,
+  PxChevron,
+  PxClock,
+  PxCoin,
+  PxFlame,
+  PxLock,
+  PxPause,
+  PxPhone,
+  PxPlay,
+  PxPlus,
+  PxRefresh,
+  PxScroll,
+  PxShield,
+  PxTarget,
+  PxWarn,
+} from './PixelIcons';
 
 export interface MobileQuickViewProps {
   state: SystemStatePayload | null;
@@ -44,23 +44,23 @@ export interface MobileQuickViewProps {
 const ENERGY_OPTIONS: Array<{
   val: number;
   label: string;
-  dotCls: string;
+  dotColor: string;
 }> = [
-  { val: 100, label: 'Sung sức', dotCls: 'bg-emerald-400' },
-  { val: 75, label: 'Ổn định', dotCls: 'bg-sky-400' },
-  { val: 45, label: 'Hơi mệt', dotCls: 'bg-amber-400' },
-  { val: 20, label: 'Cạn pin', dotCls: 'bg-rose-400' },
+  { val: 100, label: 'Sung sức', dotColor: 'var(--px-green)' },
+  { val: 75, label: 'Ổn định', dotColor: 'var(--px-blue)' },
+  { val: 45, label: 'Hơi mệt', dotColor: 'var(--px-gold)' },
+  { val: 20, label: 'Cạn pin', dotColor: 'var(--px-red)' },
 ];
 
 const QUICK_DURATIONS = [25, 45, 60] as const;
 
-const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
-  daily: { label: 'Daily', cls: 'border-sky-500/45 bg-sky-500/15 text-sky-300' },
-  main: { label: 'Main', cls: 'border-amber-500/45 bg-amber-500/15 text-amber-300' },
-  side: { label: 'Side', cls: 'border-emerald-500/45 bg-emerald-500/15 text-emerald-300' },
-  hidden: { label: 'Hidden', cls: 'border-violet-500/45 bg-violet-500/15 text-violet-300' },
-  emergency: { label: 'Urgent', cls: 'border-rose-500/45 bg-rose-500/15 text-rose-300' },
-  recovery: { label: 'Recovery', cls: 'border-teal-500/45 bg-teal-500/15 text-teal-300' },
+const TYPE_BADGE: Record<string, { label: string; color: string; textColor: string }> = {
+  daily: { label: 'Daily', color: 'var(--px-blue)', textColor: 'var(--px-blue-text)' },
+  main: { label: 'Main', color: 'var(--px-gold)', textColor: 'var(--px-gold-text)' },
+  side: { label: 'Side', color: 'var(--px-green)', textColor: 'var(--px-green-text)' },
+  hidden: { label: 'Hidden', color: 'var(--px-plum)', textColor: 'var(--px-plum-text)' },
+  emergency: { label: 'Urgent', color: 'var(--px-red)', textColor: 'var(--px-red-text)' },
+  recovery: { label: 'Recovery', color: 'var(--px-green)', textColor: 'var(--px-green-text)' },
 };
 
 function getQuestElapsedSeconds(quest: Quest, nowMs: number): number {
@@ -112,9 +112,10 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [togglingDnd, setTogglingDnd] = useState(false);
   const [checkingEnergyVal, setCheckingEnergyVal] = useState<number | null>(null);
-  const [busyQuest, setBusyQuest] = useState<{ id: string; action: 'start' | 'pause' | 'complete' } | null>(
-    null
-  );
+  const [busyQuest, setBusyQuest] = useState<{
+    id: string;
+    action: 'start' | 'pause' | 'complete';
+  } | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -193,13 +194,15 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
   if (authRequired) {
     return (
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-8">
-        <div className="rpg-window space-y-5 p-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[2px] border-2 border-amber-500/70 bg-amber-500/15 text-amber-400">
-              <Smartphone className="h-5 w-5" />
+        <div className="rpg-window relative space-y-5 rounded-none p-5">
+          <PixelRivets />
+
+          <div className="flex items-center gap-3 border-b-2 pb-3 rpg-divider">
+            <div className="px-inset flex h-11 w-11 shrink-0 items-center justify-center rounded-none text-[var(--px-gold-text)]">
+              <PxPhone size={20} />
             </div>
             <div className="min-w-0">
-              <span className="font-pixel text-[9px] uppercase tracking-wider text-amber-400">
+              <span className="font-pixel text-[9px] uppercase tracking-wider text-[var(--px-gold-text)]">
                 THE SYSTEM · MOBILE PWA
               </span>
               <h1 className="font-display text-base font-extrabold text-main">
@@ -208,15 +211,13 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
             </div>
           </div>
 
-          <div className="space-y-2 rounded-[2px] border-2 border-sky-500/35 bg-sky-500/10 p-3 text-xs text-sub">
-            <div className="flex items-start gap-2">
-              <QrCode className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
-              <p>
-                Mở tab <strong className="text-main">Trợ Lý PC</strong> trên máy tính và bật{' '}
-                <strong className="text-main">Kết nối Điện thoại qua QR Mạng LAN</strong>. Bạn có
-                thể quét mã QR để đăng nhập tự động hoặc nhập Mã PIN 6 số dưới đây.
-              </p>
-            </div>
+          <div className="px-inset flex items-start gap-2.5 rounded-none p-3 text-xs text-sub">
+            <PxLock size={16} color="var(--px-blue-text)" className="mt-0.5" />
+            <p>
+              Mở tab <strong className="text-main">Trợ Lý PC</strong> trên máy tính và bật{' '}
+              <strong className="text-main">Kết nối Điện thoại qua QR Mạng LAN</strong>. Bạn có
+              thể quét mã QR để đăng nhập tự động hoặc nhập Mã PIN 6 số dưới đây.
+            </p>
           </div>
 
           <form onSubmit={(e) => void handlePairSubmit(e)} className="space-y-4">
@@ -225,7 +226,7 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
                 htmlFor="lan-pair-pin"
                 className="flex items-center gap-1.5 text-xs font-bold text-sub"
               >
-                <KeyRound className="h-3.5 w-3.5 text-amber-400" />
+                <PxLock size={13} color="var(--px-gold-text)" />
                 <span>Nhập Mã PIN 6 số trên PC</span>
               </label>
 
@@ -244,17 +245,19 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
                 }}
                 placeholder="• • • • • •"
                 disabled={pairing}
-                className="w-full py-3.5 text-center font-mono text-2xl font-extrabold tracking-[0.42em] text-amber-300 placeholder:tracking-[0.25em] placeholder:text-dim"
+                className="w-full rounded-none py-3.5 text-center font-mono text-2xl font-extrabold tracking-[0.42em] text-[var(--px-gold-text)] placeholder:tracking-[0.25em] placeholder:text-dim"
               />
 
-              {/* 6-slot progress indicator */}
+              {/* 6-slot crisp pixel indicator */}
               <div className="grid grid-cols-6 gap-1.5 pt-1" aria-hidden="true">
                 {Array.from({ length: 6 }, (_, i) => (
                   <div
                     key={i}
-                    className={`h-1 rounded-[1px] transition-colors ${
-                      i < pinInput.length ? 'bg-amber-400' : 'bg-[#2d3856]'
-                    }`}
+                    className="h-1.5 rounded-none border border-[var(--border-ink)]"
+                    style={{
+                      backgroundColor:
+                        i < pinInput.length ? 'var(--px-gold)' : 'var(--bg-subtle)',
+                    }}
                   />
                 ))}
               </div>
@@ -263,9 +266,9 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
             {pairError && (
               <div
                 role="alert"
-                className="flex items-start gap-2 rounded-[2px] border-2 border-rose-500/60 bg-rose-500/15 px-3 py-2.5 text-xs font-medium text-rose-200"
+                className="flex items-start gap-2 rounded-none border-2 border-[var(--px-red)] bg-[var(--px-red)]/15 px-3 py-2.5 text-xs font-semibold text-[var(--px-red-text)]"
               >
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+                <PxWarn size={15} danger className="mt-0.5" />
                 <span>{pairError}</span>
               </div>
             )}
@@ -273,16 +276,16 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
             <button
               type="submit"
               disabled={pairing || pinInput.length !== 6}
-              className="btn-primary flex min-h-[46px] w-full items-center justify-center gap-2 px-4 py-3 text-sm font-extrabold"
+              className="btn-primary flex min-h-[46px] w-full items-center justify-center gap-2 rounded-none px-4 py-3 text-sm font-extrabold"
             >
               {pairing ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <PxRefresh size={15} className="animate-spin" />
                   <span>Đang xác thực...</span>
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="h-4 w-4" />
+                  <PxShield size={15} />
                   <span>Ghép nối ngay</span>
                 </>
               )}
@@ -302,8 +305,9 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
   if (!state) {
     return (
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center px-4 py-8">
-        <div className="rpg-window flex w-full flex-col items-center gap-3 p-6 text-center">
-          <Loader2 className="h-7 w-7 animate-spin text-amber-400" />
+        <div className="rpg-window relative flex w-full flex-col items-center gap-3 rounded-none p-6 text-center">
+          <PixelRivets />
+          <PxRefresh size={24} color="var(--px-gold-text)" className="animate-spin" />
           <p className="font-display text-sm font-bold text-main">
             Đang đồng bộ dữ liệu từ PC...
           </p>
@@ -318,9 +322,9 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
                 setRefreshing(false);
               }
             }}
-            className="btn-secondary mt-1 flex items-center gap-1.5 px-4 py-2 text-xs"
+            className="btn-secondary mt-1 flex items-center gap-1.5 rounded-none px-4 py-2 text-xs"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            <PxRefresh size={13} className={refreshing ? 'animate-spin' : ''} />
             <span>Tải lại</span>
           </button>
         </div>
@@ -373,7 +377,9 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
     try {
       const nextMinutes = isDndActive ? 0 : 60;
       await onToggleDnd(nextMinutes);
-      showToast(nextMinutes > 0 ? 'Đã bật Tạm im thông báo 1 giờ.' : 'Đã tắt chế độ Tạm im.');
+      showToast(
+        nextMinutes > 0 ? 'Đã bật Tạm im thông báo 1 giờ.' : 'Đã tắt chế độ Tạm im.'
+      );
     } finally {
       setTogglingDnd(false);
     }
@@ -425,27 +431,32 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
   };
 
   const activeElapsedSec = activeSession ? getQuestElapsedSeconds(activeSession, nowMs) : 0;
-  const activeEstimatedSec = activeSession ? Math.max(60, activeSession.durationMinutes * 60) : 60;
+  const activeEstimatedSec = activeSession
+    ? Math.max(60, activeSession.durationMinutes * 60)
+    : 60;
   const activePct = Math.min(100, Math.round((activeElapsedSec / activeEstimatedSec) * 100));
   const activeIsRunning = Boolean(activeSession?.startedAt && !activeSession?.isPaused);
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col gap-3 px-3 pb-10 pt-3">
-      {/* Compact Mobile RPG Header */}
-      <header className="rpg-hud-bar space-y-2.5 p-3">
+      {/* Compact 16-Bit Mobile RPG Header */}
+      <header className="rpg-hud-bar relative space-y-2.5 rounded-none p-3">
+        <PixelRivets />
+
         <div className="flex items-center justify-between gap-2">
           {/* Hero Sprite + Name + LV */}
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="relative shrink-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-[2px] border-2 border-amber-500/70 bg-[#0d111d]">
+              <div className="px-inset flex h-10 w-10 items-center justify-center rounded-none border-2 border-[var(--px-gold)]">
                 <PixelHeroSprite
                   rank={player.rank}
                   avatarStyle={player.profile.avatarStyle}
                   mood={heroMood}
                   size={34}
+                  className="!animate-none"
                 />
               </div>
-              <span className="font-pixel absolute -bottom-1.5 -right-1.5 rounded-[2px] border border-amber-300 bg-amber-500 px-1 py-0.5 text-[8px] font-bold leading-none text-[#160f05]">
+              <span className="font-pixel absolute -bottom-1.5 -right-1.5 rounded-none border-2 border-[var(--border-ink)] bg-[var(--px-gold)] px-1 py-0.5 text-[8px] font-bold leading-none text-[#140e04]">
                 LV.{player.level}
               </span>
             </div>
@@ -455,17 +466,17 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
                 <h1 className="truncate font-display text-sm font-extrabold text-main">
                   {player.profile.name}
                 </h1>
-                <span className="font-pixel shrink-0 rounded-[2px] border border-amber-500/45 bg-amber-500/15 px-1 py-0.5 text-[8px] font-bold text-amber-300">
+                <span className="font-pixel shrink-0 rounded-none border border-[var(--px-gold)] bg-[var(--bg-subtle)] px-1 py-0.5 text-[8px] font-bold text-[var(--px-gold-text)]">
                   {player.rank}
                 </span>
               </div>
-              <div className="mt-0.5 flex items-center gap-2 font-mono text-[10px] text-dim">
-                <span className="inline-flex items-center gap-0.5 text-amber-400">
-                  <Flame className="h-3 w-3" />
+              <div className="mt-0.5 flex items-center gap-2.5 font-mono text-[10px] font-bold text-sub">
+                <span className="inline-flex items-center gap-1 text-[var(--px-gold-text)]">
+                  <PxFlame size={11} />
                   {player.streakDays}d
                 </span>
-                <span className="inline-flex items-center gap-0.5 text-amber-300">
-                  <Coins className="h-3 w-3" />
+                <span className="inline-flex items-center gap-1 text-[var(--px-gold-text)]">
+                  <PxCoin size={11} />
                   {player.gold}G
                 </span>
               </div>
@@ -478,20 +489,16 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
               type="button"
               disabled={togglingDnd}
               onClick={() => void handleDndClick()}
-              className={`flex h-10 items-center gap-1 rounded-[2px] border-2 px-2.5 text-xs font-bold transition ${
-                isDndActive
-                  ? 'border-violet-400 bg-violet-500/25 text-violet-200'
-                  : 'btn-secondary'
+              className={`flex h-10 items-center gap-1 rounded-none px-2.5 text-xs font-bold ${
+                isDndActive ? 'btn-primary' : 'btn-secondary'
               }`}
               title={isDndActive ? 'Tắt Tạm im (DND)' : 'Tạm im thông báo 1 giờ'}
               aria-label={isDndActive ? 'Tắt Tạm im' : 'Bật Tạm im 1 giờ'}
             >
               {togglingDnd ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : isDndActive ? (
-                <BellOff className="h-4 w-4" />
+                <PxRefresh size={14} className="animate-spin" />
               ) : (
-                <Bell className="h-4 w-4" />
+                <PxBell size={14} muted={isDndActive} />
               )}
               <span className="font-mono text-[11px]">{isDndActive ? 'DND' : '1h'}</span>
             </button>
@@ -500,72 +507,77 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
               type="button"
               disabled={refreshing}
               onClick={() => void handleRefreshClick()}
-              className="btn-secondary flex h-10 w-10 items-center justify-center"
+              className="btn-secondary flex h-10 w-10 items-center justify-center rounded-none"
               title="Đồng bộ dữ liệu"
               aria-label="Đồng bộ dữ liệu"
             >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin text-amber-400' : ''}`} />
+              <PxRefresh size={15} className={refreshing ? 'animate-spin' : ''} />
             </button>
           </div>
         </div>
 
-        {/* HP Hearts + Segmented Pixel HP Bar */}
+        {/* HP Hearts + Segmented 16-Bit Pixel HP Bar */}
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <div
-              className="flex items-center gap-0.5 rounded-[2px] border border-rose-900/45 bg-[#120b14]/80 px-1.5 py-0.5"
+              className="px-inset flex items-center gap-0.5 rounded-none px-1.5 py-0.5"
               aria-label={`HP ${hp} trên ${maxHp}`}
             >
               {heartStates.map((st, idx) => (
                 <PixelHeart key={idx} state={st} size={13} critical={isCriticalHp} />
               ))}
             </div>
-            <span className="font-mono text-[11px] font-bold text-rose-300">
+            <span className="font-mono text-[11px] font-bold text-[var(--px-red-text)]">
               HP {hp}/{maxHp}
             </span>
           </div>
-          <div className="rpg-bar-track h-2.5 w-full">
+          <div className="rpg-bar-track h-3 w-full">
             <div
-              className="h-full bg-gradient-to-r from-rose-700 via-rose-500 to-red-400 transition-all duration-300"
-              style={{ width: `${hpPct}%` }}
+              className="h-full"
+              style={{ width: `${hpPct}%`, backgroundColor: 'var(--px-red)' }}
             />
           </div>
         </div>
 
-        {/* Status Pills: Energy %, Focus X%, DND info */}
+        {/* Status Badges: Energy %, Focus X%, DND info */}
         <div className="flex flex-wrap items-center gap-1.5">
           <span
-            className={`inline-flex items-center gap-1 rounded-[2px] border px-2 py-1 font-mono text-[11px] font-bold ${
-              player.energyLevel >= 70
-                ? 'border-emerald-500/45 bg-emerald-500/15 text-emerald-300'
-                : player.energyLevel >= 40
-                  ? 'border-amber-500/45 bg-amber-500/15 text-amber-300'
-                  : 'border-rose-500/45 bg-rose-500/15 text-rose-300'
-            }`}
+            className="px-inset inline-flex items-center gap-1 rounded-none px-2 py-1 font-mono text-[11px] font-bold"
+            style={{
+              color:
+                player.energyLevel >= 70
+                  ? 'var(--px-green-text)'
+                  : player.energyLevel >= 40
+                    ? 'var(--px-gold-text)'
+                    : 'var(--px-red-text)',
+            }}
           >
-            <Zap className="h-3.5 w-3.5" />
+            <PxBolt size={12} />
             Energy {player.energyLevel}%
           </span>
 
           <span
-            className={`inline-flex items-center gap-1.5 rounded-[2px] border px-2 py-1 font-mono text-[11px] font-bold ${
-              distractionAlert
-                ? 'border-rose-400/80 bg-rose-500/20 text-rose-200'
-                : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-            }`}
+            className="px-inset inline-flex items-center gap-1.5 rounded-none px-2 py-1 font-mono text-[11px] font-bold"
+            style={{
+              borderColor: distractionAlert ? 'var(--px-red)' : undefined,
+              color: distractionAlert ? 'var(--px-red-text)' : 'var(--px-green-text)',
+            }}
           >
-            <span
-              className={`h-2 w-2 rounded-full ${
-                distractionAlert ? 'animate-pulse bg-rose-400' : 'bg-emerald-400'
-              }`}
+            <PxTarget
+              size={12}
+              color={distractionAlert ? 'var(--px-red-text)' : 'var(--px-green-text)'}
             />
             Focus {focusScore}%
-            {distractionAlert && <span className="text-[10px] text-rose-300">· Xao nhãng!</span>}
+            {distractionAlert && (
+              <span className="text-[10px] font-extrabold text-[var(--px-red-text)]">
+                · Xao nhãng!
+              </span>
+            )}
           </span>
 
           {isDndActive && overview?.dndUntil && (
-            <span className="inline-flex items-center gap-1 rounded-[2px] border border-violet-500/45 bg-violet-500/15 px-2 py-1 font-mono text-[10px] font-bold text-violet-200">
-              <BellOff className="h-3 w-3" />
+            <span className="px-inset inline-flex items-center gap-1 rounded-none px-2 py-1 font-mono text-[10px] font-bold text-[var(--px-plum-text)]">
+              <PxBell size={11} muted />
               Im lặng đến {formatVnTimeShort(overview.dndUntil)}
             </span>
           )}
@@ -576,17 +588,20 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
       {toastMsg && (
         <div
           role="status"
-          className="rounded-[2px] border-2 border-emerald-500/60 bg-emerald-500/15 px-3 py-2 text-center font-mono text-xs font-bold text-emerald-200"
+          className="rounded-none border-2 border-[var(--px-green)] bg-[var(--px-green)]/15 px-3 py-2 text-center font-mono text-xs font-bold text-[var(--px-green-text)]"
         >
           {toastMsg}
         </div>
       )}
 
       {/* 4-Pill Thể Trạng Quick Switcher (NEVER drains HP) */}
-      <section className="rpg-pane space-y-2 p-2.5">
+      <section className="rpg-pane relative space-y-2 rounded-none p-2.5">
+        <PixelRivets />
         <div className="flex items-center justify-between text-[11px]">
           <span className="font-display font-bold text-main">Thể trạng hôm nay</span>
-          <span className="font-mono text-[10px] text-emerald-400">Không trừ HP</span>
+          <span className="font-mono text-[10px] font-bold text-[var(--px-green-text)]">
+            Không trừ HP
+          </span>
         </div>
         <div className="grid grid-cols-4 gap-1.5">
           {ENERGY_OPTIONS.map((opt) => {
@@ -598,19 +613,16 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
                 type="button"
                 disabled={checkingEnergyVal !== null}
                 onClick={() => void handleEnergyClick(opt.val, opt.label)}
-                className={`flex min-h-[42px] flex-col items-center justify-center gap-1 rounded-[2px] border-2 px-1 py-1.5 text-[11px] font-bold transition ${
-                  selected
-                    ? 'border-amber-300 bg-amber-500 text-[#180f03]'
-                    : 'border-[#2d3856] bg-[#101522] text-sub hover:border-[#475780] hover:text-main'
+                className={`flex min-h-[42px] flex-col items-center justify-center gap-1 rounded-none px-1 py-1.5 text-[11px] font-bold ${
+                  selected ? 'btn-primary' : 'btn-secondary'
                 }`}
               >
                 {busy ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <PxRefresh size={12} className="animate-spin" />
                 ) : (
                   <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      selected ? 'bg-[#180f03]' : opt.dotCls
-                    }`}
+                    className="h-2 w-2 rounded-none border border-[var(--border-ink)]"
+                    style={{ backgroundColor: selected ? '#140e04' : opt.dotColor }}
                   />
                 )}
                 <span className="leading-none">{opt.label}</span>
@@ -623,7 +635,7 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
       {/* Sticky 1-Thumb Quick-Add Bar */}
       <form
         onSubmit={(e) => void handleQuickAddSubmit(e)}
-        className="rpg-hud-bar sticky top-2 z-20 space-y-2 bg-[#141927]/95 p-2.5 backdrop-blur-sm"
+        className="rpg-hud-bar sticky top-2 z-20 space-y-2 rounded-none p-2.5"
       >
         <div className="flex items-center gap-1.5">
           <input
@@ -632,17 +644,17 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
             onChange={(e) => setQuickTitle(e.target.value)}
             placeholder="Thêm nhanh việc..."
             disabled={quickAdding}
-            className="h-11 min-w-0 flex-1 px-3 text-sm"
+            className="h-11 min-w-0 flex-1 rounded-none px-3 text-sm"
           />
           <button
             type="submit"
             disabled={!quickTitle.trim() || quickAdding}
-            className="btn-primary flex h-11 shrink-0 items-center gap-1 px-3.5 text-xs font-extrabold"
+            className="btn-primary flex h-11 shrink-0 items-center gap-1 rounded-none px-3.5 text-xs font-extrabold"
           >
             {quickAdding ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <PxRefresh size={14} className="animate-spin" />
             ) : (
-              <Plus className="h-4 w-4" />
+              <PxPlus size={14} />
             )}
             <span>Thêm</span>
           </button>
@@ -656,13 +668,11 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
                 key={mins}
                 type="button"
                 onClick={() => setQuickDuration(mins)}
-                className={`flex h-8 items-center justify-center gap-1 rounded-[2px] border font-mono text-xs font-bold transition ${
-                  active
-                    ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                    : 'border-[#2d3856] bg-[#101522] text-dim hover:text-main'
+                className={`flex h-8 items-center justify-center gap-1 rounded-none font-mono text-xs font-bold ${
+                  active ? 'btn-primary' : 'btn-secondary'
                 }`}
               >
-                <Clock className="h-3 w-3" />
+                <PxClock size={11} />
                 <span>{mins}p</span>
               </button>
             );
@@ -672,13 +682,14 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
 
       {/* Active Running / Paused Quest Spotlight */}
       {activeSession && (
-        <section className="rounded-[2px] border-2 border-amber-500/75 bg-amber-500/10 p-3 shadow-[3px_3px_0_#05070c]">
+        <section className="rpg-window relative rounded-none border-[var(--px-gold)] p-3">
+          <PixelRivets />
           <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1 rounded-[2px] border border-amber-500/60 bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">
-              <Timer className="h-3 w-3" />
+            <span className="inline-flex items-center gap-1 rounded-none border-2 border-[var(--border-ink)] bg-[var(--px-gold)] px-1.5 py-0.5 font-pixel text-[9px] font-bold text-[#140e04]">
+              <PxClock size={11} />
               {activeIsRunning ? 'ĐANG CHẠY' : 'TẠM DỪNG'}
             </span>
-            <span className="rounded-[2px] border border-amber-500/60 bg-[#0d111d] px-2.5 py-0.5 font-mono text-base font-extrabold tabular-nums text-amber-300">
+            <span className="px-inset rounded-none px-2.5 py-0.5 font-mono text-base font-extrabold tabular-nums text-[var(--px-gold-text)]">
               {formatTimer(activeElapsedSec)}
             </span>
           </div>
@@ -688,10 +699,10 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
           </h2>
 
           <div className="mt-2 space-y-1">
-            <div className="rpg-bar-track h-2 w-full">
+            <div className="rpg-bar-track h-2.5 w-full">
               <div
-                className="h-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-300"
-                style={{ width: `${activePct}%` }}
+                className="h-full"
+                style={{ width: `${activePct}%`, backgroundColor: 'var(--px-gold)' }}
               />
             </div>
             <div className="flex items-center justify-between font-mono text-[10px] text-sub">
@@ -706,24 +717,28 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
                 type="button"
                 disabled={busyQuest !== null}
                 onClick={() => void handleQuestAction(activeSession.id, 'pause')}
-                className="btn-secondary flex min-h-[44px] items-center justify-center gap-1.5 border-amber-500/60 text-xs font-bold text-amber-300"
+                className="btn-secondary flex min-h-[44px] items-center justify-center gap-1.5 rounded-none text-xs font-bold text-[var(--px-gold-text)]"
               >
-                {busyQuest?.id === activeSession.id && busyQuest.action === 'pause' && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                {busyQuest?.id === activeSession.id && busyQuest.action === 'pause' ? (
+                  <PxRefresh size={13} className="animate-spin" />
+                ) : (
+                  <PxPause size={13} />
                 )}
-                <span>⏸ Tạm dừng</span>
+                <span>Tạm dừng</span>
               </button>
             ) : (
               <button
                 type="button"
                 disabled={busyQuest !== null}
                 onClick={() => void handleQuestAction(activeSession.id, 'start')}
-                className="btn-secondary flex min-h-[44px] items-center justify-center gap-1.5 border-emerald-500/60 text-xs font-bold text-emerald-300"
+                className="btn-secondary flex min-h-[44px] items-center justify-center gap-1.5 rounded-none text-xs font-bold text-[var(--px-green-text)]"
               >
-                {busyQuest?.id === activeSession.id && busyQuest.action === 'start' && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                {busyQuest?.id === activeSession.id && busyQuest.action === 'start' ? (
+                  <PxRefresh size={13} className="animate-spin" />
+                ) : (
+                  <PxPlay size={13} />
                 )}
-                <span>▶ Tiếp tục</span>
+                <span>Tiếp tục</span>
               </button>
             )}
 
@@ -731,12 +746,14 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
               type="button"
               disabled={busyQuest !== null}
               onClick={() => void handleQuestAction(activeSession.id, 'complete')}
-              className="btn-emerald flex min-h-[44px] items-center justify-center gap-1.5 text-xs font-extrabold"
+              className="btn-emerald flex min-h-[44px] items-center justify-center gap-1.5 rounded-none text-xs font-extrabold"
             >
-              {busyQuest?.id === activeSession.id && busyQuest.action === 'complete' && (
-                <Loader2 className="h-4 w-4 animate-spin" />
+              {busyQuest?.id === activeSession.id && busyQuest.action === 'complete' ? (
+                <PxRefresh size={13} className="animate-spin" />
+              ) : (
+                <PxCheck size={13} />
               )}
-              <span>✓ Xong</span>
+              <span>Xong</span>
             </button>
           </div>
         </section>
@@ -746,23 +763,25 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
       <section className="space-y-2.5">
         <div className="flex items-center justify-between px-0.5">
           <div className="flex items-center gap-2">
-            <h2 className="font-display text-sm font-extrabold text-main">
-              Quest Hôm Nay
-            </h2>
-            <span className="rounded-[2px] border border-[#3a486e] bg-[#1a2133] px-1.5 py-0.5 font-mono text-[10px] font-bold text-sub">
+            <PxScroll size={15} color="var(--px-gold-text)" />
+            <h2 className="font-display text-sm font-extrabold text-main">Quest Hôm Nay</h2>
+            <span className="px-inset rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold text-sub">
               Còn {pendingQuests.length}
             </span>
           </div>
 
-          <span className="inline-flex items-center gap-1 rounded-[2px] border border-emerald-500/45 bg-emerald-500/15 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-300">
-            <CheckCircle2 className="h-3.5 w-3.5" />
+          <span className="px-inset inline-flex items-center gap-1 rounded-none px-2 py-0.5 font-mono text-[11px] font-bold text-[var(--px-green-text)]">
+            <PxCheck size={12} />
             {completedQuests.length}/{todayQuests.length} xong
           </span>
         </div>
 
         {pendingQuests.length === 0 ? (
-          <div className="rpg-pane space-y-1.5 p-5 text-center">
-            <CheckCircle2 className="mx-auto h-7 w-7 text-emerald-400" />
+          <div className="rpg-pane relative space-y-1.5 rounded-none p-5 text-center">
+            <PixelRivets />
+            <div className="mx-auto flex h-10 w-10 items-center justify-center border-2 border-[var(--border-ink)] bg-[var(--px-green)] text-white">
+              <PxCheck size={18} />
+            </div>
             <p className="font-display text-sm font-bold text-main">
               Không còn Quest tồn đọng!
             </p>
@@ -779,29 +798,30 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
               );
               const elapsed = getQuestElapsedSeconds(quest, nowMs);
               const typeMeta = TYPE_BADGE[quest.type] || TYPE_BADGE.daily;
-              const isStarting =
-                busyQuest?.id === quest.id && busyQuest.action === 'start';
-              const isPausing =
-                busyQuest?.id === quest.id && busyQuest.action === 'pause';
+              const isStarting = busyQuest?.id === quest.id && busyQuest.action === 'start';
+              const isPausing = busyQuest?.id === quest.id && busyQuest.action === 'pause';
               const isCompleting =
                 busyQuest?.id === quest.id && busyQuest.action === 'complete';
 
               return (
                 <article
                   key={quest.id}
-                  className={`rpg-pane space-y-2.5 p-3 transition-colors ${
-                    running ? 'border-amber-500/80 bg-amber-500/5' : ''
-                  }`}
+                  className="rpg-pane space-y-2.5 rounded-none p-3"
+                  style={running ? { borderColor: 'var(--px-gold)' } : undefined}
                 >
                   {/* Meta row */}
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span
-                        className={`rounded-[2px] border px-1.5 py-0.5 font-mono text-[10px] font-bold ${typeMeta.cls}`}
+                        className="rounded-none border-2 bg-[var(--bg-subtle)] px-1.5 py-0.5 font-mono text-[10px] font-bold"
+                        style={{
+                          borderColor: typeMeta.color,
+                          color: typeMeta.textColor,
+                        }}
                       >
                         {typeMeta.label}
                       </span>
-                      <span className="font-pixel rounded-[2px] border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[9px] text-amber-300">
+                      <span className="font-pixel rounded-none border border-[var(--px-gold)] bg-[var(--bg-subtle)] px-1 py-0.5 text-[9px] text-[var(--px-gold-text)]">
                         {quest.rank}
                       </span>
                       <span className="font-mono text-[11px] text-dim">
@@ -814,13 +834,12 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
 
                     {(running || paused) && (
                       <span
-                        className={`inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 font-mono text-[11px] font-extrabold tabular-nums ${
-                          running
-                            ? 'border-amber-500/60 bg-amber-500/20 text-amber-300'
-                            : 'border-sky-500/50 bg-sky-500/15 text-sky-300'
-                        }`}
+                        className="px-inset inline-flex items-center gap-1 rounded-none px-1.5 py-0.5 font-mono text-[11px] font-extrabold tabular-nums"
+                        style={{
+                          color: running ? 'var(--px-gold-text)' : 'var(--px-blue-text)',
+                        }}
                       >
-                        <Timer className="h-3 w-3" />
+                        <PxClock size={11} />
                         {formatTimer(elapsed)}
                       </span>
                     )}
@@ -831,10 +850,10 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
                     <h3 className="font-display text-sm font-bold leading-snug text-main">
                       {quest.title}
                     </h3>
-                    <div className="mt-1 flex items-center gap-2 font-mono text-[10px] text-dim">
-                      <span className="text-sky-400">+{quest.xpReward} XP</span>
+                    <div className="mt-1 flex items-center gap-2 font-mono text-[10px] font-bold text-dim">
+                      <span className="text-[var(--px-blue-text)]">+{quest.xpReward} XP</span>
                       <span>·</span>
-                      <span className="text-amber-400">+{quest.goldReward}G</span>
+                      <span className="text-[var(--px-gold-text)]">+{quest.goldReward}G</span>
                     </div>
                   </div>
 
@@ -845,20 +864,28 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
                         type="button"
                         disabled={busyQuest !== null}
                         onClick={() => void handleQuestAction(quest.id, 'pause')}
-                        className="btn-secondary flex min-h-[44px] items-center justify-center gap-1.5 border-amber-500/60 text-xs font-bold text-amber-300"
+                        className="btn-secondary flex min-h-[44px] items-center justify-center gap-1.5 rounded-none text-xs font-bold text-[var(--px-gold-text)]"
                       >
-                        {isPausing && <Loader2 className="h-4 w-4 animate-spin" />}
-                        <span>⏸ Tạm dừng</span>
+                        {isPausing ? (
+                          <PxRefresh size={13} className="animate-spin" />
+                        ) : (
+                          <PxPause size={13} />
+                        )}
+                        <span>Tạm dừng</span>
                       </button>
                     ) : (
                       <button
                         type="button"
                         disabled={busyQuest !== null}
                         onClick={() => void handleQuestAction(quest.id, 'start')}
-                        className="btn-secondary flex min-h-[44px] items-center justify-center gap-1.5 border-emerald-500/50 text-xs font-bold text-emerald-300"
+                        className="btn-secondary flex min-h-[44px] items-center justify-center gap-1.5 rounded-none text-xs font-bold text-[var(--px-green-text)]"
                       >
-                        {isStarting && <Loader2 className="h-4 w-4 animate-spin" />}
-                        <span>{paused ? '▶ Tiếp tục' : '▶ Bắt đầu'}</span>
+                        {isStarting ? (
+                          <PxRefresh size={13} className="animate-spin" />
+                        ) : (
+                          <PxPlay size={13} />
+                        )}
+                        <span>{paused ? 'Tiếp tục' : 'Bắt đầu'}</span>
                       </button>
                     )}
 
@@ -866,10 +893,14 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
                       type="button"
                       disabled={busyQuest !== null}
                       onClick={() => void handleQuestAction(quest.id, 'complete')}
-                      className="btn-emerald flex min-h-[44px] items-center justify-center gap-1.5 text-xs font-extrabold"
+                      className="btn-emerald flex min-h-[44px] items-center justify-center gap-1.5 rounded-none text-xs font-extrabold"
                     >
-                      {isCompleting && <Loader2 className="h-4 w-4 animate-spin" />}
-                      <span>✓ Xong</span>
+                      {isCompleting ? (
+                        <PxRefresh size={13} className="animate-spin" />
+                      ) : (
+                        <PxCheck size={13} />
+                      )}
+                      <span>Xong</span>
                     </button>
                   </div>
                 </article>
@@ -880,32 +911,28 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
 
         {/* Collapsible Completed Quests Summary */}
         {completedQuests.length > 0 && (
-          <div className="rpg-pane overflow-hidden">
+          <div className="rpg-pane overflow-hidden rounded-none">
             <button
               type="button"
               onClick={() => setShowCompleted((v) => !v)}
               className="flex min-h-[44px] w-full items-center justify-between px-3 py-2 text-xs font-bold text-sub"
             >
-              <span className="inline-flex items-center gap-1.5 text-emerald-400">
-                <CheckCircle2 className="h-4 w-4" />
+              <span className="inline-flex items-center gap-1.5 text-[var(--px-green-text)]">
+                <PxCheck size={14} />
                 Đã hoàn thành hôm nay ({completedQuests.length})
               </span>
-              {showCompleted ? (
-                <ChevronUp className="h-4 w-4 text-dim" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-dim" />
-              )}
+              <PxChevron dir={showCompleted ? 'up' : 'down'} size={13} />
             </button>
 
             {showCompleted && (
-              <ul className="divide-y rpg-divider border-t rpg-divider px-3 py-1">
+              <ul className="divide-y border-t px-3 py-1 rpg-divider">
                 {completedQuests.map((q) => (
                   <li
                     key={q.id}
                     className="flex items-center justify-between gap-2 py-2 text-xs"
                   >
                     <span className="truncate text-sub line-through">{q.title}</span>
-                    <span className="shrink-0 font-mono text-[10px] font-bold text-emerald-400">
+                    <span className="shrink-0 font-mono text-[10px] font-bold text-[var(--px-green-text)]">
                       +{q.xpReward} XP
                     </span>
                   </li>

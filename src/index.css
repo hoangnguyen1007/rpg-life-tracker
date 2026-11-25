@@ -3,58 +3,86 @@
 @tailwind utilities;
 
 @layer base {
-  /* Default: 2D Dark Obsidian Pixel Dungeon RPG Theme */
+  /* Default: Authentic 16-Bit Obsidian-Iron Pixel RPG Theme */
   :root,
   [data-theme='dark'] {
-    --bg-canvas: #0b0e16;
-    --bg-surface: #141927;
-    --bg-surface-2: #1a2133;
-    --bg-subtle: #101522;
-    --bg-muted: #202940;
-    --border-hairline: #2d3856;
-    --border-strong: #475780;
-    --border-highlight: rgba(245, 158, 11, 0.35);
-    --text-primary: #f1f5f9;
-    --text-secondary: #cbd5e1;
-    --text-muted: #8b9bb8;
-    --accent-primary: #f59e0b;
-    --accent-arcane: #8b5cf6;
-    --accent-crimson: #ef4444;
-    --accent-emerald: #10b981;
-    --accent-soft: rgba(245, 158, 11, 0.14);
-    --panel-shadow: 4px 4px 0 #05070c, inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    --tile-dot: rgba(148, 163, 184, 0.05);
-    --cal-grid-line: rgba(45, 56, 86, 0.85);
-    --cal-half-line: rgba(45, 56, 86, 0.38);
-    --cal-today-bg: rgba(245, 158, 11, 0.06);
-    --cal-now-line: #f59e0b;
+    --bg-canvas: #12101a;
+    --bg-surface: #181523;
+    --bg-surface-2: #211c30;
+    --bg-subtle: #100e18;
+    --bg-muted: #2b263d;
+    --border-ink: #09070f;
+    --border-bevel-hi: #3f3859;
+    --border-bevel-lo: #0e0c16;
+    --border-hairline: #2e2942;
+    --border-strong: #4a4266;
+    --px-rivet: #d4a24c;
+    --border-highlight: rgba(201, 147, 48, 0.42);
+    --text-primary: #f3ead8;
+    --text-secondary: #c5bcd6;
+    --text-muted: #847a99;
+    --px-gold: #c99330;
+    --px-gold-text: #f0c46c;
+    --px-green: #2e8b57;
+    --px-green-text: #52c484;
+    --px-blue: #3267a8;
+    --px-blue-text: #74ace8;
+    --px-red: #b83a4b;
+    --px-red-text: #e86b7a;
+    --px-plum: #73499e;
+    --px-plum-text: #b792e0;
+    --accent-primary: var(--px-gold);
+    --accent-arcane: var(--px-plum);
+    --accent-crimson: var(--px-red);
+    --accent-emerald: var(--px-green);
+    --accent-soft: rgba(201, 147, 48, 0.14);
+    --panel-shadow: inset 2px 2px 0 #3f3859, inset -2px -2px 0 #0e0c16, 4px 4px 0 rgba(0, 0, 0, 0.72);
+    --tile-dot: rgba(197, 188, 214, 0.045);
+    --cal-grid-line: #2e2942;
+    --cal-half-line: rgba(46, 41, 66, 0.55);
+    --cal-today-bg: rgba(201, 147, 48, 0.08);
+    --cal-now-line: #c99330;
     color-scheme: dark;
   }
 
-  /* Light Theme: Warm Guild Tavern Parchment RPG */
+  /* Light Theme: Warm 16-Bit Wood & Parchment Guild Tavern */
   [data-theme='light'] {
-    --bg-canvas: #efe6d5;
-    --bg-surface: #fbf6eb;
-    --bg-surface-2: #f3ead7;
-    --bg-subtle: #ece0c8;
-    --bg-muted: #e2d2b3;
-    --border-hairline: #b69e72;
-    --border-strong: #8c7248;
-    --border-highlight: rgba(180, 83, 9, 0.28);
-    --text-primary: #1f1912;
-    --text-secondary: #4a3d2f;
-    --text-muted: #6f5f4d;
-    --accent-primary: #c2410c;
-    --accent-arcane: #6d28d9;
-    --accent-crimson: #dc2626;
-    --accent-emerald: #059669;
-    --accent-soft: rgba(194, 65, 12, 0.12);
-    --panel-shadow: 3px 3px 0 rgba(102, 78, 44, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.85);
-    --tile-dot: rgba(120, 96, 62, 0.08);
-    --cal-grid-line: rgba(182, 158, 114, 0.72);
-    --cal-half-line: rgba(182, 158, 114, 0.35);
-    --cal-today-bg: rgba(194, 65, 12, 0.06);
-    --cal-now-line: #c2410c;
+    --bg-canvas: #dfd2b8;
+    --bg-surface: #f5ecd8;
+    --bg-surface-2: #eadcc0;
+    --bg-subtle: #e2d1b0;
+    --bg-muted: #d5bf98;
+    --border-ink: #3a2b1c;
+    --border-bevel-hi: #fff9ec;
+    --border-bevel-lo: #bfa882;
+    --border-hairline: #aa926a;
+    --border-strong: #6e5536;
+    --px-rivet: #b88435;
+    --border-highlight: rgba(184, 126, 30, 0.35);
+    --text-primary: #231a11;
+    --text-secondary: #4f3f2e;
+    --text-muted: #75614a;
+    --px-gold: #b87e1e;
+    --px-gold-text: #7a4f0c;
+    --px-green: #277348;
+    --px-green-text: #1c5c38;
+    --px-blue: #29568c;
+    --px-blue-text: #1f4878;
+    --px-red: #a12e3d;
+    --px-red-text: #8c2030;
+    --px-plum: #613c87;
+    --px-plum-text: #502d73;
+    --accent-primary: var(--px-gold);
+    --accent-arcane: var(--px-plum);
+    --accent-crimson: var(--px-red);
+    --accent-emerald: var(--px-green);
+    --accent-soft: rgba(184, 126, 30, 0.14);
+    --panel-shadow: inset 2px 2px 0 #fff9ec, inset -2px -2px 0 #bfa882, 4px 4px 0 rgba(42, 30, 18, 0.35);
+    --tile-dot: rgba(58, 43, 28, 0.075);
+    --cal-grid-line: #aa926a;
+    --cal-half-line: rgba(170, 146, 106, 0.45);
+    --cal-today-bg: rgba(184, 126, 30, 0.08);
+    --cal-now-line: #b87e1e;
     color-scheme: light;
   }
 
@@ -74,7 +102,6 @@
     line-height: 1.55;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
-    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   h1, h2, h3, h4 {
@@ -87,21 +114,51 @@
     overflow-wrap: break-word;
   }
 
-  input,
+  input:not([type='checkbox']):not([type='radio']),
   textarea,
   select {
     background-color: var(--bg-subtle);
     color: var(--text-primary);
-    border: 2px solid var(--border-hairline);
-    border-radius: 2px;
+    border: 2px solid var(--border-ink);
+    border-radius: 0;
+    box-shadow: inset 2px 2px 0 var(--border-bevel-lo), inset -1px -1px 0 var(--border-bevel-hi);
   }
 
-  input:focus,
+  input:not([type='checkbox']):not([type='radio']):focus,
   textarea:focus,
   select:focus {
     outline: none;
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.22);
+    border-color: var(--px-gold);
+    box-shadow: inset 2px 2px 0 var(--border-bevel-lo), 0 0 0 1px var(--px-gold);
+  }
+
+  input[type='checkbox'] {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-grid;
+    place-content: center;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-ink);
+    border-radius: 0;
+    background-color: var(--bg-subtle);
+    box-shadow: inset 1px 1px 0 var(--border-bevel-lo);
+    cursor: pointer;
+    image-rendering: pixelated;
+  }
+
+  input[type='checkbox']:checked {
+    background-color: var(--px-gold);
+    box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.28), inset -1px -1px 0 rgba(0, 0, 0, 0.35);
+  }
+
+  input[type='checkbox']:checked::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    background-color: #140e04;
+    clip-path: polygon(14% 48%, 0 64%, 40% 100%, 100% 24%, 84% 8%, 40% 68%);
   }
 
   ::-webkit-scrollbar {
@@ -113,42 +170,52 @@
   }
   ::-webkit-scrollbar-thumb {
     background: var(--border-strong);
-    border-radius: 2px;
+    border: 1px solid var(--border-ink);
+    border-radius: 0;
   }
 }
 
-/* ==================== NON-CARD 2D PIXEL RPG GEOMETRY ==================== */
+/* ==================== 16-BIT 2D PIXEL RPG GEOMETRY ==================== */
 .rpg-hud-bar {
+  position: relative;
   background-color: var(--bg-surface);
-  border: 2px solid var(--border-strong);
-  border-radius: 2px;
+  border: 2px solid var(--border-ink);
+  border-radius: 0;
   box-shadow: var(--panel-shadow);
+  image-rendering: pixelated;
 }
 
 .rpg-window,
 .dungeon-panel-glow {
   position: relative;
   background-color: var(--bg-surface);
-  border: 2px solid var(--border-strong);
-  border-radius: 2px;
+  border: 2px solid var(--border-ink);
+  border-radius: 0;
   box-shadow: var(--panel-shadow);
-}
-
-.rpg-window::before {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border: 1px solid var(--border-hairline);
-  pointer-events: none;
+  image-rendering: pixelated;
 }
 
 .rpg-pane,
 .dungeon-panel,
 .studio-surface {
+  position: relative;
   background-color: var(--bg-surface);
-  border: 2px solid var(--border-hairline);
-  border-radius: 2px;
-  box-shadow: 2px 2px 0 rgba(5, 7, 12, 0.22);
+  border: 2px solid var(--border-ink);
+  border-radius: 0;
+  box-shadow:
+    inset 2px 2px 0 var(--border-bevel-hi),
+    inset -2px -2px 0 var(--border-bevel-lo),
+    3px 3px 0 rgba(0, 0, 0, 0.28);
+  image-rendering: pixelated;
+}
+
+.px-inset {
+  background-color: var(--bg-subtle);
+  border: 2px solid var(--border-ink);
+  border-radius: 0;
+  box-shadow:
+    inset 2px 2px 0 var(--border-bevel-lo),
+    inset -1px -1px 0 var(--border-bevel-hi);
 }
 
 .rpg-divider,
@@ -160,16 +227,16 @@
   background-color: var(--bg-subtle);
 }
 
-/* Flush RPG Menu Book Tabs (zero gap above .rpg-window) */
+/* Flush 16-Bit Menu Book Tabs (zero gap above .rpg-window) */
 .rpg-tab {
   position: relative;
   background-color: var(--bg-subtle);
   color: var(--text-secondary);
-  border: 2px solid var(--border-hairline);
+  border: 2px solid var(--border-ink);
   border-bottom: none;
-  border-radius: 2px 2px 0 0;
+  border-radius: 0;
+  box-shadow: inset 2px 2px 0 var(--border-bevel-hi);
   font-weight: 700;
-  transition: background-color 0.12s ease, color 0.12s ease;
 }
 
 .rpg-tab:hover {
@@ -183,10 +250,11 @@
   margin-bottom: -2px;
   padding-bottom: calc(0.625rem + 2px);
   background-color: var(--bg-surface);
-  color: var(--accent-primary);
-  border: 2px solid var(--border-strong);
+  color: var(--px-gold-text);
+  border: 2px solid var(--border-ink);
   border-bottom: 2px solid var(--bg-surface);
-  border-radius: 2px 2px 0 0;
+  border-radius: 0;
+  box-shadow: inset 2px 2px 0 var(--px-gold);
   font-weight: 800;
 }
 
@@ -194,9 +262,10 @@
 .rpg-bar-track {
   position: relative;
   overflow: hidden;
-  border: 2px solid var(--border-strong);
-  border-radius: 2px;
+  border: 2px solid var(--border-ink);
+  border-radius: 0;
   background-color: var(--bg-subtle);
+  box-shadow: inset 1px 1px 0 var(--border-bevel-lo);
 }
 
 .rpg-bar-track::after {
@@ -206,9 +275,9 @@
   background-image: repeating-linear-gradient(
     to right,
     transparent,
-    transparent 10px,
-    rgba(0, 0, 0, 0.2) 10px,
-    rgba(0, 0, 0, 0.2) 12px
+    transparent 8px,
+    rgba(9, 7, 15, 0.45) 8px,
+    rgba(9, 7, 15, 0.45) 10px
   );
   pointer-events: none;
 }
@@ -234,113 +303,83 @@
   font-family: 'Silkscreen', 'JetBrains Mono', monospace;
 }
 
-/* Tactile 2D Pixel Game Buttons */
-.btn-primary {
-  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
-  color: #140f07;
-  border: 2px solid #fbbf24;
-  border-radius: 2px;
+/* Flat Solid 16-Bit Beveled Pixel Buttons (ZERO gradients) */
+.btn-primary,
+.btn-crimson,
+.btn-arcane,
+.btn-emerald,
+.btn-secondary {
+  border: 2px solid var(--border-ink);
+  border-radius: 0;
   font-weight: 700;
-  box-shadow: 2px 2px 0 #78350f;
-  transition: transform 0.08s ease, filter 0.12s ease, box-shadow 0.08s ease;
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.24),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.42),
+    2px 2px 0 rgba(0, 0, 0, 0.35);
+  image-rendering: pixelated;
+  cursor: pointer;
 }
-.btn-primary:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-.btn-primary:active:not(:disabled) {
-  transform: translate(1px, 1px);
-  box-shadow: 1px 1px 0 #78350f;
-}
-.btn-primary:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  box-shadow: none;
+
+.btn-primary {
+  background-color: var(--px-gold);
+  color: #140e04;
 }
 
 .btn-crimson {
-  background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+  background-color: var(--px-red);
   color: #ffffff;
-  border: 2px solid #f87171;
-  border-radius: 2px;
-  font-weight: 700;
-  box-shadow: 2px 2px 0 #7f1d1d;
-  transition: transform 0.08s ease, filter 0.12s ease, box-shadow 0.08s ease;
-}
-.btn-crimson:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-.btn-crimson:active:not(:disabled) {
-  transform: translate(1px, 1px);
-  box-shadow: 1px 1px 0 #7f1d1d;
-}
-.btn-crimson:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  box-shadow: none;
 }
 
 .btn-arcane {
-  background: linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%);
+  background-color: var(--px-plum);
   color: #ffffff;
-  border: 2px solid #a78bfa;
-  border-radius: 2px;
-  font-weight: 700;
-  box-shadow: 2px 2px 0 #4c1d95;
-  transition: transform 0.08s ease, filter 0.12s ease, box-shadow 0.08s ease;
-}
-.btn-arcane:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-.btn-arcane:active:not(:disabled) {
-  transform: translate(1px, 1px);
-  box-shadow: 1px 1px 0 #4c1d95;
-}
-.btn-arcane:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  box-shadow: none;
 }
 
 .btn-emerald {
-  background: linear-gradient(180deg, #10b981 0%, #047857 100%);
+  background-color: var(--px-green);
   color: #ffffff;
-  border: 2px solid #34d399;
-  border-radius: 2px;
-  font-weight: 700;
-  box-shadow: 2px 2px 0 #064e3b;
-  transition: transform 0.08s ease, filter 0.12s ease, box-shadow 0.08s ease;
-}
-.btn-emerald:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-.btn-emerald:active:not(:disabled) {
-  transform: translate(1px, 1px);
-  box-shadow: 1px 1px 0 #064e3b;
-}
-.btn-emerald:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  box-shadow: none;
 }
 
 .btn-secondary {
-  background-color: var(--bg-surface-2);
-  color: var(--text-primary);
-  border: 2px solid var(--border-strong);
-  border-radius: 2px;
-  font-weight: 600;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.22);
-  transition: background-color 0.12s ease, transform 0.08s ease;
-}
-.btn-secondary:hover:not(:disabled) {
   background-color: var(--bg-muted);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow:
+    inset 2px 2px 0 var(--border-bevel-hi),
+    inset -2px -2px 0 var(--border-bevel-lo),
+    2px 2px 0 rgba(0, 0, 0, 0.25);
 }
+
+.btn-primary:hover:not(:disabled),
+.btn-crimson:hover:not(:disabled),
+.btn-arcane:hover:not(:disabled),
+.btn-emerald:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--bg-surface-2);
+}
+
+.btn-primary:active:not(:disabled),
+.btn-crimson:active:not(:disabled),
+.btn-arcane:active:not(:disabled),
+.btn-emerald:active:not(:disabled),
 .btn-secondary:active:not(:disabled) {
-  transform: translate(1px, 1px);
+  transform: translateY(1px);
+  box-shadow:
+    inset 2px 2px 0 rgba(0, 0, 0, 0.42),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.14);
 }
+
+.btn-primary:disabled,
+.btn-crimson:disabled,
+.btn-arcane:disabled,
+.btn-emerald:disabled,
 .btn-secondary:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 /* ==================== 2D PIXEL RPG ANIMATIONS ==================== */
@@ -355,8 +394,8 @@
 }
 
 @keyframes heart-critical {
-  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.7)); }
-  50% { transform: scale(1.16); filter: drop-shadow(0 0 7px rgba(248, 113, 113, 1)); }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.14); }
 }
 
 @keyframes torch-stepped {
@@ -396,7 +435,7 @@
 }
 
 .anim-heart-crit {
-  animation: heart-critical 0.85s ease-in-out infinite;
+  animation: heart-critical 0.75s steps(2) infinite;
 }
 
 html.hud-mode,

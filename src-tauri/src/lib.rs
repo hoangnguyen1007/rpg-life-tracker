@@ -1,4 +1,5 @@
 mod backend_manager;
+mod hud_state;
 mod single_instance;
 mod startup_log;
 mod win_tracker;
@@ -89,16 +90,16 @@ fn force_win32_topmost_refresh(_window: &WebviewWindow, _activate: bool) {}
 
 /// Docks the floating 2D Pixel HUD cleanly at the bottom-right corner directly above
 /// the Windows taskbar using `primary_monitor().work_area()` and DPI `scale_factor()`.
-fn dock_hud_bottom_right(window: &WebviewWindow, logical_w: f64, logical_h: f64) {
+fn dock_hud_bottom_right(
+    window: &WebviewWindow,
+    logical_w: f64,
+    logical_h: f64,
+) -> Option<hud_state::HudPosition> {
     let monitor = window
         .current_monitor()
         .ok()
         .flatten()
-        .or_else(|| window.primary_monitor().ok().flatten());
-
-    let Some(monitor) = monitor else {
-        return;
-    };
+        .or_else(|| window.primary_monitor().ok().flatten())?;
 
     let scale = monitor.scale_factor();
     let wa = monitor.work_area();
@@ -114,9 +115,10 @@ fn dock_hud_bottom_right(window: &WebviewWindow, logical_w: f64, logical_h: f64)
     let y = (wa.position.y + (wa.size.height as i32) - hud_h - margin_b).max(min_y);
 
     let _ = window.set_position(Position::Physical(PhysicalPosition::new(x, y)));
+    Some(hud_state::HudPosition { x, y })
 }
 
-fn dock_hud_preserving_valid_size(hud: &WebviewWindow) {
+fn dock_hud_preserving_valid_size(hud: &WebviewWindow) -> Option<hud_state::HudPosition> {
     let scale = hud.scale_factor().unwrap_or(1.0);
     let (mut w, mut h) = hud
         .outer_size()
@@ -128,7 +130,28 @@ fn dock_hud_preserving_valid_size(hud: &WebviewWindow) {
         h = HUD_NORMAL_HEIGHT;
         let _ = hud.set_size(Size::Logical(LogicalSize::new(w, h)));
     }
-    dock_hud_bottom_right(hud, w, h);
+    dock_hud_bottom_right(hud, w, h)
+}
+
+fn dock_and_save_hud(app: &AppHandle) -> Result<(), String> {
+    let hud = app
+        .get_webview_window("hud")
+        .ok_or_else(|| "HUD window not found".to_string())?;
+    if let Some(pos) = dock_hud_preserving_valid_size(&hud) {
+        if let Some(saver) = app.try_state::<hud_state::HudPositionSaver>() {
+            saver.save_immediately(pos);
+        } else {
+            hud_state::save_position_now(pos);
+        }
+        startup_log::log(&format!(
+            "hud_docked: pos=({}, {}) saved_to='{}'",
+            pos.x,
+            pos.y,
+            hud_state::position_file_path().display()
+        ));
+    }
+    let _ = set_hud_visible_inner(app, true);
+    Ok(())
 }
 
 fn show_main_window_inner(app: &AppHandle) -> Result<(), String> {
@@ -227,10 +250,7 @@ fn start_hud_bridge_listener(app_handle: AppHandle) {
                                         let _ = toggle_hud_window_inner(&handle);
                                     }
                                     "dock" => {
-                                        if let Some(hud) = handle.get_webview_window("hud") {
-                                            dock_hud_preserving_valid_size(&hud);
-                                        }
-                                        let _ = set_hud_visible_inner(&handle, true);
+                                        let _ = dock_and_save_hud(&handle);
                                     }
                                     _ => {}
                                 }
@@ -339,6 +359,9 @@ fn resize_hud(
             new_y = new_y.clamp(wa.position.y, max_y);
         }
 
+        if let Some(saver) = app.try_state::<hud_state::HudPositionSaver>() {
+            saver.suppress_briefly(Duration::from_millis(250));
+        }
         let _ = window.set_position(Position::Physical(PhysicalPosition::new(new_x, new_y)));
     }
 
@@ -369,12 +392,7 @@ fn set_hud_visible(app: AppHandle, visible: bool) -> Result<bool, String> {
 
 #[tauri::command]
 fn dock_hud_corner(app: AppHandle) -> Result<(), String> {
-    let hud = app
-        .get_webview_window("hud")
-        .ok_or_else(|| "HUD window not found".to_string())?;
-    dock_hud_preserving_valid_size(&hud);
-    let _ = set_hud_visible_inner(&app, true);
-    Ok(())
+    dock_and_save_hud(&app)
 }
 
 #[tauri::command]
@@ -436,6 +454,8 @@ fn load_tray_icon(app: &tauri::App) -> Image<'static> {
 fn build_system_tray_once(app: &tauri::App) -> tauri::Result<()> {
     let toggle_hud =
         MenuItemBuilder::with_id("toggle_hud", "Hiện / Ẩn Mini HUD (Ctrl+Shift+Space)").build(app)?;
+    let toggle_hud_size =
+        MenuItemBuilder::with_id("toggle_hud_size", "Chuyển chế độ Mini / Đầy đủ").build(app)?;
     let dock_hud =
         MenuItemBuilder::with_id("dock_hud", "Đưa Mini HUD về góc Taskbar").build(app)?;
     let open_dashboard =
@@ -447,6 +467,7 @@ fn build_system_tray_once(app: &tauri::App) -> tauri::Result<()> {
 
     let tray_menu = MenuBuilder::new(app)
         .item(&toggle_hud)
+        .item(&toggle_hud_size)
         .item(&dock_hud)
         .item(&open_dashboard)
         .separator()
@@ -470,11 +491,12 @@ fn build_system_tray_once(app: &tauri::App) -> tauri::Result<()> {
             "toggle_hud" => {
                 let _ = toggle_hud_window_inner(app_handle);
             }
-            "dock_hud" => {
-                if let Some(hud) = app_handle.get_webview_window("hud") {
-                    dock_hud_preserving_valid_size(&hud);
-                }
+            "toggle_hud_size" => {
                 let _ = set_hud_visible_inner(app_handle, true);
+                let _ = app_handle.emit("tauri-hud-toggle-mode", true);
+            }
+            "dock_hud" => {
+                let _ = dock_and_save_hud(app_handle);
             }
             "dnd_1h" => {
                 trigger_dnd_async(app_handle.clone(), 60);
@@ -485,6 +507,9 @@ fn build_system_tray_once(app: &tauri::App) -> tauri::Result<()> {
             }
             "quit" => {
                 startup_log::log("tray: user selected quit");
+                if let Some(saver) = app_handle.try_state::<hud_state::HudPositionSaver>() {
+                    saver.stop();
+                }
                 if let Some(tracker) = app_handle.try_state::<win_tracker::WinTrackerHandle>() {
                     tracker.stop();
                 }
@@ -653,7 +678,7 @@ pub fn run() {
                 Err(err) => startup_log::log(&format!("shortcuts_error: {err}")),
             }
 
-            // 5. Enforce true Windows WebView2 transparency and dock 2D Pixel HUD bottom-right above taskbar.
+            // 5. Enforce true Windows WebView2 transparency and restore saved HUD position (or dock bottom-right).
             let show_hud_now = should_show_hud_on_start();
             if let Some(hud) = app.get_webview_window("hud") {
                 let _ = hud.set_background_color(Some(Color(0, 0, 0, 0)));
@@ -661,7 +686,29 @@ pub fn run() {
                     HUD_NORMAL_WIDTH,
                     HUD_NORMAL_HEIGHT,
                 )));
-                dock_hud_bottom_right(&hud, HUD_NORMAL_WIDTH, HUD_NORMAL_HEIGHT);
+                let saved_pos = hud_state::load_saved_position();
+                if let Some(saved) = saved_pos.filter(|&p| {
+                    hud_state::is_position_visible_on_monitors(
+                        &hud,
+                        p,
+                        HUD_NORMAL_WIDTH,
+                        HUD_NORMAL_HEIGHT,
+                    )
+                }) {
+                    let _ = hud.set_position(Position::Physical(PhysicalPosition::new(
+                        saved.x, saved.y,
+                    )));
+                    startup_log::log(&format!(
+                        "hud_position: restored saved=({}, {})",
+                        saved.x, saved.y
+                    ));
+                } else {
+                    let docked = dock_hud_bottom_right(&hud, HUD_NORMAL_WIDTH, HUD_NORMAL_HEIGHT);
+                    startup_log::log(&format!(
+                        "hud_position: docked_default={docked:?} (saved={saved_pos:?})"
+                    ));
+                }
+
                 if show_hud_now {
                     let _ = hud.unminimize();
                     let _ = hud.set_always_on_top(true);
@@ -683,6 +730,9 @@ pub fn run() {
                 startup_log::log("hud_error: webview window 'hud' not found");
             }
 
+            // Register debounced HUD position saver AFTER initial positioning so creation moves never overwrite saved pos.
+            app.manage(hud_state::HudPositionSaver::new());
+
             // 6. Start Web-to-Native HUD control bridge and sync visibility state.
             start_hud_bridge_listener(app.handle().clone());
             sync_hud_visible_to_backend_async(show_hud_now);
@@ -696,22 +746,34 @@ pub fn run() {
             startup_log::log("setup_done");
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                match window.label() {
-                    "main" => {
-                        api.prevent_close();
-                        let _ = window.hide();
+        .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { api, .. } => match window.label() {
+                "main" => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                "hud" => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    let _ = window.app_handle().emit("tauri-hud-visibility", false);
+                    sync_hud_visible_to_backend_async(false);
+                }
+                _ => {}
+            },
+            WindowEvent::Moved(pos) => {
+                if window.label() == "hud" {
+                    let visible = window.is_visible().unwrap_or(false);
+                    let minimized = window.is_minimized().unwrap_or(false);
+                    if visible && !minimized && pos.x > -10_000 && pos.y > -10_000 {
+                        if let Some(saver) =
+                            window.app_handle().try_state::<hud_state::HudPositionSaver>()
+                        {
+                            saver.schedule_save(hud_state::HudPosition { x: pos.x, y: pos.y });
+                        }
                     }
-                    "hud" => {
-                        api.prevent_close();
-                        let _ = window.hide();
-                        let _ = window.app_handle().emit("tauri-hud-visibility", false);
-                        sync_hud_visible_to_backend_async(false);
-                    }
-                    _ => {}
                 }
             }
+            _ => {}
         });
 
     let app = match builder.build(tauri::generate_context!()) {
@@ -727,6 +789,9 @@ pub fn run() {
     app.run(|app_handle, event| {
         if let RunEvent::Exit = event {
             startup_log::log("app_exit");
+            if let Some(saver) = app_handle.try_state::<hud_state::HudPositionSaver>() {
+                saver.stop();
+            }
             if let Some(tracker) = app_handle.try_state::<win_tracker::WinTrackerHandle>() {
                 tracker.stop();
             }

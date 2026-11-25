@@ -1,36 +1,30 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import {
-  AlertTriangle,
-  BookOpen,
-  Bot,
-  CalendarCheck,
-  Check,
-  CheckSquare,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  Coffee,
-  Edit3,
-  FlaskConical,
-  Loader2,
-  MessageSquare,
-  Pause,
-  Play,
-  Plus,
-  RefreshCw,
-  Send,
-  ShieldCheck,
-  SlidersHorizontal,
-  Sparkles,
-  Square,
-  Swords,
-  Timer,
-  Trash2,
-  Wand2,
-  X,
-  XCircle,
-  Zap,
-} from 'lucide-react';
+  PixelRivets,
+  PxAutomaton,
+  PxBolt,
+  PxBook,
+  PxCalendar,
+  PxCheck,
+  PxChevron,
+  PxClock,
+  PxClose,
+  PxCoffee,
+  PxEdit,
+  PxFlame,
+  PxGear,
+  PxPause,
+  PxPlay,
+  PxPlus,
+  PxRefresh,
+  PxScroll,
+  PxShield,
+  PxSparkle,
+  PxSword,
+  PxTrash,
+  PxWarn,
+} from './PixelIcons';
 import type {
   AIChatMessage,
   AIChatThread,
@@ -129,12 +123,30 @@ interface QuestCouncilBoardProps {
 }
 
 const TYPE_PILLS: Record<string, { label: string; cls: string }> = {
-  daily: { label: 'Daily', cls: 'bg-sky-500/15 text-sky-600 border-sky-500/40 dark:text-sky-300' },
-  main: { label: 'Main', cls: 'bg-amber-500/15 text-amber-700 border-amber-500/45 dark:text-amber-300' },
-  side: { label: 'Side', cls: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/40 dark:text-emerald-300' },
-  hidden: { label: 'Hidden', cls: 'bg-violet-500/15 text-violet-700 border-violet-500/40 dark:text-violet-300' },
-  emergency: { label: 'Urgent', cls: 'bg-rose-500/15 text-rose-700 border-rose-500/40 dark:text-rose-300' },
-  recovery: { label: 'Recovery', cls: 'bg-teal-500/15 text-teal-700 border-teal-500/40 dark:text-teal-300' },
+  daily: {
+    label: 'Daily',
+    cls: 'border-[var(--px-blue)] bg-[var(--bg-surface-2)] text-[var(--px-blue-text)]',
+  },
+  main: {
+    label: 'Main',
+    cls: 'border-[var(--px-gold)] bg-[var(--bg-surface-2)] text-[var(--px-gold-text)]',
+  },
+  side: {
+    label: 'Side',
+    cls: 'border-[var(--px-green)] bg-[var(--bg-surface-2)] text-[var(--px-green-text)]',
+  },
+  hidden: {
+    label: 'Hidden',
+    cls: 'border-[var(--px-plum)] bg-[var(--bg-surface-2)] text-[var(--px-plum-text)]',
+  },
+  emergency: {
+    label: 'Urgent',
+    cls: 'border-[var(--px-red)] bg-[var(--bg-surface-2)] text-[var(--px-red-text)]',
+  },
+  recovery: {
+    label: 'Recovery',
+    cls: 'border-[var(--px-green)] bg-[var(--bg-subtle)] text-[var(--px-green-text)]',
+  },
 };
 
 const CHAT_SCOPES: Array<{
@@ -143,11 +155,11 @@ const CHAT_SCOPES: Array<{
   dotCls: string;
   placeholder: string;
 }> = [
-  { key: 'general', label: 'Tổng hợp', dotCls: 'bg-amber-400', placeholder: 'Hỏi AI về kế hoạch hôm nay...' },
-  { key: 'timetable', label: 'Lịch', dotCls: 'bg-sky-400', placeholder: 'Hỏi AI về sắp xếp lịch & giờ trống...' },
-  { key: 'goals', label: 'Mục tiêu', dotCls: 'bg-emerald-400', placeholder: 'Hỏi AI về lộ trình mục tiêu...' },
-  { key: 'skills', label: 'Kĩ năng', dotCls: 'bg-violet-400', placeholder: 'Hỏi AI về nâng cấp kỹ năng & chỉ số...' },
-  { key: 'review', label: 'Phản tư', dotCls: 'bg-rose-400', placeholder: 'Phân tích nguyên nhân mệt / trì hoãn...' },
+  { key: 'general', label: 'Tổng hợp', dotCls: 'bg-[var(--px-gold)]', placeholder: 'Hỏi AI về kế hoạch hôm nay...' },
+  { key: 'timetable', label: 'Lịch', dotCls: 'bg-[var(--px-blue)]', placeholder: 'Hỏi AI về sắp xếp lịch & giờ trống...' },
+  { key: 'goals', label: 'Mục tiêu', dotCls: 'bg-[var(--px-green)]', placeholder: 'Hỏi AI về lộ trình mục tiêu...' },
+  { key: 'skills', label: 'Kĩ năng', dotCls: 'bg-[var(--px-plum)]', placeholder: 'Hỏi AI về nâng cấp kỹ năng & chỉ số...' },
+  { key: 'review', label: 'Phản tư', dotCls: 'bg-[var(--px-red)]', placeholder: 'Phân tích nguyên nhân mệt / trì hoãn...' },
 ];
 
 interface ScientificProtocolTemplate {
@@ -515,14 +527,15 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
   return (
     <div className="divide-y-2 rpg-divider">
       {/* 1) Concise Top Command Strip */}
-      <section className="px-4 py-3 sm:px-5">
+      <section className="relative px-4 py-3 sm:px-5">
+        <PixelRivets />
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-xs text-sub">
             <span className="font-display font-bold text-main">{todayAnalysis.dayLabel}</span>
             <span className="text-dim">•</span>
             <span>
               Rảnh{' '}
-              <strong className="font-mono text-emerald-600 dark:text-emerald-400">
+              <strong className="font-mono text-[var(--px-green-text)]">
                 {(todayAnalysis.totalFreeMinutes / 60).toFixed(1)}h
               </strong>
             </span>
@@ -530,7 +543,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
 
           <div className="flex flex-wrap items-center gap-2">
             <div
-              className="flex items-center gap-1 border-2 px-1.5 py-0.5 studio-subtle rpg-divider rounded-[2px]"
+              className="px-inset flex items-center gap-1 rounded-none px-1.5 py-0.5"
               title="Chọn thể trạng để AI điều chỉnh độ nặng kế hoạch hôm nay — KHÔNG trừ HP!"
             >
               <span className="px-1 text-[11px] font-bold text-sub">Thể trạng:</span>
@@ -546,9 +559,9 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     key={opt.val}
                     type="button"
                     onClick={() => onCheckinEnergy(opt.val)}
-                    className={`px-2 py-1 text-[11px] font-bold transition rounded-[2px] ${
+                    className={`rounded-none px-2 py-1 text-[11px] font-bold transition ${
                       selected
-                        ? 'bg-amber-500 text-[#180f03]'
+                        ? 'bg-[var(--px-gold)] text-[#140e04]'
                         : 'text-sub hover:text-main'
                     }`}
                     title="Chọn thể trạng để AI điều chỉnh độ nặng kế hoạch hôm nay — KHÔNG trừ HP!"
@@ -570,17 +583,15 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                   setTogglingRest(false);
                 }
               }}
-              className={`inline-flex items-center gap-1.5 border-2 px-2.5 py-1.5 text-xs font-semibold transition rounded-[2px] ${
-                player.plannedRestMode
-                  ? 'border-teal-500 bg-teal-500/20 text-teal-700 dark:text-teal-300'
-                  : 'btn-secondary'
+              className={`inline-flex items-center gap-1.5 rounded-none px-2.5 py-1.5 text-xs font-semibold transition ${
+                player.plannedRestMode ? 'btn-emerald' : 'btn-secondary'
               }`}
               title="Bật Nghỉ Chủ Động (Grace Day) để hồi phục & bảo toàn chuỗi"
             >
               {togglingRest ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Coffee className="h-3.5 w-3.5" />
+                <PxCoffee size={14} />
               )}
               <span>Nghỉ Chủ Động</span>
             </button>
@@ -589,10 +600,12 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
               type="button"
               onClick={() => setShowFocusNote((v) => !v)}
               className={`btn-secondary flex items-center gap-1.5 px-2.5 py-1.5 text-xs ${
-                showFocusNote || focusNote ? 'border-amber-500 text-amber-600 dark:text-amber-300' : ''
+                showFocusNote || focusNote
+                  ? 'border-[var(--px-gold)] text-[var(--px-gold-text)]'
+                  : ''
               }`}
             >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <PxGear size={14} />
               <span>Ghi chú AI</span>
             </button>
 
@@ -605,7 +618,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
               {orchestrating ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
+                <PxRefresh size={14} />
               )}
               <span>{orchestrating ? 'Đang lập...' : 'AI Lập Kế Hoạch'}</span>
             </button>
@@ -635,7 +648,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                 {settling ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <CalendarCheck className="h-3.5 w-3.5 text-emerald-500" />
+                  <PxCalendar size={14} className="text-[var(--px-green-text)]" />
                 )}
                 <span>Chốt Ngày</span>
               </button>
@@ -655,7 +668,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
               value={focusNote}
               onChange={(e) => setFocusNote(e.target.value)}
               placeholder="Ghi chú hôm nay (VD: Sáng Deep Work chuyên môn, chiều rèn ngoại ngữ, tối vận động & đọc sách)..."
-              className="flex-1 px-3 py-1.5 text-xs"
+              className="flex-1 rounded-none px-3 py-1.5 text-xs"
             />
             <button type="submit" disabled={orchestrating} className="btn-secondary px-3 py-1.5 text-xs">
               Áp dụng &amp; Lập lịch
@@ -682,12 +695,13 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
         <section className="lg:col-span-7">
           {/* Live Flexible Task Session Tracker Strip */}
           {activeSession && (
-            <div className="border-b-2 border-amber-500/60 bg-amber-500/10 px-4 py-3 sm:px-5">
+            <div className="relative border-b-2 border-[var(--px-gold)] bg-[var(--bg-surface-2)] px-4 py-3 sm:px-5">
+              <PixelRivets />
               <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1 border border-amber-500/60 bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300 rounded-[2px]">
-                      <Timer className="h-3 w-3" />
+                    <span className="px-inset inline-flex items-center gap-1 rounded-none border-[var(--px-gold)] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--px-gold-text)]">
+                      <PxClock size={12} />
                       {activeSession.isPaused ? 'TẠM DỪNG' : 'ĐANG CHẠY'}
                     </span>
                     <span className="truncate font-display text-xs font-extrabold text-main">
@@ -695,10 +709,10 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     </span>
                     {(activeSession.verifiedFocusSeconds ?? 0) >= 60 && (
                       <span
-                        className={`border px-1.5 py-0.5 font-mono text-[10px] font-bold rounded-[2px] ${
+                        className={`rounded-none border-2 px-1.5 py-0.5 font-mono text-[10px] font-bold ${
                           (activeSession.focusIntegrityPct ?? 100) >= 80
-                            ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
-                            : 'border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                            ? 'border-[var(--px-green)] bg-[var(--bg-subtle)] text-[var(--px-green-text)]'
+                            : 'border-[var(--px-gold)] bg-[var(--bg-subtle)] text-[var(--px-gold-text)]'
                         }`}
                         title="Chất lượng tập trung đo bởi Windows Activity Tracker"
                       >
@@ -718,12 +732,12 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     <span
                       className={
                         activeSession.isPaused
-                          ? 'text-amber-600 dark:text-amber-300'
+                          ? 'text-[var(--px-gold-text)]'
                           : activeOverMins > 5
-                            ? 'text-rose-500 font-bold'
+                            ? 'font-bold text-[var(--px-red-text)]'
                             : activeOverMins >= 0
-                              ? 'text-emerald-600 dark:text-emerald-400 font-bold'
-                              : 'text-sky-600 dark:text-cyan-300 font-bold'
+                              ? 'font-bold text-[var(--px-green-text)]'
+                              : 'font-bold text-[var(--px-blue-text)]'
                       }
                     >
                       {activeSession.isPaused
@@ -738,7 +752,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono border-2 border-amber-500/60 bg-[#0d111d] px-2.5 py-1 text-sm font-extrabold text-amber-300 rounded-[2px]">
+                  <span className="px-inset rounded-none border-[var(--px-gold)] px-2.5 py-1 font-mono text-sm font-extrabold text-[var(--px-gold-text)]">
                     {formatHms(activeElapsedSec)}
                   </span>
 
@@ -757,7 +771,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                           }}
                           className="btn-secondary flex items-center gap-1 px-2.5 py-1.5 text-xs"
                         >
-                          <Play className="h-3.5 w-3.5 text-emerald-500" />
+                          <PxPlay size={13} className="text-[var(--px-green-text)]" />
                           <span>Tiếp tục</span>
                         </button>
                       )
@@ -775,7 +789,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                           }}
                           className="btn-secondary flex items-center gap-1 px-2.5 py-1.5 text-xs"
                         >
-                          <Pause className="h-3.5 w-3.5 text-amber-500" />
+                          <PxPause size={13} className="text-[var(--px-gold-text)]" />
                           <span>Tạm dừng</span>
                         </button>
                       )}
@@ -791,7 +805,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     }}
                     className="btn-emerald flex items-center gap-1 px-3 py-1.5 text-xs"
                   >
-                    <Check className="h-3.5 w-3.5" />
+                    <PxCheck size={14} />
                     <span>Hoàn thành</span>
                   </button>
 
@@ -802,19 +816,22 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                         void onDeleteQuest(activeSession.id);
                       }
                     }}
-                    className="btn-secondary p-1.5 text-dim hover:text-rose-500"
+                    className="btn-secondary p-1.5 text-dim hover:text-[var(--px-red-text)]"
                     title="Xóa nhiệm vụ đang chạy"
                     aria-label={`Xóa ${activeSession.title}`}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <PxTrash size={14} />
                   </button>
                 </div>
               </div>
 
-              <div className="rpg-bar-track mt-2 h-2 w-full">
+              <div className="rpg-bar-track mt-2 h-2.5 w-full rounded-none">
                 <div
-                  className="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all"
-                  style={{ width: `${activeElapsedPct}%` }}
+                  className="h-full transition-all"
+                  style={{
+                    width: `${activeElapsedPct}%`,
+                    backgroundColor: activeElapsedPct >= 100 ? 'var(--px-green)' : 'var(--px-gold)',
+                  }}
                 />
               </div>
 
@@ -824,7 +841,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     value={sessionProofText}
                     onChange={(e) => setSessionProofText(e.target.value)}
                     placeholder="Ghi ngắn gọn kết quả thực tế của phiên làm việc..."
-                    className="min-w-[200px] flex-1 px-3 py-1.5 text-xs"
+                    className="min-w-[200px] flex-1 rounded-none px-3 py-1.5 text-xs"
                   />
                   <button
                     type="button"
@@ -847,12 +864,12 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
             assistantOverview.activity.uncreditedFocusMinutes >= 15 &&
             assistantOverview.activity.suggestedFocusSession &&
             onConvertFocusToQuest && (
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs sm:px-5">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-[var(--px-green)] bg-[var(--bg-surface-2)] px-4 py-2 text-xs sm:px-5">
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <Zap className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                  <PxBolt size={14} className="text-[var(--px-green-text)]" />
                   <span className="truncate text-main">
                     PC ghi nhận{' '}
-                    <strong className="font-mono text-emerald-600 dark:text-emerald-300">
+                    <strong className="font-mono text-[var(--px-green-text)]">
                       {assistantOverview.activity.uncreditedFocusMinutes}p
                     </strong>{' '}
                     tập trung ({assistantOverview.activity.suggestedFocusSession.topApp})
@@ -881,7 +898,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     {convertingFocus ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
-                      <Check className="h-3 w-3" />
+                      <PxCheck size={12} />
                     )}
                     <span>Ghi nhận thành Quest</span>
                   </button>
@@ -908,18 +925,18 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                   setQuickTitle(e.target.value);
                   if (draftAnalysis) setDraftAnalysis(null);
                 }}
-                placeholder="Thêm nhanh việc cần làm hôm nay... (Enter để thêm)"
-                className="min-w-[190px] flex-1 px-3 py-2 text-xs sm:text-sm"
+                placeholder="Thêm việc hôm nay... (Enter)"
+                className="min-w-[190px] flex-1 rounded-none px-3 py-2 text-xs sm:text-sm"
               />
 
-              <div className="flex items-center border-2 p-0.5 studio-surface rpg-divider rounded-[2px]">
+              <div className="px-inset flex items-center rounded-none p-0.5">
                 {[25, 45, 60].map((d) => (
                   <button
                     key={d}
                     type="button"
                     onClick={() => setQuickDur(d)}
-                    className={`px-2 py-1 font-mono text-[11px] font-bold transition rounded-[2px] ${
-                      quickDur === d ? 'bg-amber-500 text-[#180f03]' : 'text-sub hover:text-main'
+                    className={`rounded-none px-2 py-1 font-mono text-[11px] font-bold transition ${
+                      quickDur === d ? 'bg-[var(--px-gold)] text-[#140e04]' : 'text-sub hover:text-main'
                     }`}
                   >
                     {d}p
@@ -932,7 +949,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                 disabled={quickAdding || !quickTitle.trim()}
                 className="btn-primary flex items-center gap-1 px-3 py-2 text-xs"
               >
-                {quickAdding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                {quickAdding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PxPlus size={14} />}
                 <span>Thêm</span>
               </button>
 
@@ -943,7 +960,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                 className="btn-arcane flex items-center gap-1 px-3 py-2 text-xs"
                 title="AI tự phân tích việc này cộng chỉ số nào, kỹ năng nào, bao nhiêu XP/SP và tìm khung giờ trống"
               >
-                {analyzingDraft ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+                {analyzingDraft ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PxSparkle size={14} />}
                 <span>AI Gợi Ý Điểm</span>
               </button>
 
@@ -951,7 +968,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                 type="button"
                 onClick={() => setShowAdvancedAdd((v) => !v)}
                 className={`btn-secondary px-2.5 py-2 text-[11px] ${
-                  showAdvancedAdd ? 'border-amber-500 text-amber-600 dark:text-amber-300' : ''
+                  showAdvancedAdd ? 'border-[var(--px-gold)] text-[var(--px-gold-text)]' : ''
                 }`}
               >
                 Nâng cao
@@ -965,12 +982,12 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
 
             {/* AI Draft Suggestion Preview Strip */}
             {draftAnalysis && (
-              <div className="mt-2.5 flex flex-col gap-2 border-2 border-violet-500/50 bg-violet-500/10 p-2.5 text-xs sm:flex-row sm:items-center sm:justify-between rounded-[2px]">
+              <div className="px-inset mt-2.5 flex flex-col gap-2 rounded-none border-2 border-[var(--px-plum)] p-2.5 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-main">
-                    Gợi ý: <span className="text-amber-600 dark:text-amber-300">+{draftAnalysis.primaryStat}</span>
+                    Gợi ý: <span className="text-[var(--px-gold-text)]">+{draftAnalysis.primaryStat}</span>
                     {draftAnalysis.secondaryStat ? (
-                      <span className="text-sky-600 dark:text-cyan-300"> · +{draftAnalysis.secondaryStat}</span>
+                      <span className="text-[var(--px-blue-text)]"> · +{draftAnalysis.secondaryStat}</span>
                     ) : null}
                     {draftAnalysis.skillName ? (
                       <span> · Skill: <strong>{draftAnalysis.skillName}</strong></span>
@@ -978,7 +995,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     · +{draftAnalysis.xpReward} XP · +{draftAnalysis.spReward} SP · Slot{' '}
                     <span className="font-mono">{draftAnalysis.scheduledSlot}</span>
                   </p>
-                  <p className="mt-0.5 text-[11px] text-sub">"{draftAnalysis.statReason}"</p>
+                  <p className="mt-0.5 text-[11px] text-sub">&ldquo;{draftAnalysis.statReason}&rdquo;</p>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2.5">
@@ -987,7 +1004,6 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                       type="checkbox"
                       checked={syncDraftToTimetable}
                       onChange={(e) => setSyncDraftToTimetable(e.target.checked)}
-                      className="h-3.5 w-3.5 accent-violet-500"
                     />
                     <span>Gắn lên Lịch</span>
                   </label>
@@ -1008,7 +1024,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                 <select
                   value={quickType}
                   onChange={(e) => setQuickType(e.target.value as QuestType)}
-                  className="px-2.5 py-1.5 text-xs"
+                  className="rounded-none px-2.5 py-1.5 text-xs"
                 >
                   <option value="daily">Daily (-12 HP)</option>
                   <option value="main">Main (-18 HP)</option>
@@ -1018,7 +1034,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                 <select
                   value={quickStat}
                   onChange={(e) => setQuickStat(e.target.value as AttributeKey)}
-                  className="px-2.5 py-1.5 text-xs"
+                  className="rounded-none px-2.5 py-1.5 text-xs"
                 >
                   <option value="INT">INT · Trí tuệ</option>
                   <option value="PER">PER · Nhận thức</option>
@@ -1031,14 +1047,13 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                   value={quickSlot}
                   onChange={(e) => setQuickSlot(e.target.value)}
                   placeholder="Khung giờ (VD: 14:00 - 15:00)"
-                  className="px-2.5 py-1.5 text-xs"
+                  className="rounded-none px-2.5 py-1.5 text-xs"
                 />
                 <label className="flex cursor-pointer items-center gap-1.5 px-2 text-xs text-sub">
                   <input
                     type="checkbox"
                     checked={quickRequireProof}
                     onChange={(e) => setQuickRequireProof(e.target.checked)}
-                    className="h-3.5 w-3.5 accent-amber-500"
                   />
                   <span>Cần ghi nhận kết quả</span>
                 </label>
@@ -1046,7 +1061,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                   value={quickDesc}
                   onChange={(e) => setQuickDesc(e.target.value)}
                   placeholder="Mô tả chi tiết (tùy chọn)..."
-                  className="sm:col-span-4 px-2.5 py-1.5 text-xs"
+                  className="rounded-none sm:col-span-4 px-2.5 py-1.5 text-xs"
                 />
               </div>
             )}
@@ -1054,12 +1069,12 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
 
           {/* Filter Header + Collapsible Scientific Protocols Drawer */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 px-4 py-2.5 sm:px-5 rpg-divider">
-            <div className="flex items-center gap-1 border-2 p-0.5 studio-subtle rpg-divider rounded-[2px]">
+            <div className="px-inset flex items-center gap-1 rounded-none p-0.5">
               <button
                 type="button"
                 onClick={() => setQuestFilter('pending')}
-                className={`px-3 py-1 text-xs font-bold transition rounded-[2px] ${
-                  questFilter === 'pending' ? 'bg-amber-500 text-[#180f03]' : 'text-sub hover:text-main'
+                className={`rounded-none px-3 py-1 text-xs font-bold transition ${
+                  questFilter === 'pending' ? 'bg-[var(--px-gold)] text-[#140e04]' : 'text-sub hover:text-main'
                 }`}
               >
                 Cần làm ({pendingQuests.length})
@@ -1067,8 +1082,8 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
               <button
                 type="button"
                 onClick={() => setQuestFilter('completed')}
-                className={`px-3 py-1 text-xs font-bold transition rounded-[2px] ${
-                  questFilter === 'completed' ? 'bg-amber-500 text-[#180f03]' : 'text-sub hover:text-main'
+                className={`rounded-none px-3 py-1 text-xs font-bold transition ${
+                  questFilter === 'completed' ? 'bg-[var(--px-gold)] text-[#140e04]' : 'text-sub hover:text-main'
                 }`}
               >
                 Đã xong ({completedQuests.length})
@@ -1079,10 +1094,10 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
               type="button"
               onClick={() => setShowProtocolsLibrary((v) => !v)}
               className={`btn-secondary flex items-center gap-1.5 px-2.5 py-1 text-xs ${
-                showProtocolsLibrary ? 'border-violet-500 text-violet-600 dark:text-violet-300' : ''
+                showProtocolsLibrary ? 'border-[var(--px-plum)] text-[var(--px-plum-text)]' : ''
               }`}
             >
-              <FlaskConical className="h-3.5 w-3.5 text-violet-500" />
+              <PxBook size={14} className="text-[var(--px-plum-text)]" />
               <span>Mẫu khoa học</span>
             </button>
           </div>
@@ -1093,9 +1108,10 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                 {SCIENTIFIC_PROTOCOLS.map((proto) => {
                   const busy = creatingProtocolId === proto.id;
                   return (
-                    <div key={proto.id} className="rpg-pane flex flex-col justify-between p-3">
+                    <div key={proto.id} className="rpg-pane relative flex flex-col justify-between p-3">
+                      <PixelRivets />
                       <div>
-                        <div className="font-mono text-[10px] font-semibold text-violet-600 dark:text-violet-400">
+                        <div className="font-mono text-[10px] font-semibold text-[var(--px-plum-text)]">
                           {proto.researcherTag}
                         </div>
                         <h4 className="mt-0.5 font-display text-xs font-bold text-main">{proto.title}</h4>
@@ -1122,9 +1138,9 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                             setCreatingProtocolId(null);
                           }
                         }}
-                        className="btn-secondary mt-2.5 flex w-full items-center justify-center gap-1 py-1 text-[11px] font-semibold text-amber-600 dark:text-amber-300"
+                        className="btn-secondary mt-2.5 flex w-full items-center justify-center gap-1 py-1 text-[11px] font-semibold text-[var(--px-gold-text)]"
                       >
-                        {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                        {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <PxPlus size={12} />}
                         <span>Thêm vào hôm nay</span>
                       </button>
                     </div>
@@ -1138,12 +1154,12 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
           {questFilter === 'pending' ? (
             pendingQuests.length === 0 ? (
               <div className="p-10 text-center">
-                <Sparkles className="mx-auto h-7 w-7 text-amber-500" />
+                <PxSparkle size={28} className="mx-auto text-[var(--px-gold-text)]" />
                 <p className="mt-2 font-display text-sm font-bold text-main">
                   Chưa có việc cần làm hôm nay
                 </p>
                 <p className="mt-1 text-xs text-sub">
-                  Gõ vào ô <strong>"Thêm nhanh việc cần làm..."</strong> phía trên hoặc bấm <strong>"AI Lập Kế Hoạch"</strong>.
+                  Gõ vào ô <strong>&ldquo;Thêm nhanh việc cần làm...&rdquo;</strong> phía trên hoặc bấm <strong>&ldquo;AI Lập Kế Hoạch&rdquo;</strong>.
                 </p>
               </div>
             ) : (
@@ -1164,8 +1180,8 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                   return (
                     <div
                       key={q.id}
-                      className={`px-4 py-3 transition hover:bg-slate-500/5 sm:px-5 ${
-                        isRunning ? 'bg-amber-500/5' : ''
+                      className={`px-4 py-3 transition hover:bg-[var(--bg-surface-2)] sm:px-5 ${
+                        isRunning ? 'bg-[var(--bg-surface-2)]' : ''
                       }`}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2.5 sm:flex-nowrap">
@@ -1185,15 +1201,15 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                             title={q.requiresProof ? 'Ghi nhận & Hoàn thành' : 'Hoàn thành ngay (1-Click)'}
                             aria-label={`Hoàn thành ${q.title}`}
                           >
-                            <Check className="h-4 w-4" />
+                            <PxCheck size={14} />
                           </button>
 
                           {q.microStartDone ? (
                             <span
-                              className="inline-flex shrink-0 items-center gap-0.5 border border-amber-500/50 bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-600 dark:text-amber-300 rounded-[2px]"
+                              className="px-inset inline-flex shrink-0 items-center gap-0.5 rounded-none border-[var(--px-gold)] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--px-gold-text)]"
                               title="Đã khởi động 2 phút (+10 XP)"
                             >
-                              <Zap className="h-3 w-3" />
+                              <PxBolt size={11} />
                               2p
                             </span>
                           ) : (
@@ -1208,13 +1224,13 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                                   setMicroStartingId(null);
                                 }
                               }}
-                              className="btn-secondary inline-flex shrink-0 items-center gap-0.5 border-amber-500/45 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-600 dark:text-amber-300"
+                              className="btn-secondary inline-flex shrink-0 items-center gap-0.5 border-[var(--px-gold)] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--px-gold-text)]"
                               title="Atomic Habits: Khởi động 2 phút (+10 XP)"
                             >
                               {microStartingId === q.id ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
                               ) : (
-                                <Zap className="h-3 w-3 text-amber-500" />
+                                <PxBolt size={11} className="text-[var(--px-gold-text)]" />
                               )}
                               <span>2p</span>
                             </button>
@@ -1226,12 +1242,12 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                                 <input
                                   value={editTitle}
                                   onChange={(e) => setEditTitle(e.target.value)}
-                                  className="min-w-[160px] flex-1 px-2 py-1 text-xs"
+                                  className="min-w-[160px] flex-1 rounded-none px-2 py-1 text-xs"
                                 />
                                 <input
                                   value={editSlot}
                                   onChange={(e) => setEditSlot(e.target.value)}
-                                  className="w-28 px-2 py-1 text-xs"
+                                  className="w-28 rounded-none px-2 py-1 text-xs"
                                 />
                                 <button
                                   type="button"
@@ -1259,10 +1275,10 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                                   </h4>
                                   {(isRunning || isPaused) && (
                                     <span
-                                      className={`font-mono border px-1.5 py-0.5 text-[10px] font-bold rounded-[2px] ${
+                                      className={`rounded-none border-2 px-1.5 py-0.5 font-mono text-[10px] font-bold ${
                                         isRunning
-                                          ? 'border-amber-500/70 bg-amber-500/20 text-amber-700 dark:text-amber-300'
-                                          : 'border-slate-500/50 bg-slate-500/15 text-sub'
+                                          ? 'border-[var(--px-gold)] bg-[var(--bg-subtle)] text-[var(--px-gold-text)]'
+                                          : 'border-[var(--border-strong)] bg-[var(--bg-subtle)] text-sub'
                                       }`}
                                     >
                                       {isRunning ? `Đang chạy ${formatMsShort(elapsedSec)}` : `Tạm dừng ${formatMsShort(elapsedSec)}`}
@@ -1271,21 +1287,23 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                                 </div>
                                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-sub">
                                   <span className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3 text-amber-500" />
+                                    <PxClock size={12} className="text-[var(--px-gold-text)]" />
                                     {q.scheduledSlot} ({q.durationMinutes}p)
                                   </span>
                                   <span>·</span>
-                                  <span className="font-sans font-semibold">{pill.label}</span>
+                                  <span className={`rounded-none border px-1.5 py-0 font-sans text-[10px] font-bold ${pill.cls}`}>
+                                    {pill.label}
+                                  </span>
                                   <span>·</span>
-                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                  <span className="font-semibold text-[var(--px-green-text)]">
                                     +{q.xpReward} XP · +{spReward} SP
                                   </span>
                                   <span>·</span>
                                   <span
                                     className={
                                       hpStake === 0
-                                        ? 'text-teal-600 dark:text-teal-400'
-                                        : 'text-rose-500 dark:text-rose-400'
+                                        ? 'text-[var(--px-green-text)]'
+                                        : 'text-[var(--px-red-text)]'
                                     }
                                   >
                                     {hpStake === 0 ? '0 HP' : `-${hpStake} HP`}
@@ -1313,7 +1331,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                               className="btn-primary flex items-center gap-1 px-2.5 py-1 text-xs"
                               title="Bắt đầu tính giờ phiên làm việc"
                             >
-                              <Play className="h-3 w-3" />
+                              <PxPlay size={12} />
                               <span>{isPaused ? 'Tiếp tục' : 'Bắt đầu'}</span>
                             </button>
                           )}
@@ -1332,7 +1350,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                               }}
                               className="btn-secondary flex items-center gap-1 px-2.5 py-1 text-xs"
                             >
-                              <Pause className="h-3 w-3 text-amber-500" />
+                              <PxPause size={12} className="text-[var(--px-gold-text)]" />
                               <span>Tạm dừng</span>
                             </button>
                           )}
@@ -1343,7 +1361,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                             className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs"
                             title="Mở Focus Mode (+25% XP & +2 SP)"
                           >
-                            <Swords className="h-3.5 w-3.5 text-amber-500" />
+                            <PxSword size={13} />
                             <span className="hidden sm:inline">Focus</span>
                           </button>
 
@@ -1353,7 +1371,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                             className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs text-sub"
                           >
                             <span>Chi tiết</span>
-                            {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            <PxChevron size={12} dir={isExpanded ? 'up' : 'down'} />
                           </button>
 
                           <button
@@ -1367,23 +1385,23 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                               }
                               void onDeleteQuest(q.id);
                             }}
-                            className="btn-secondary p-1.5 text-dim hover:text-rose-500"
+                            className="btn-secondary p-1.5 text-dim hover:text-[var(--px-red-text)]"
                             title="Xóa nhiệm vụ"
                             aria-label={`Xóa ${q.title}`}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <PxTrash size={13} />
                           </button>
                         </div>
                       </div>
 
                       {/* Inline Proof-of-Work bar (only if requiresProof) */}
                       {isCompleting && (
-                        <div className="mt-2.5 flex flex-wrap gap-2 border-2 p-2.5 studio-subtle rpg-divider rounded-[2px]">
+                        <div className="px-inset mt-2.5 flex flex-wrap gap-2 rounded-none p-2.5">
                           <input
                             value={proofText}
                             onChange={(e) => setProofText(e.target.value)}
                             placeholder="Ghi ngắn gọn kết quả vừa hoàn thành..."
-                            className="min-w-[200px] flex-1 px-3 py-1.5 text-xs"
+                            className="min-w-[200px] flex-1 rounded-none px-3 py-1.5 text-xs"
                           />
                           <button
                             type="button"
@@ -1404,14 +1422,14 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                         <div className="mt-3 space-y-2.5 border-t-2 pt-3 text-xs rpg-divider">
                           <div className="flex flex-wrap items-center gap-2">
                             {q.scientificProtocol && (
-                              <span className="inline-flex items-center gap-1 border border-violet-500/40 bg-violet-500/15 px-2 py-0.5 text-[11px] font-semibold text-violet-700 dark:text-violet-300 rounded-[2px]">
-                                <FlaskConical className="h-3 w-3" />
+                              <span className="inline-flex items-center gap-1 rounded-none border-2 border-[var(--px-plum)] bg-[var(--bg-surface-2)] px-2 py-0.5 text-[11px] font-semibold text-[var(--px-plum-text)]">
+                                <PxBook size={12} />
                                 {q.scientificProtocol}
                               </span>
                             )}
                             {linkedSkill && (
-                              <span className="inline-flex items-center gap-1 border border-cyan-500/40 bg-cyan-500/15 px-2 py-0.5 text-[11px] font-semibold text-cyan-700 dark:text-cyan-300 rounded-[2px]">
-                                <Zap className="h-3 w-3" />
+                              <span className="inline-flex items-center gap-1 rounded-none border-2 border-[var(--px-blue)] bg-[var(--bg-surface-2)] px-2 py-0.5 text-[11px] font-semibold text-[var(--px-blue-text)]">
+                                <PxBolt size={12} />
                                 Skill: {linkedSkill.name}
                               </span>
                             )}
@@ -1420,8 +1438,8 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                           {q.description && <p className="text-sub">{q.description}</p>}
 
                           {q.ifThenTrigger && (
-                            <div className="flex items-start gap-1.5 border border-indigo-500/40 bg-indigo-500/10 px-2.5 py-1.5 text-main rounded-[2px]">
-                              <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                            <div className="px-inset flex items-start gap-1.5 rounded-none border-[var(--px-blue)] px-2.5 py-1.5 text-main">
+                              <PxShield size={14} className="mt-0.5 text-[var(--px-blue-text)]" />
                               <span>
                                 <strong>Kế hoạch Nếu–Thì:</strong> {q.ifThenTrigger}
                               </span>
@@ -1437,18 +1455,22 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                                   onClick={() => onToggleSubtask(q.id, st.id)}
                                   className="flex w-full items-center gap-2 text-left text-xs text-sub hover:text-main"
                                 >
-                                  {st.done ? (
-                                    <CheckSquare className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                                  ) : (
-                                    <Square className="h-3.5 w-3.5 shrink-0 text-dim" />
-                                  )}
+                                  <span
+                                    className={`flex h-4 w-4 shrink-0 items-center justify-center border-2 border-[var(--border-ink)] rounded-none ${
+                                      st.done
+                                        ? 'bg-[var(--px-green)] text-white'
+                                        : 'bg-[var(--bg-subtle)]'
+                                    }`}
+                                  >
+                                    {st.done && <PxCheck size={10} />}
+                                  </span>
                                   <span className={st.done ? 'line-through opacity-60' : ''}>{st.label}</span>
                                 </button>
                               ))}
                             </div>
                           )}
 
-                          <div className="border p-2.5 text-[11px] text-sub studio-subtle rpg-divider rounded-[2px]">
+                          <div className="px-inset rounded-none p-2.5 text-[11px] text-sub">
                             <p>
                               <strong>Phương pháp:</strong> {q.learningMethod}
                             </p>
@@ -1467,16 +1489,16 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                               }}
                               className="btn-secondary flex items-center gap-1 px-2.5 py-1 text-[11px]"
                             >
-                              <Edit3 className="h-3 w-3" />
+                              <PxEdit size={12} />
                               <span>Sửa</span>
                             </button>
 
                             <button
                               type="button"
                               onClick={() => setRejectingId(isRejecting ? null : q.id)}
-                              className="btn-secondary flex items-center gap-1 px-2.5 py-1 text-[11px] text-rose-500"
+                              className="btn-secondary flex items-center gap-1 px-2.5 py-1 text-[11px] text-[var(--px-red-text)]"
                             >
-                              <XCircle className="h-3 w-3" />
+                              <PxClose size={12} />
                               <span>Đổi bài</span>
                             </button>
 
@@ -1497,7 +1519,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                                 {failingId === q.id ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
-                                  <AlertTriangle className="h-3 w-3" />
+                                  <PxWarn size={12} danger />
                                 )}
                                 <span>Bỏ lỡ (-HP)</span>
                               </button>
@@ -1506,15 +1528,15 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                             <button
                               type="button"
                               onClick={() => onDeleteQuest(q.id)}
-                              className="ml-auto flex items-center gap-1 px-2 py-1 text-[11px] text-dim hover:text-rose-500"
+                              className="ml-auto flex items-center gap-1 px-2 py-1 text-[11px] text-dim hover:text-[var(--px-red-text)]"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <PxTrash size={13} />
                               <span>Xóa</span>
                             </button>
                           </div>
 
                           {isRejecting && (
-                            <div className="flex flex-wrap items-center gap-1.5 border p-2.5 studio-subtle rpg-divider rounded-[2px]">
+                            <div className="px-inset flex flex-wrap items-center gap-1.5 rounded-none p-2.5">
                               <span className="text-[11px] text-sub">Lý do đổi:</span>
                               {[
                                 { reason: 'low_energy' as RejectionReason, label: 'Đang mệt' },
@@ -1562,7 +1584,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                    <span className="font-mono font-semibold text-[var(--px-green-text)]">
                       +{cq.xpReward} XP
                     </span>
                     <button
@@ -1572,11 +1594,11 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                           void onDeleteQuest(cq.id);
                         }
                       }}
-                      className="btn-secondary p-1 text-dim hover:text-rose-500"
+                      className="btn-secondary p-1 text-dim hover:text-[var(--px-red-text)]"
                       title="Xóa nhiệm vụ đã hoàn thành"
                       aria-label={`Xóa ${cq.title}`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <PxTrash size={13} />
                     </button>
                   </div>
                 </div>
@@ -1586,7 +1608,8 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
         </section>
 
         {/* Right Page (5 cols): 3-Tab RPG Tome */}
-        <section className="flex flex-col lg:col-span-5">
+        <section className="relative flex flex-col lg:col-span-5">
+          <PixelRivets />
           <div className="border-b-2 px-4 pt-3 rpg-divider studio-subtle">
             <div className="grid grid-cols-3 gap-1">
               {[
@@ -1613,9 +1636,9 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
               {/* Compact Advisor Header */}
               <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4 text-amber-500" />
+                  <PxAutomaton size={16} className="text-[var(--px-gold-text)]" />
                   <h3 className="font-display text-xs font-bold text-main">Cố vấn AI</h3>
-                  <span className="rounded-[2px] border px-1.5 py-0.5 font-mono text-[10px] text-dim studio-subtle rpg-divider">
+                  <span className="px-inset rounded-none px-1.5 py-0.5 font-mono text-[10px] text-dim">
                     {isLiveAi ? aiSettings.model : 'Offline'}
                   </span>
                 </div>
@@ -1629,7 +1652,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                   {creatingThread ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : (
-                    <Plus className="h-3 w-3 text-amber-400" />
+                    <PxPlus size={12} className="text-[var(--px-gold-text)]" />
                   )}
                   <span>Context mới</span>
                 </button>
@@ -1637,7 +1660,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
 
               {/* 1-Row Context Scope Picker */}
               {showScopePicker && (
-                <div className="mb-2.5 flex flex-wrap items-center gap-1.5 rounded-[2px] border p-2 studio-subtle rpg-divider">
+                <div className="px-inset mb-2.5 flex flex-wrap items-center gap-1.5 rounded-none p-2">
                   <span className="text-[10px] font-semibold text-dim">Chủ đề:</span>
                   {CHAT_SCOPES.map((sc) => (
                     <button
@@ -1658,7 +1681,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                       }}
                       className="btn-secondary flex items-center gap-1.5 px-2 py-1 text-[11px]"
                     >
-                      <span className={`h-2 w-2 rounded-full ${sc.dotCls}`} />
+                      <span className={`h-2 w-2 rounded-none ${sc.dotCls}`} />
                       <span>{sc.label}</span>
                     </button>
                   ))}
@@ -1676,10 +1699,10 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     return (
                       <div
                         key={th.id}
-                        className={`group flex shrink-0 items-center gap-1.5 rounded-[2px] border px-2 py-1 text-[11px] transition ${
+                        className={`group flex shrink-0 items-center gap-1.5 rounded-none border-2 px-2 py-1 text-[11px] transition ${
                           isSelected
-                            ? 'border-amber-400 bg-amber-500/15 font-bold text-main'
-                            : 'studio-subtle rpg-divider text-sub hover:border-amber-500/50'
+                            ? 'border-[var(--px-gold)] bg-[var(--bg-surface-2)] font-bold text-main'
+                            : 'border-[var(--border-ink)] studio-subtle text-sub hover:border-[var(--px-gold)]'
                         }`}
                       >
                         <button
@@ -1689,9 +1712,9 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                           title={`${scopeMeta.label}: ${th.title}`}
                         >
                           {threadBusy ? (
-                            <Loader2 className="h-3 w-3 animate-spin text-amber-400" />
+                            <Loader2 className="h-3 w-3 animate-spin text-[var(--px-gold-text)]" />
                           ) : (
-                            <span className={`h-2 w-2 shrink-0 rounded-full ${scopeMeta.dotCls}`} />
+                            <span className={`h-2 w-2 shrink-0 rounded-none ${scopeMeta.dotCls}`} />
                           )}
                           <span className="max-w-[125px] truncate">{th.title}</span>
                         </button>
@@ -1708,11 +1731,11 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                               }
                               void onDeleteChatThread(th.id);
                             }}
-                            className="p-0.5 text-dim opacity-70 hover:text-rose-400 group-hover:opacity-100"
+                            className="p-0.5 text-dim opacity-70 hover:text-[var(--px-red-text)] group-hover:opacity-100"
                             title="Xóa context này"
                             aria-label={`Xóa ${th.title}`}
                           >
-                            <X className="h-3 w-3" />
+                            <PxClose size={11} />
                           </button>
                         )}
                       </div>
@@ -1724,7 +1747,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
               {/* Scrollable Messages Viewport */}
               <div className="mb-3 min-h-[260px] max-h-[460px] flex-1 space-y-2.5 overflow-y-auto pr-1 text-xs">
                 {visibleMessages.length === 0 && !isCurrentThreadPending && (
-                  <div className="space-y-2 border-2 p-3 text-sub studio-subtle rpg-divider rounded-[2px]">
+                  <div className="px-inset space-y-2 rounded-none p-3 text-sub">
                     <div className="flex flex-wrap gap-1.5">
                       {QUICK_AI_CHIPS.map((chip) => (
                         <button
@@ -1743,10 +1766,10 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                 {visibleMessages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`p-3 rounded-[2px] ${
+                    className={`rounded-none p-3 ${
                       msg.role === 'user'
-                        ? 'ml-6 border-2 border-amber-500/60 bg-amber-500/15 text-main'
-                        : 'mr-2 border-2 studio-subtle rpg-divider text-main'
+                        ? 'ml-6 border-2 border-[var(--px-gold)] bg-[var(--bg-surface-2)] text-main'
+                        : 'rpg-pane relative mr-2 text-main'
                     }`}
                   >
                     {msg.role === 'user' ? (
@@ -1758,7 +1781,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     )}
 
                     {msg.suggestedQuests && msg.suggestedQuests.length > 0 && (
-                      <div className="mt-2.5 space-y-2 border-t pt-2 rpg-divider">
+                      <div className="mt-2.5 space-y-2 border-t-2 pt-2 rpg-divider">
                         {msg.suggestedQuests.map((sq, sIdx) => (
                           <div key={sIdx} className="flex items-center justify-between gap-2">
                             <div className="min-w-0">
@@ -1794,14 +1817,14 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
 
                 {isCurrentThreadPending && (
                   <div className="flex items-center gap-2 px-1 text-xs text-sub">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--px-gold-text)]" />
                     <span>Đang phân tích và soạn phản hồi...</span>
                   </div>
                 )}
 
                 {currentThreadError && (
-                  <div className="flex items-center gap-2 rounded-[2px] border border-rose-500/50 bg-rose-500/10 px-2.5 py-2 text-[11px] text-rose-400">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  <div className="px-inset flex items-center gap-2 rounded-none border-[var(--px-red)] px-2.5 py-2 text-[11px] text-[var(--px-red-text)]">
+                    <PxWarn size={14} danger />
                     <span>{currentThreadError}</span>
                   </div>
                 )}
@@ -1829,14 +1852,15 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     CHAT_SCOPES.find((s) => s.key === currentScope)?.placeholder ||
                     'Nhắn tin hỏi cố vấn AI...'
                   }
-                  className="max-h-28 min-h-[38px] flex-1 resize-y px-3 py-2 text-xs leading-snug"
+                  className="max-h-28 min-h-[38px] flex-1 resize-y rounded-none px-3 py-2 text-xs leading-snug"
                 />
                 <button
                   type="submit"
                   disabled={isCurrentThreadPending || !currentDraft.trim()}
                   className="btn-primary shrink-0 px-3.5 py-2.5"
+                  aria-label="Gửi tin nhắn"
                 >
-                  <Send className="h-4 w-4" />
+                  <PxChevron size={14} dir="right" />
                 </button>
               </form>
             </div>
@@ -1845,7 +1869,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
           {utilityTab === 'rhythm' && (
             <div className="space-y-4 p-4 sm:p-5">
               <div>
-                <p className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                <p className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--px-gold-text)]">
                   Phân bổ 24 giờ · {todayAnalysis.dayLabel}
                 </p>
                 <DayAllocationDonut analysis={todayAnalysis} />
@@ -1860,11 +1884,11 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                 ) : (
                   <div className="space-y-1.5 text-xs">
                     {todayAnalysis.freeWindows.map((fw, idx) => (
-                      <div key={idx} className="flex items-center justify-between border px-2.5 py-1.5 studio-subtle rpg-divider rounded-[2px]">
+                      <div key={idx} className="px-inset flex items-center justify-between rounded-none px-2.5 py-1.5">
                         <span className="font-mono font-semibold text-main">
                           {fw.startTime} – {fw.endTime}
                         </span>
-                        <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
+                        <span className="font-mono text-[11px] text-[var(--px-green-text)]">
                           {fw.durationMinutes}p · {fw.windowQuality.replace(/_/g, ' ')}
                         </span>
                       </div>
@@ -1876,7 +1900,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
               {deliberation && (
                 <div className="border-t-2 pt-3 text-xs rpg-divider">
                   <div className="flex items-center gap-1.5 font-semibold text-main">
-                    <Bot className="h-3.5 w-3.5 text-amber-500" />
+                    <PxAutomaton size={14} className="text-[var(--px-gold-text)]" />
                     <span>Chỉ thị Hội đồng AI</span>
                   </div>
                   <p className="mt-1 text-sub">{deliberation.systemDirective}</p>
@@ -1884,7 +1908,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     <div className="mt-2 space-y-1 text-[11px] text-sub">
                       {deliberation.agentNotes.map((n, i) => (
                         <div key={i}>
-                          <span className="font-mono font-semibold text-amber-600 dark:text-amber-400">
+                          <span className="font-mono font-semibold text-[var(--px-gold-text)]">
                             [{n.agent}]
                           </span>{' '}
                           {n.message}
@@ -1901,7 +1925,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
             <div className="space-y-4 p-4 sm:p-5">
               <div>
                 <div className="mb-2 flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-amber-500" />
+                  <PxScroll size={15} className="text-[var(--px-gold-text)]" />
                   <h3 className="font-display text-xs font-bold text-main">
                     Nhật ký Phản tư 1 dòng hôm nay
                   </h3>
@@ -1923,7 +1947,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     value={reflectionDraft}
                     onChange={(e) => setReflectionDraft(e.target.value)}
                     placeholder="Điều gì tạo đà tốt nhất hôm nay hoặc cần điều chỉnh?"
-                    className="w-full px-3 py-2 text-xs"
+                    className="w-full rounded-none px-3 py-2 text-xs"
                   />
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] text-dim">
@@ -1934,7 +1958,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                       disabled={savingReflection || !reflectionDraft.trim()}
                       className="btn-primary flex items-center gap-1.5 px-3.5 py-1.5 text-xs"
                     >
-                      {savingReflection ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      {savingReflection ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PxCheck size={14} />}
                       <span>Lưu Reflection</span>
                     </button>
                   </div>
@@ -1952,7 +1976,7 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     {memoryLogs.slice(0, 8).map((log) => (
                       <div key={log.id} className="py-2">
                         <div className="flex items-center justify-between font-mono text-[10px] text-dim">
-                          <span className="font-semibold text-amber-600 dark:text-amber-400">
+                          <span className="font-semibold text-[var(--px-gold-text)]">
                             [{log.agent}]
                           </span>
                           <span>{log.eventType}</span>

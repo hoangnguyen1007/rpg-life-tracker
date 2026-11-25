@@ -1,29 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
-import {
-  Bot,
-  CalendarClock,
-  Coffee,
-  Command,
-  Eye,
-  EyeOff,
-  Ghost,
-  GitBranch,
-  Loader2,
-  Moon,
-  RefreshCw,
-  RotateCcw,
-  ScrollText,
-  Search,
-  Settings,
-  Shield,
-  ShoppingBag,
-  Skull,
-  Sparkles,
-  Sun,
-  UserCheck,
-  X,
-} from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type {
   ActivityCategory,
   AIChatMessage,
@@ -39,6 +16,30 @@ import { isLanAuthError, isTauriDesktop, setLanToken, systemApi } from './utils/
 import { soundEngine } from './utils/soundEngine';
 import { getVnTodayKey } from './utils/timeVn';
 import { TopSystemHud } from './components/TopSystemHud';
+import {
+  PixelRivets,
+  PxAutomaton,
+  PxCalendar,
+  PxChest,
+  PxClose,
+  PxCmd,
+  PxCoffee,
+  PxEye,
+  PxEyeOff,
+  PxGear,
+  PxGhost,
+  PxMoon,
+  PxRefresh,
+  PxReset,
+  PxScroll,
+  PxSearch,
+  PxShield,
+  PxSkillTree,
+  PxSkull,
+  PxSparkle,
+  PxSun,
+  PxTarget,
+} from './components/PixelIcons';
 import { SkillTreeView } from './components/SkillTreeView';
 import { BossAndSkillsView } from './components/BossAndSkillsView';
 import { QuestCouncilBoard } from './components/QuestCouncilBoard';
@@ -76,12 +77,12 @@ interface SystemAlert {
 }
 
 const NAV_TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: 'quests', label: 'Hôm Nay', icon: <ScrollText className="h-4 w-4" /> },
-  { key: 'timetable', label: 'Thời Khóa Biểu', icon: <CalendarClock className="h-4 w-4" /> },
-  { key: 'skills', label: 'Cây Kĩ Năng', icon: <GitBranch className="h-4 w-4" /> },
-  { key: 'hero', label: 'Tiến Độ & Mục Tiêu', icon: <Shield className="h-4 w-4" /> },
-  { key: 'campaign', label: 'Hành Trình', icon: <Skull className="h-4 w-4" /> },
-  { key: 'assistant', label: 'Trợ Lý PC', icon: <Bot className="h-4 w-4" /> },
+  { key: 'quests', label: 'Hôm Nay', icon: <PxScroll size={15} /> },
+  { key: 'timetable', label: 'Thời Khóa Biểu', icon: <PxCalendar size={15} /> },
+  { key: 'skills', label: 'Cây Kĩ Năng', icon: <PxSkillTree size={15} /> },
+  { key: 'hero', label: 'Tiến Độ & Mục Tiêu', icon: <PxShield size={15} /> },
+  { key: 'campaign', label: 'Hành Trình', icon: <PxSkull size={15} /> },
+  { key: 'assistant', label: 'Trợ Lý PC', icon: <PxAutomaton size={15} /> },
 ];
 
 export default function App() {
@@ -508,7 +509,8 @@ export default function App() {
     const tauri = (window as unknown as { __TAURI__?: TauriBridge }).__TAURI__;
 
     if (isTauriDesktop() && tauri?.core?.invoke) {
-      let unlisten: (() => void) | null = null;
+      let disposed = false;
+      const unlisteners: Array<() => void> = [];
       const syncTauriHud = () => {
         tauri.core
           ?.invoke?.('get_hud_visible')
@@ -520,18 +522,51 @@ export default function App() {
       syncTauriHud();
       window.addEventListener('focus', syncTauriHud);
       if (tauri.event?.listen) {
-        tauri.event
-          .listen('tauri-hud-visibility', (ev) => {
-            if (typeof ev.payload === 'boolean') setHudVisible(ev.payload);
-          })
-          .then((fn) => {
-            unlisten = fn;
-          })
-          .catch(() => {});
+        const registerListener = (
+          eventName: string,
+          handler: (ev: { payload: unknown }) => void
+        ) => {
+          tauri.event
+            ?.listen?.(eventName, handler)
+            .then((fn) => {
+              if (disposed) {
+                fn();
+              } else {
+                unlisteners.push(fn);
+              }
+            })
+            .catch(() => {});
+        };
+
+        registerListener('tauri-hud-visibility', (ev) => {
+          if (typeof ev.payload === 'boolean') setHudVisible(ev.payload);
+        });
+
+        registerListener('tauri-open-mobile-qr', () => {
+          soundEngine.systemPing();
+          setActiveTab('assistant');
+          setTimeout(() => {
+            document
+              .getElementById('lan-qr-card')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 120);
+        });
+
+        registerListener('tauri-dnd-updated', (ev) => {
+          const mins = typeof ev.payload === 'number' ? ev.payload : 0;
+          void loadAssistantOverview();
+          pushAlert(
+            'Đã cập nhật DND từ System Tray',
+            mins > 0
+              ? `Đã bật Do Not Disturb trong ${mins} phút.`
+              : 'Đã tắt Do Not Disturb — Trợ lý PC tiếp tục theo dõi.'
+          );
+        });
       }
       return () => {
+        disposed = true;
         window.removeEventListener('focus', syncTauriHud);
-        if (unlisten) unlisten();
+        unlisteners.forEach((fn) => fn());
       };
     }
 
@@ -558,7 +593,7 @@ export default function App() {
       window.removeEventListener('focus', syncViaBackendBridge);
       window.clearInterval(interval);
     };
-  }, [viewMode]);
+  }, [viewMode, loadAssistantOverview, pushAlert]);
 
   const handleToggleHudVisible = useCallback(async () => {
     soundEngine.click();
@@ -787,7 +822,7 @@ export default function App() {
         label: 'AI Lập Kế Hoạch hôm nay',
         hint: 'Tạo Quest theo lịch trống',
         keywords: 'ai orchestrate quests lap ke hoach',
-        icon: <RefreshCw className="h-4 w-4 text-amber-500" />,
+        icon: <PxRefresh size={14} color="var(--px-gold-text)" />,
         run: async () => {
           setPaletteBusy(true);
           try {
@@ -808,7 +843,11 @@ export default function App() {
         label: theme === 'dark' ? 'Đổi sang Quán Trọ Sáng (Light)' : 'Đổi sang Hầm Ngục Tối (Dark)',
         hint: 'Theme',
         keywords: 'theme dark light',
-        icon: theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-500" />,
+        icon: theme === 'dark' ? (
+          <PxSun size={14} color="var(--px-gold-text)" />
+        ) : (
+          <PxMoon size={14} color="var(--px-blue-text)" />
+        ),
         run: async () => {
           soundEngine.click();
           setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
@@ -821,7 +860,7 @@ export default function App() {
         label: `${state?.player.plannedRestMode ? 'Tắt' : 'Bật'} Nghỉ Chủ Động (Grace Day)`,
         hint: 'Hồi phục & chống kiệt sức',
         keywords: 'rest grace day nghi',
-        icon: <Coffee className="h-4 w-4 text-teal-400" />,
+        icon: <PxCoffee size={14} color="var(--px-green-text)" />,
         run: async () => {
           setPaletteBusy(true);
           try {
@@ -838,7 +877,7 @@ export default function App() {
         label: 'Reset tiến trình về Level 1',
         hint: 'Reset / Test',
         keywords: 'reset progress level 1 test clean',
-        icon: <RotateCcw className="h-4 w-4 text-rose-400" />,
+        icon: <PxReset size={14} color="var(--px-red-text)" />,
         run: async () => {
           soundEngine.click();
           setCommandPaletteOpen(false);
@@ -854,9 +893,9 @@ export default function App() {
         hint: hudVisible ? 'Đang hiện' : 'Đang ẩn',
         keywords: 'hud an hien floating widget pixel taskbar',
         icon: hudVisible ? (
-          <EyeOff className="h-4 w-4 text-amber-400" />
+          <PxEyeOff size={14} color="var(--px-gold-text)" />
         ) : (
-          <Eye className="h-4 w-4 text-cyan-400" />
+          <PxEye size={14} color="var(--px-blue-text)" />
         ),
         run: async () => {
           await handleToggleHudVisible();
@@ -869,7 +908,7 @@ export default function App() {
         label: 'Mở Trợ Lý PC & Khởi động cùng Windows',
         hint: 'Assistant',
         keywords: 'assistant tro ly pc startup windows tray activity tracker',
-        icon: <Bot className="h-4 w-4 text-emerald-400" />,
+        icon: <PxAutomaton size={14} color="var(--px-green-text)" />,
         run: async () => {
           soundEngine.click();
           setActiveTab('assistant');
@@ -882,7 +921,7 @@ export default function App() {
         label: 'Mở Cài đặt (LLM API & Backup)',
         hint: 'Settings',
         keywords: 'settings api llm backup reset sqlite',
-        icon: <Settings className="h-4 w-4 text-slate-400" />,
+        icon: <PxGear size={14} color="var(--text-secondary)" />,
         run: async () => {
           soundEngine.click();
           setCommandPaletteOpen(false);
@@ -1006,9 +1045,10 @@ export default function App() {
       {/* RPG Toast Alert */}
       {alert && (
         <div className="fixed bottom-5 right-5 z-50 max-w-sm">
-          <div className="rpg-window border-l-4 border-l-amber-500 p-3.5 shadow-2xl">
-            <div className="flex items-center gap-2 text-xs font-extrabold text-amber-500 dark:text-amber-400">
-              <Sparkles className="h-4 w-4" />
+          <div className="rpg-window relative rounded-none border-l-4 border-l-[var(--px-gold)] p-3.5">
+            <PixelRivets />
+            <div className="flex items-center gap-2 text-xs font-extrabold text-[var(--px-gold-text)]">
+              <PxSparkle size={14} color="var(--px-gold-text)" />
               <span>{alert.title}</span>
             </div>
             <p className="mt-1 text-xs text-main">{alert.message}</p>
@@ -1056,7 +1096,10 @@ export default function App() {
 
         {/* UNIFIED 5-TAB RPG MENU BOOK SHELL (Zero-Gap Flush Tabs + .rpg-window) */}
         <div>
-          <nav className="flex flex-row gap-1 overflow-x-auto px-0.5" aria-label="Điều hướng chính">
+          <nav
+            className="relative z-10 -mb-[2px] flex flex-row items-end gap-1 overflow-x-auto overflow-y-hidden px-0.5"
+            aria-label="Điều hướng chính"
+          >
             {NAV_TABS.map((tab) => {
               const active = activeTab === tab.key;
               const showSpDot = tab.key === 'skills' && spAvailable > 0;
@@ -1069,7 +1112,7 @@ export default function App() {
                     setActiveTab(tab.key);
                   }}
                   className={`flex shrink-0 items-center gap-2 px-4 py-2.5 text-xs ${
-                    active ? 'rpg-tab-active' : 'rpg-tab'
+                    active ? 'rpg-tab-active !mb-0' : 'rpg-tab mb-[2px]'
                   }`}
                 >
                   {tab.icon}
@@ -1082,22 +1125,18 @@ export default function App() {
                   )}
                   {tab.key === 'assistant' && trackerRunning && (
                     <span
-                      className="h-2 w-2 animate-pulse rounded-full bg-emerald-400"
+                      className="h-2 w-2 bg-[var(--px-green-text)]"
                       title="PC Activity Tracker đang chạy"
                     />
                   )}
                   {tab.key === 'assistant' && unreadNudges > 0 && (
-                    <span className="font-pixel bg-amber-500 px-1 py-0.5 text-[9px] font-bold leading-none text-[#180f03] rounded-[2px]">
+                    <span className="font-pixel rounded-none border border-[var(--border-ink)] bg-[var(--px-gold)] px-1 py-0.5 text-[9px] font-bold leading-none text-[#140e04]">
                       {unreadNudges}
                     </span>
                   )}
                   {showSpDot && (
                     <span
-                      className={`font-pixel px-1.5 py-0.5 text-[9px] font-bold leading-none rounded-[2px] ${
-                        active
-                          ? 'bg-amber-500 text-[#180f03]'
-                          : 'animate-pulse bg-amber-500 text-[#180f03]'
-                      }`}
+                      className="font-pixel rounded-none border border-[var(--border-ink)] bg-[var(--px-gold)] px-1.5 py-0.5 text-[9px] font-bold leading-none text-[#140e04]"
                     >
                       +{spAvailable} SP
                     </span>
@@ -1108,7 +1147,8 @@ export default function App() {
           </nav>
 
           {/* MAIN UNIFIED RPG WINDOW FRAME */}
-          <main className="rpg-window min-w-0">
+          <main className="rpg-window relative min-w-0 rounded-none">
+            <PixelRivets />
             {activeTab === 'quests' && (
               <QuestCouncilBoard
                 player={state.player}
@@ -1453,17 +1493,17 @@ export default function App() {
                 {/* Flush Sub-Tabs Ledger Bar */}
                 <div className="flex flex-wrap items-center gap-1 border-b-2 px-4 pt-3 rpg-divider studio-subtle">
                   {[
-                    { key: 'status' as const, label: 'Biểu Đồ & Cấp Độ', icon: <Shield className="h-3.5 w-3.5" /> },
-                    { key: 'profile' as const, label: 'Mục Tiêu & Hồ Sơ', icon: <UserCheck className="h-3.5 w-3.5" /> },
+                    { key: 'status' as const, label: 'Biểu Đồ & Cấp Độ', icon: <PxShield size={14} /> },
+                    { key: 'profile' as const, label: 'Mục Tiêu & Hồ Sơ', icon: <PxTarget size={14} /> },
                     {
                       key: 'shop' as const,
                       label: `Cửa Hàng & Kho (${state.inventory.length})`,
-                      icon: <ShoppingBag className="h-3.5 w-3.5" />,
+                      icon: <PxChest size={14} />,
                     },
                     {
                       key: 'shadows' as const,
                       label: `Shadow Army (${state.shadows.length})`,
-                      icon: <Ghost className="h-3.5 w-3.5" />,
+                      icon: <PxGhost size={14} />,
                     },
                   ].map((st) => {
                     const active = heroSubTab === st.key;
@@ -1768,15 +1808,16 @@ export default function App() {
       {/* Command Palette (Ctrl+K / Cmd+K) */}
       {commandPaletteOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 px-4 pt-16 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/75 px-4 pt-16"
           onClick={() => setCommandPaletteOpen(false)}
         >
           <div
-            className="rpg-window w-full max-w-lg overflow-hidden"
+            className="rpg-window relative w-full max-w-lg overflow-hidden rounded-none"
             onClick={(e) => e.stopPropagation()}
           >
+            <PixelRivets />
             <div className="flex items-center gap-2.5 border-b-2 px-4 py-3 rpg-divider">
-              <Search className="h-4 w-4 text-amber-500" />
+              <PxSearch size={15} color="var(--px-gold-text)" />
               <input
                 ref={commandInputRef}
                 value={commandQuery}
@@ -1800,14 +1841,14 @@ export default function App() {
                   }
                 }}
                 placeholder="Tìm lệnh nhanh: Hôm Nay, Thời Khóa Biểu, Cây Kĩ Năng, Tiến Độ & Mục Tiêu, Hành Trình..."
-                className="flex-1 border-0 bg-transparent text-sm text-main shadow-none focus:ring-0"
+                className="flex-1 !border-0 !bg-transparent text-sm text-main !shadow-none focus:!shadow-none"
               />
               <button
                 type="button"
                 onClick={() => setCommandPaletteOpen(false)}
                 className="p-1 text-dim hover:text-main"
               >
-                <X className="h-4 w-4" />
+                <PxClose size={14} />
               </button>
             </div>
 
@@ -1824,17 +1865,23 @@ export default function App() {
                       disabled={paletteBusy}
                       onMouseEnter={() => setSelectedCommandIdx(idx)}
                       onClick={() => void cmd.run()}
-                      className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-xs transition rounded-[2px] ${
+                      className={`flex w-full items-center justify-between gap-3 rounded-none px-3 py-2.5 text-left text-xs ${
                         selected
-                          ? 'bg-amber-500/20 text-amber-600 dark:text-amber-200'
-                          : 'text-main hover:bg-slate-500/10'
+                          ? 'border-2 border-[var(--border-ink)] bg-[var(--px-gold)] text-[#140e04]'
+                          : 'border-2 border-transparent text-main hover:bg-[var(--bg-muted)]'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
                         {cmd.icon}
                         <span className="font-semibold">{cmd.label}</span>
                       </div>
-                      <span className="font-mono text-[10px] text-dim">{cmd.hint}</span>
+                      <span
+                        className={`font-mono text-[10px] ${
+                          selected ? 'font-bold text-[#140e04]' : 'text-dim'
+                        }`}
+                      >
+                        {cmd.hint}
+                      </span>
                     </button>
                   );
                 })
@@ -1842,8 +1889,8 @@ export default function App() {
             </div>
 
             <div className="flex items-center justify-between border-t-2 px-4 py-2 text-[11px] text-dim rpg-divider studio-subtle">
-              <span className="flex items-center gap-1">
-                <Command className="h-3 w-3" /> ↑↓ chọn · Enter chạy · Esc đóng
+              <span className="flex items-center gap-1.5">
+                <PxCmd size={12} /> ↑↓ chọn · Enter chạy · Esc đóng
               </span>
               <span className="font-mono">Ctrl+K / ⌘K</span>
             </div>

@@ -1,5 +1,14 @@
 $ErrorActionPreference = 'SilentlyContinue'
 $scriptDir = $PSScriptRoot
+$repoRoot = Split-Path -Parent $scriptDir
+$exePath = Join-Path $repoRoot 'src-tauri\target\release\rpg-life-tracker.exe'
+
+# Prefer native Tauri v2 Desktop App (.exe) when built
+if (Test-Path $exePath) {
+  Start-Process -FilePath 'explorer.exe' -ArgumentList "`"$exePath`""
+  exit 0
+}
+
 $url = 'http://localhost:3001'
 
 function Test-ServerOnline {

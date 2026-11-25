@@ -1,25 +1,26 @@
 import React, { useState } from 'react';
-import {
-  Check,
-  Coins,
-  Command,
-  Edit3,
-  Eye,
-  EyeOff,
-  Flame,
-  Gem,
-  Moon,
-  RotateCcw,
-  Settings,
-  Sparkles,
-  Sun,
-  Volume2,
-  VolumeX,
-  X,
-  Zap,
-} from 'lucide-react';
 import type { AISettings, PlayerState, SystemStatePayload } from '../types/system';
 import { PixelHeart, PixelHeroSprite } from './DungeonSprites';
+import {
+  PixelRivets,
+  PxBolt,
+  PxCheck,
+  PxClose,
+  PxCmd,
+  PxCoin,
+  PxEdit,
+  PxEye,
+  PxEyeOff,
+  PxFlame,
+  PxGear,
+  PxGem,
+  PxMoon,
+  PxReset,
+  PxSoundOff,
+  PxSoundOn,
+  PxSparkle,
+  PxSun,
+} from './PixelIcons';
 
 interface TopSystemHudProps {
   player: PlayerState;
@@ -87,26 +88,27 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
   const sp = player.skillPoints ?? 0;
 
   return (
-    <header className="rpg-hud-bar px-3.5 py-2.5 sm:px-4">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        {/* TOP-LEFT CORNER 2D PIXEL RPG STATUS PLAQUE */}
-        <div className="flex min-w-0 items-center gap-3">
+    <header className="rpg-hud-bar relative rounded-none px-3 py-2 sm:px-3.5">
+      <PixelRivets />
+      <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between xl:gap-2.5">
+        {/* TOP-LEFT CORNER 16-BIT PIXEL RPG STATUS PLAQUE */}
+        <div className="flex min-w-0 items-center gap-2.5">
           {/* Pixel Hero Sprite Frame + LV Badge */}
           <div className="relative shrink-0">
-            <div className="flex h-12 w-12 items-center justify-center border-2 border-amber-500/70 bg-[#0d111d] rounded-[2px]">
+            <div className="px-inset flex h-12 w-12 items-center justify-center rounded-none">
               <PixelHeroSprite
                 rank={player.rank}
                 avatarStyle={player.profile.avatarStyle}
                 mood={heroMood}
-                size={44}
+                size={42}
               />
             </div>
-            <span className="font-pixel absolute -bottom-1.5 -right-1.5 border border-amber-300 bg-amber-500 px-1 py-0.5 text-[9px] font-bold leading-none text-[#160f05] rounded-[2px]">
+            <span className="font-pixel absolute -bottom-1 -right-1 rounded-none border-2 border-[var(--border-ink)] bg-[var(--px-gold)] px-1 py-0.5 text-[9px] font-bold leading-none text-[#140e04]">
               LV.{player.level}
             </span>
           </div>
 
-          <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="min-w-0 flex-1 space-y-1">
             {editingIdentity ? (
               <form
                 onSubmit={async (e) => {
@@ -132,7 +134,7 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
                   className="w-36 px-2 py-1 text-xs"
                 />
                 <button type="submit" className="btn-primary p-1.5" title="Lưu">
-                  <Check className="h-3.5 w-3.5" />
+                  <PxCheck size={13} />
                 </button>
                 <button
                   type="button"
@@ -140,12 +142,12 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
                   className="btn-secondary p-1.5"
                   title="Hủy"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <PxClose size={13} />
                 </button>
               </form>
             ) : (
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <h1 className="truncate font-display text-sm font-extrabold text-main sm:text-base">
                     {player.profile.name}
                   </h1>
@@ -156,63 +158,64 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
                       setClassDraft(player.hunterClass);
                       setEditingIdentity(true);
                     }}
-                    className="p-0.5 text-dim transition hover:text-amber-400"
+                    className="p-0.5 text-dim hover:text-[var(--px-gold-text)]"
                     title="Đổi tên & danh xưng"
                   >
-                    <Edit3 className="h-3 w-3" />
+                    <PxEdit size={12} />
                   </button>
-                  <span className="font-pixel border border-amber-500/45 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-500 dark:text-amber-300 rounded-[2px]">
+                  <span className="font-pixel shrink-0 rounded-none border-2 border-[var(--border-ink)] bg-[var(--bg-muted)] px-1.5 py-0.5 text-[9px] font-bold text-[var(--px-gold-text)]">
                     {player.rank}
                   </span>
                   <span
-                    className="font-mono border border-cyan-500/40 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-bold text-cyan-600 dark:text-cyan-300 rounded-[2px]"
+                    className="px-inset flex shrink-0 items-center gap-1 rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--px-blue-text)]"
                     title={player.currentCheckpoint?.label || 'Checkpoint hiện tại'}
                   >
-                    🚩 Ch.{player.currentCheckpoint?.chapterNumber ?? 1}-
+                    <span className="inline-block h-1.5 w-1.5 bg-[var(--px-blue-text)]" />
+                    Ch.{player.currentCheckpoint?.chapterNumber ?? 1}-
                     {player.currentCheckpoint?.stageNumber ?? 1}
                   </span>
                 </div>
 
                 {/* Pixel Hearts Row */}
                 <div
-                  className="flex items-center gap-0.5 border-2 border-rose-900/40 bg-[#120b14]/75 px-1.5 py-0.5 rounded-[2px]"
+                  className="px-inset flex items-center gap-0.5 rounded-none px-1.5 py-0.5"
                   title="Sinh lực Kỷ luật (HP): chỉ trừ khi bỏ lỡ nhiệm vụ bắt buộc, hồi khi hoàn thành Quest / Nghỉ Chủ Động / dùng Elixir"
                   aria-label={`HP ${hp} trên ${maxHp}`}
                 >
                   {heartStates.map((st, i) => (
-                    <PixelHeart key={i} state={st} size={15} critical={isCriticalHp} />
+                    <PixelHeart key={i} state={st} size={14} critical={isCriticalHp} />
                   ))}
                 </div>
               </div>
             )}
 
             {/* Pixel HP Bar + Pixel EXP Bar */}
-            <div className="flex flex-wrap items-center gap-2.5">
-              <div className="flex min-w-[155px] max-w-[220px] flex-1 items-center gap-1.5">
-                <span className="font-pixel text-[9px] font-bold text-rose-500 dark:text-rose-400">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex min-w-[140px] max-w-[205px] flex-1 items-center gap-1.5">
+                <span className="font-pixel text-[9px] font-bold text-[var(--px-red-text)]">
                   HP
                 </span>
-                <div className="rpg-bar-track h-3.5 flex-1">
+                <div className="rpg-bar-track h-3.5 flex-1 rounded-none">
                   <div
-                    className="h-full bg-gradient-to-r from-rose-700 via-rose-500 to-red-400 transition-all duration-300"
-                    style={{ width: `${hpPct}%` }}
+                    className="h-full transition-all duration-200"
+                    style={{ width: `${hpPct}%`, backgroundColor: 'var(--px-red)' }}
                   />
-                  <span className="font-mono absolute inset-0 z-10 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.95)]">
+                  <span className="font-mono absolute inset-0 z-10 flex items-center justify-center text-[10px] font-bold text-white [text-shadow:1px_1px_0_#000]">
                     {hp}/{maxHp}
                   </span>
                 </div>
               </div>
 
-              <div className="flex min-w-[145px] max-w-[200px] flex-1 items-center gap-1.5">
-                <span className="font-pixel text-[9px] font-bold text-sky-600 dark:text-cyan-400">
+              <div className="flex min-w-[135px] max-w-[195px] flex-1 items-center gap-1.5">
+                <span className="font-pixel text-[9px] font-bold text-[var(--px-blue-text)]">
                   EXP
                 </span>
-                <div className="rpg-bar-track h-3.5 flex-1">
+                <div className="rpg-bar-track h-3.5 flex-1 rounded-none">
                   <div
-                    className="h-full bg-gradient-to-r from-indigo-600 via-sky-500 to-cyan-400 transition-all duration-500"
-                    style={{ width: `${xpPct}%` }}
+                    className="h-full transition-all duration-300"
+                    style={{ width: `${xpPct}%`, backgroundColor: 'var(--px-blue)' }}
                   />
-                  <span className="font-mono absolute inset-0 z-10 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.95)]">
+                  <span className="font-mono absolute inset-0 z-10 flex items-center justify-center text-[10px] font-bold text-white [text-shadow:1px_1px_0_#000]">
                     {player.currentXp}/{player.xpToNextLevel}
                   </span>
                 </div>
@@ -222,15 +225,15 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
         </div>
 
         {/* TOP-RIGHT COMPACT RESOURCE & TOOL COUNTERS */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 xl:flex-nowrap">
           {assistantSummary?.trackerRunning && onOpenAssistant && (
             <button
               type="button"
               onClick={onOpenAssistant}
-              className="flex items-center gap-1.5 border-2 border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 font-mono text-[11px] font-bold text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-300 rounded-[2px]"
+              className="px-inset flex shrink-0 items-center gap-1.5 rounded-none px-2 py-1 font-mono text-[11px] font-bold text-[var(--px-green-text)] hover:border-[var(--px-green)]"
               title="Trợ Lý PC đang theo dõi Focus — bấm để mở"
             >
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+              <span className="h-2 w-2 shrink-0 bg-[var(--px-green-text)]" />
               <span>Focus {assistantSummary.focusScore}%</span>
             </button>
           )}
@@ -239,10 +242,10 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
             <button
               type="button"
               onClick={onToggleHudVisible}
-              className={`flex items-center gap-1.5 border-2 px-2.5 py-1.5 font-mono text-[11px] font-bold transition rounded-[2px] ${
+              className={`flex shrink-0 items-center gap-1.5 rounded-none border-2 px-2 py-1 font-mono text-[11px] font-bold ${
                 hudVisible
-                  ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-600 hover:bg-cyan-500/25 dark:text-cyan-300'
-                  : 'studio-subtle studio-divider text-sub hover:border-amber-500/50 hover:text-main'
+                  ? 'border-[var(--border-ink)] bg-[var(--px-blue)] text-white shadow-[inset_2px_2px_0_rgba(255,255,255,0.22),inset_-2px_-2px_0_rgba(0,0,0,0.4)]'
+                  : 'px-inset text-sub hover:text-main'
               }`}
               title={
                 hudVisible
@@ -250,8 +253,10 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
                   : 'Mini HUD 2D Pixel đang ẩn — bấm để hiện ngay lên màn hình (Ctrl+Shift+Space)'
               }
             >
-              {hudVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-              <span>{hudVisible ? 'Mini HUD: Hiện' : 'Mini HUD: Ẩn'}</span>
+              {hudVisible ? <PxEye size={13} /> : <PxEyeOff size={13} />}
+              <span className="whitespace-nowrap">
+                {hudVisible ? 'HUD: Hiện' : 'HUD: Ẩn'}
+              </span>
             </button>
           )}
 
@@ -259,52 +264,55 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
           <button
             type="button"
             onClick={onOpenSkillTree}
-            className={`flex items-center gap-1.5 border-2 px-2.5 py-1.5 text-xs font-bold transition rounded-[2px] ${
+            className={`flex shrink-0 items-center gap-1 rounded-none border-2 border-[var(--border-ink)] px-2 py-1 text-xs font-bold ${
               sp > 0
-                ? 'border-amber-400 bg-amber-500/20 text-amber-600 dark:text-amber-300 hover:bg-amber-500/30'
-                : 'border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300 hover:bg-violet-500/20'
+                ? 'bg-[var(--px-gold)] text-[#140e04] shadow-[inset_2px_2px_0_rgba(255,255,255,0.28),inset_-2px_-2px_0_rgba(0,0,0,0.35)]'
+                : 'px-inset text-[var(--px-plum-text)] hover:text-main'
             }`}
             title="Điểm Kĩ Năng (SP) — Mở Cây Kĩ Năng"
           >
-            <Sparkles className={`h-3.5 w-3.5 ${sp > 0 ? 'animate-pulse text-amber-500' : 'text-violet-500'}`} />
-            <span className="font-pixel text-[10px]">{sp} SP</span>
+            <PxSparkle size={12} color={sp > 0 ? '#140e04' : 'var(--px-plum-text)'} />
+            <span className="font-pixel whitespace-nowrap text-[10px]">{sp} SP</span>
           </button>
 
           {/* Gold & Runestones Counters */}
           <div
-            className="flex items-center gap-2 border-2 px-2.5 py-1.5 text-xs studio-subtle studio-divider rounded-[2px]"
+            className="px-inset flex shrink-0 items-center gap-1.5 rounded-none px-2 py-1 text-xs"
             title="Gold & Runestones nâng cấp kỹ năng"
           >
-            <span className="flex items-center gap-1 font-mono font-bold text-amber-600 dark:text-amber-400">
-              <Coins className="h-3.5 w-3.5" />
-              {player.gold} G
+            <span className="flex items-center gap-1 whitespace-nowrap font-mono font-bold text-[var(--px-gold-text)]">
+              <PxCoin size={13} />
+              {player.gold}G
             </span>
             <span className="text-dim">|</span>
-            <span className="flex items-center gap-1 font-mono font-bold text-sky-600 dark:text-cyan-400">
-              <Gem className="h-3.5 w-3.5" />
+            <span className="flex items-center gap-1 whitespace-nowrap font-mono font-bold text-[var(--px-blue-text)]">
+              <PxGem size={13} />
               {player.runestones}
             </span>
           </div>
 
           {/* Streak Days */}
           <div
-            className="flex items-center gap-1 border-2 px-2.5 py-1.5 text-xs studio-subtle studio-divider rounded-[2px]"
+            className="px-inset flex shrink-0 items-center gap-1 rounded-none px-2 py-1 text-xs"
             title="Chuỗi ngày rèn luyện liên tiếp"
           >
-            <Flame className="h-3.5 w-3.5 text-amber-500" />
+            <PxFlame size={13} />
             <span className="font-mono font-bold text-main">{player.streakDays}d</span>
           </div>
 
           {/* Energy Level Pill (Decoupled from HP) */}
           <div
-            className={`flex items-center gap-1 border-2 px-2.5 py-1.5 text-xs rounded-[2px] ${
+            className={`px-inset flex shrink-0 items-center gap-1 rounded-none px-2 py-1 text-xs ${
               player.energyLevel >= 70
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-                : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-300'
+                ? 'text-[var(--px-green-text)]'
+                : 'text-[var(--px-gold-text)]'
             }`}
             title="Thể trạng hôm nay — giúp AI cân chỉnh độ nặng nhiệm vụ (độc lập với HP)"
           >
-            <Zap className="h-3.5 w-3.5" />
+            <PxBolt
+              size={12}
+              color={player.energyLevel >= 70 ? 'var(--px-green-text)' : 'var(--px-gold-text)'}
+            />
             <span className="font-mono font-bold">{player.energyLevel}%</span>
           </div>
 
@@ -312,11 +320,11 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
             <button
               type="button"
               onClick={onOpenCommandPalette}
-              className="btn-secondary flex items-center gap-1 px-2.5 py-1.5 text-xs"
+              className="btn-secondary flex shrink-0 items-center gap-1 rounded-none px-2 py-1 text-xs"
               title="Bảng Lệnh Nhanh (Ctrl+K / Cmd+K)"
             >
-              <Command className="h-3.5 w-3.5 text-amber-500" />
-              <span className="font-mono text-[11px] text-dim">⌘K</span>
+              <PxCmd size={13} color="var(--px-gold-text)" />
+              <span className="font-mono text-[11px] text-sub">⌘K</span>
             </button>
           )}
 
@@ -324,13 +332,13 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
             <button
               type="button"
               onClick={onToggleSound}
-              className="btn-secondary p-2"
+              className="btn-secondary shrink-0 rounded-none p-1.5"
               title={soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
             >
               {soundEnabled ? (
-                <Volume2 className="h-4 w-4 text-emerald-500" />
+                <PxSoundOn size={14} color="var(--px-green-text)" />
               ) : (
-                <VolumeX className="h-4 w-4 text-dim" />
+                <PxSoundOff size={14} color="var(--text-muted)" />
               )}
             </button>
           )}
@@ -338,13 +346,13 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
           <button
             type="button"
             onClick={onToggleTheme}
-            className="btn-secondary p-2"
+            className="btn-secondary shrink-0 rounded-none p-1.5"
             title={theme === 'dark' ? 'Đổi sang Quán Trọ Sáng (Light)' : 'Đổi sang Hầm Ngục Tối (Dark)'}
           >
             {theme === 'dark' ? (
-              <Sun className="h-4 w-4 text-amber-400" />
+              <PxSun size={14} color="var(--px-gold-text)" />
             ) : (
-              <Moon className="h-4 w-4 text-indigo-600" />
+              <PxMoon size={14} color="var(--px-blue-text)" />
             )}
           </button>
 
@@ -352,21 +360,21 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
             <button
               type="button"
               onClick={onOpenReset}
-              className="btn-secondary p-2 text-rose-400 hover:text-rose-300"
+              className="btn-secondary shrink-0 rounded-none p-1.5 text-[var(--px-red-text)]"
               title="Reset tiến trình"
               aria-label="Reset tiến trình"
             >
-              <RotateCcw className="h-4 w-4" />
+              <PxReset size={14} />
             </button>
           )}
 
           <button
             type="button"
             onClick={onOpenSettings}
-            className="btn-secondary p-2"
+            className="btn-secondary shrink-0 rounded-none p-1.5"
             title="Cài đặt AI & SQLite Vault"
           >
-            <Settings className="h-4 w-4" />
+            <PxGear size={14} />
           </button>
         </div>
       </div>

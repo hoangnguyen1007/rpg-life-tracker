@@ -1,16 +1,4 @@
 import React, { useMemo } from 'react';
-import {
-  Award,
-  CheckCircle2,
-  Clock,
-  Crown,
-  Flame,
-  GitBranch,
-  History,
-  MessageSquareText,
-  Moon,
-  TrendingUp,
-} from 'lucide-react';
 import type {
   AttributeKey,
   AuditLogEntry,
@@ -25,6 +13,27 @@ import {
   PixelHeroSprite,
   PixelTombstone,
 } from './DungeonSprites';
+import {
+  PixelRivets,
+  PxBook,
+  PxCheck,
+  PxClock,
+  PxCoin,
+  PxCrown,
+  PxFlame,
+  PxGem,
+  PxMoon,
+  PxScroll,
+  PxShield,
+  PxSkillTree,
+  PxStar,
+  PxStatAgi,
+  PxStatCha,
+  PxStatInt,
+  PxStatPer,
+  PxStatStr,
+  PxStatVit,
+} from './PixelIcons';
 import { getVnTodayKey } from '../utils/timeVn';
 
 interface StatusWindowProps {
@@ -37,13 +46,62 @@ interface StatusWindowProps {
   onSelectTitle: (title: string) => void;
 }
 
-const STAT_META: { key: AttributeKey; label: string; desc: string; color: string }[] = [
-  { key: 'INT', label: 'Intelligence', desc: 'Tư duy hệ thống, Phân tích & Chuyên môn', color: '#f59e0b' },
-  { key: 'PER', label: 'Perception', desc: 'Ngoại ngữ, Nghiên cứu & Tổng hợp tri thức', color: '#06b6d4' },
-  { key: 'AGI', label: 'Agility', desc: 'Tốc độ Deep Work & Timeboxing', color: '#8b5cf6' },
-  { key: 'STR', label: 'Strength', desc: 'Thể lực & Sức mạnh cơ bắp', color: '#f97316' },
-  { key: 'VIT', label: 'Vitality', desc: 'Giấc ngủ, Phục hồi & Chống kiệt sức', color: '#10b981' },
-  { key: 'CHA', label: 'Charisma', desc: 'Giao tiếp, Thuyết phục & Kỹ năng mềm', color: '#f43f5e' },
+const STAT_META: Array<{
+  key: AttributeKey;
+  label: string;
+  desc: string;
+  barHex: string;
+  textVar: string;
+  Icon: React.FC<{ size?: number; color?: string; className?: string }>;
+}> = [
+  {
+    key: 'INT',
+    label: 'Intelligence',
+    desc: 'Tư duy hệ thống, Phân tích & Chuyên môn',
+    barHex: '#3267a8',
+    textVar: 'var(--px-blue-text)',
+    Icon: PxStatInt,
+  },
+  {
+    key: 'PER',
+    label: 'Perception',
+    desc: 'Ngoại ngữ, Nghiên cứu & Tổng hợp tri thức',
+    barHex: '#2f7d8c',
+    textVar: 'var(--px-blue-text)',
+    Icon: PxStatPer,
+  },
+  {
+    key: 'AGI',
+    label: 'Agility',
+    desc: 'Tốc độ Deep Work & Timeboxing',
+    barHex: '#2e8b57',
+    textVar: 'var(--px-green-text)',
+    Icon: PxStatAgi,
+  },
+  {
+    key: 'STR',
+    label: 'Strength',
+    desc: 'Thể lực & Sức mạnh cơ bắp',
+    barHex: '#c99330',
+    textVar: 'var(--px-gold-text)',
+    Icon: PxStatStr,
+  },
+  {
+    key: 'VIT',
+    label: 'Vitality',
+    desc: 'Giấc ngủ, Phục hồi & Chống kiệt sức',
+    barHex: '#b83a4b',
+    textVar: 'var(--px-red-text)',
+    Icon: PxStatVit,
+  },
+  {
+    key: 'CHA',
+    label: 'Charisma',
+    desc: 'Giao tiếp, Thuyết phục & Kỹ năng mềm',
+    barHex: '#73499e',
+    textVar: 'var(--px-plum-text)',
+    Icon: PxStatCha,
+  },
 ];
 
 const RANK_THRESHOLDS = [
@@ -77,7 +135,6 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
   quests = [],
   onSelectTitle,
 }) => {
-
   const svgW = 360;
   const svgH = 290;
   const centerX = svgW / 2;
@@ -96,12 +153,12 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
     return {
       ...item,
       value: val,
-      x: centerX + cosA * r,
-      y: centerY + sinA * r,
-      lx: centerX + cosA * (maxRadius + 16),
-      ly: centerY + sinA * (maxRadius + 18),
-      ax: centerX + cosA * maxRadius,
-      ay: centerY + sinA * maxRadius,
+      x: Math.round(centerX + cosA * r),
+      y: Math.round(centerY + sinA * r),
+      lx: Math.round(centerX + cosA * (maxRadius + 18)),
+      ly: Math.round(centerY + sinA * (maxRadius + 20)),
+      ax: Math.round(centerX + cosA * maxRadius),
+      ay: Math.round(centerY + sinA * maxRadius),
       textAnchor,
     };
   });
@@ -193,11 +250,12 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Top Hero & 4 Discipline KPI Blocks */}
-      <section className="studio-surface p-5">
+      {/* Top Hero Plaque & 4 Discipline KPI Blocks */}
+      <section className="rpg-window relative p-5">
+        <PixelRivets />
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[2px] border-2 border-amber-500/50 studio-subtle">
+            <div className="px-inset flex h-20 w-20 shrink-0 items-center justify-center border-2 border-[var(--px-gold)]">
               <PixelHeroSprite
                 avatarStyle={player.profile.avatarStyle}
                 rank={player.rank}
@@ -205,41 +263,55 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
                 className="anim-hero-idle"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-pixel rounded-[2px] border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-400">
+                <span className="rounded-none border-2 border-[var(--border-ink)] bg-[var(--px-gold)] px-2 py-0.5 font-pixel text-[10px] font-bold text-[#140e04]">
                   {player.rank}
                 </span>
-                <span className="text-xs text-dim">{player.hunterClass}</span>
+                <span className="font-mono text-xs text-dim">{player.hunterClass}</span>
               </div>
               <h2 className="mt-1 font-display text-2xl font-extrabold text-main">
                 {player.profile.name}
               </h2>
-              <p className="text-xs text-sub">
-                Danh hiệu: <strong className="text-amber-400">{player.activeTitle}</strong> ·{' '}
-                {player.skillPoints ?? 0} SP · {player.gold} Gold · {player.runestones} 💎
-              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-sub">
+                <span>
+                  Danh hiệu:{' '}
+                  <strong className="text-[var(--px-gold-text)]">{player.activeTitle}</strong>
+                </span>
+                <span className="inline-flex items-center gap-1 font-mono font-bold text-[var(--px-plum-text)]">
+                  <PxSkillTree size={12} /> {player.skillPoints ?? 0} SP
+                </span>
+                <span className="inline-flex items-center gap-1 font-mono font-bold text-[var(--px-gold-text)]">
+                  <PxCoin size={12} /> {player.gold} Gold
+                </span>
+                <span className="inline-flex items-center gap-1 font-mono font-bold text-[var(--px-blue-text)]">
+                  <PxGem size={12} /> {player.runestones}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:min-w-[440px]">
-            <div className="rounded-[2px] border-2 p-3.5 studio-subtle studio-divider">
-              <div className="flex items-center justify-between text-xs font-bold text-cyan-400">
+            <div className="px-inset p-3.5">
+              <div className="flex items-center justify-between text-xs font-bold text-[var(--px-blue-text)]">
                 <span>Cấp Độ (Lv.{player.level})</span>
-                <TrendingUp className="h-4 w-4" />
+                <PxStar size={14} color="var(--px-blue-text)" />
               </div>
               <p className="mt-1 font-mono text-base font-bold text-main">
                 {player.currentXp} / {player.xpToNextLevel} XP
               </p>
-              <div className="mt-2 h-2.5 w-full overflow-hidden rounded-[2px] border studio-divider bg-[var(--bg-surface)]">
-                <div className="h-full bg-cyan-500" style={{ width: `${xpPct}%` }} />
+              <div className="rpg-bar-track mt-2 h-3 w-full">
+                <div
+                  className="h-full"
+                  style={{ width: `${xpPct}%`, backgroundColor: '#3267a8' }}
+                />
               </div>
             </div>
 
-            <div className="rounded-[2px] border-2 p-3.5 studio-subtle studio-divider">
-              <div className="flex items-center justify-between text-xs font-bold text-amber-400">
+            <div className="px-inset p-3.5">
+              <div className="flex items-center justify-between text-xs font-bold text-[var(--px-gold-text)]">
                 <span>Thực Lực ({player.rank})</span>
-                <Crown className="h-4 w-4" />
+                <PxCrown size={15} />
               </div>
               <p className="mt-1 font-mono text-base font-bold text-main">
                 {player.masteryScore}{' '}
@@ -247,8 +319,11 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
                   {nextRank ? `/ ${nextRank.min} (${nextRank.rank})` : 'MAX'}
                 </span>
               </p>
-              <div className="mt-2 h-2.5 w-full overflow-hidden rounded-[2px] border studio-divider bg-[var(--bg-surface)]">
-                <div className="h-full bg-amber-500" style={{ width: `${masteryPct}%` }} />
+              <div className="rpg-bar-track mt-2 h-3 w-full">
+                <div
+                  className="h-full"
+                  style={{ width: `${masteryPct}%`, backgroundColor: '#c99330' }}
+                />
               </div>
             </div>
           </div>
@@ -256,22 +331,28 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
 
         {/* 4 Visual KPI Blocks */}
         <div className="mt-4 grid grid-cols-2 gap-3 border-t-2 pt-4 lg:grid-cols-4 studio-divider">
-          <div className="flex items-center gap-3 rounded-[2px] border-2 px-3.5 py-2.5 studio-subtle studio-divider">
-            <Flame className="h-5 w-5 shrink-0 text-amber-400" />
+          <div className="px-inset flex items-center gap-3 px-3.5 py-2.5">
+            <PxFlame size={20} />
             <div className="min-w-0">
-              <div className="font-mono text-[10px] font-bold uppercase text-dim">Chuỗi Kỷ Luật</div>
-              <div className="font-mono text-sm font-extrabold text-main">{player.streakDays} ngày</div>
+              <div className="font-mono text-[10px] font-bold uppercase text-dim">
+                Chuỗi Kỷ Luật
+              </div>
+              <div className="font-mono text-sm font-extrabold text-main">
+                {player.streakDays} ngày
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 rounded-[2px] border-2 px-3.5 py-2.5 studio-subtle studio-divider">
-            <GitBranch className="h-5 w-5 shrink-0 text-violet-400" />
+          <div className="px-inset flex items-center gap-3 px-3.5 py-2.5">
+            <PxSkillTree size={20} color="var(--px-plum-text)" />
             <div className="min-w-0">
-              <div className="font-mono text-[10px] font-bold uppercase text-dim">Kĩ Năng Đã Nâng</div>
+              <div className="font-mono text-[10px] font-bold uppercase text-dim">
+                Kĩ Năng Đã Nâng
+              </div>
               <div className="flex flex-wrap items-center gap-1.5 font-mono text-sm font-extrabold text-main">
                 <span>{growthBonuses?.totalSkillLevels ?? 0} cấp</span>
                 {(growthBonuses?.totalAscensions ?? 0) > 0 && (
-                  <span className="rounded-[2px] border border-amber-400/50 bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">
+                  <span className="rounded-none border border-[var(--border-ink)] bg-[var(--px-gold)] px-1.5 py-0.5 text-[10px] font-bold text-[#140e04]">
                     {growthBonuses!.totalAscensions} ∞
                   </span>
                 )}
@@ -279,10 +360,12 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3 rounded-[2px] border-2 px-3.5 py-2.5 studio-subtle studio-divider">
-            <Clock className="h-5 w-5 shrink-0 text-cyan-400" />
+          <div className="px-inset flex items-center gap-3 px-3.5 py-2.5">
+            <PxClock size={20} color="var(--px-blue-text)" />
             <div className="min-w-0">
-              <div className="font-mono text-[10px] font-bold uppercase text-dim">Tổng Giờ Focus</div>
+              <div className="font-mono text-[10px] font-bold uppercase text-dim">
+                Tổng Giờ Focus
+              </div>
               <div className="font-mono text-sm font-extrabold text-main">
                 {totalFocusHours}h{' '}
                 <span className="text-[11px] font-normal text-dim">
@@ -292,26 +375,34 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3 rounded-[2px] border-2 px-3.5 py-2.5 studio-subtle studio-divider">
+          <div className="px-inset flex items-center gap-3 px-3.5 py-2.5">
             <div className="flex shrink-0 items-center gap-1">
               <PixelCheckpointCrystal size={20} />
               <PixelTombstone size={18} />
             </div>
             <div className="min-w-0">
-              <div className="font-mono text-[10px] font-bold uppercase text-dim">Checkpoint</div>
-              <div className="truncate font-mono text-xs font-extrabold text-main">
-                🚩 Ch.{cp?.chapterNumber ?? 1}-{cp?.stageNumber ?? 1}{' '}
-                <span className="font-normal text-dim">({player.deathCount ?? 0} lần gục)</span>
+              <div className="font-mono text-[10px] font-bold uppercase text-dim">
+                Checkpoint
+              </div>
+              <div className="flex items-center gap-1 truncate font-mono text-xs font-extrabold text-main">
+                <PxShield size={12} color="var(--px-gold-text)" />
+                <span>
+                  Ch.{cp?.chapterNumber ?? 1}-{cp?.stageNumber ?? 1}
+                </span>
+                <span className="font-normal text-dim">
+                  ({player.deathCount ?? 0} lần gục)
+                </span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* NEW Visual Growth Charts Row: 14-Day SVG Chart + 28-Day Discipline Heatmap */}
-      <section className="studio-surface overflow-hidden">
+      {/* 14-Day Pixel Growth Chart + 28-Day Discipline Heatmap */}
+      <section className="rpg-pane relative overflow-hidden">
+        <PixelRivets />
         <div className="grid grid-cols-1 lg:grid-cols-12">
-          {/* Left: Biểu Đồ Tăng Trưởng 14 Ngày (Pixel SVG Dual-Metric Chart) */}
+          {/* Left: Biểu Đồ Tăng Trưởng 14 Ngày */}
           <div className="p-5 lg:col-span-7">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -319,22 +410,35 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
                   Biểu Đồ Tăng Trưởng 14 Ngày
                 </h3>
                 <p className="text-[11px] text-dim">
-                  Cột vàng: XP kiếm được · Cột xanh: Phút tập trung thực tế
+                  Cột vàng: XP kiếm được · Cột xanh lam: Phút tập trung thực tế
                 </p>
               </div>
               <div className="flex items-center gap-3 font-mono text-[10px] text-sub">
                 <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 bg-amber-400" /> XP
+                  <span
+                    className="h-2.5 w-2.5 border border-[var(--border-ink)]"
+                    style={{ backgroundColor: '#c99330' }}
+                  />{' '}
+                  XP
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 bg-cyan-400" /> Focus (phút)
+                  <span
+                    className="h-2.5 w-2.5 border border-[var(--border-ink)]"
+                    style={{ backgroundColor: '#3267a8' }}
+                  />{' '}
+                  Focus (phút)
                 </span>
               </div>
             </div>
 
-            <div className="rounded-[2px] border-2 p-3 studio-subtle studio-divider">
-              <svg viewBox="0 0 560 156" className="w-full" role="img" aria-label="14-day XP and Focus growth chart">
-                {/* Horizontal pixel gridlines */}
+            <div className="px-inset p-3">
+              <svg
+                viewBox="0 0 560 156"
+                shapeRendering="crispEdges"
+                className="w-full"
+                role="img"
+                aria-label="14-day XP and Focus growth chart"
+              >
                 {[20, 50, 80, 110].map((y) => (
                   <line
                     key={y}
@@ -347,12 +451,22 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
                     strokeDasharray="3 3"
                   />
                 ))}
-                <line x1="8" y1="126" x2="552" y2="126" stroke="var(--border-strong)" strokeWidth="2" />
+                <line
+                  x1="8"
+                  y1="126"
+                  x2="552"
+                  y2="126"
+                  stroke="var(--border-ink)"
+                  strokeWidth="2"
+                />
 
                 {chart14Days.map((day, idx) => {
                   const slotW = 544 / 14;
-                  const baseX = 8 + idx * slotW;
-                  const xpH = day.xpEarned > 0 ? Math.max(6, Math.round((day.xpEarned / max14Xp) * 100)) : 3;
+                  const baseX = Math.round(8 + idx * slotW);
+                  const xpH =
+                    day.xpEarned > 0
+                      ? Math.max(6, Math.round((day.xpEarned / max14Xp) * 100))
+                      : 3;
                   const focusH =
                     day.focusMinutes > 0
                       ? Math.max(6, Math.round((day.focusMinutes / max14Focus) * 100))
@@ -363,33 +477,50 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
                       <title>
                         {day.dateKey}: +{day.xpEarned} XP · {day.focusMinutes} phút focus
                       </title>
-                      {/* Amber XP Bar */}
+                      {/* Flat 16-bit Gold XP Bar */}
                       <rect
                         x={baseX + 5}
                         y={126 - xpH}
                         width={12}
                         height={xpH}
-                        fill={day.xpEarned > 0 ? '#f59e0b' : 'var(--border-strong)'}
-                        opacity={day.xpEarned > 0 ? 1 : 0.45}
+                        fill={day.xpEarned > 0 ? '#c99330' : 'var(--border-hairline)'}
                       />
-                      {/* Cyan Focus Bar */}
+                      {day.xpEarned > 0 && (
+                        <rect
+                          x={baseX + 5}
+                          y={126 - xpH}
+                          width={12}
+                          height={2}
+                          fill="#f0c46c"
+                        />
+                      )}
+                      {/* Flat 16-bit Cobalt Focus Bar */}
                       <rect
                         x={baseX + 19}
                         y={126 - focusH}
                         width={12}
                         height={focusH}
-                        fill={day.focusMinutes > 0 ? '#06b6d4' : 'var(--border-hairline)'}
-                        opacity={day.focusMinutes > 0 ? 0.9 : 0.45}
+                        fill={day.focusMinutes > 0 ? '#3267a8' : 'var(--border-hairline)'}
                       />
-                      {/* Date Label (every 2 days + Today) */}
+                      {day.focusMinutes > 0 && (
+                        <rect
+                          x={baseX + 19}
+                          y={126 - focusH}
+                          width={12}
+                          height={2}
+                          fill="#74ace8"
+                        />
+                      )}
+                      {/* Date Label */}
                       {(idx % 2 === 0 || day.isToday) && (
                         <text
-                          x={baseX + slotW / 2}
+                          x={Math.round(baseX + slotW / 2)}
                           y="144"
                           textAnchor="middle"
-                          className={`fill-current font-mono text-[9px] ${
-                            day.isToday ? 'font-bold text-amber-400' : 'text-dim'
-                          }`}
+                          fill={day.isToday ? 'var(--px-gold-text)' : 'var(--text-muted)'}
+                          fontSize="9"
+                          fontWeight={day.isToday ? '700' : '500'}
+                          fontFamily="JetBrains Mono, monospace"
                         >
                           {day.shortLabel}
                         </text>
@@ -412,23 +543,25 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
                   Ổn định {consistency28Pct}% ({consistent28Count}/28 ngày)
                 </p>
               </div>
-              <span className="rounded-[2px] border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-400">
+              <span className="rounded-none border-2 border-[var(--border-ink)] bg-[#2e8b57] px-2 py-0.5 font-mono text-[11px] font-bold text-white">
                 {consistency28Pct}%
               </span>
             </div>
 
-            <div className="rounded-[2px] border-2 p-3 studio-subtle studio-divider">
+            <div className="px-inset p-3">
               <div className="grid grid-cols-7 gap-1.5">
                 {heatmap28Days.map((cell) => {
-                  let cls = 'studio-divider bg-[var(--bg-surface)] text-dim';
+                  let cls =
+                    'bg-[#dfd1b5] text-[#6e5c45] dark:bg-[#182921] dark:text-[#7c9c8b]';
                   if (cell.isRestDay) {
-                    cls = 'border-teal-500/70 bg-teal-500/20 text-teal-300';
+                    cls = 'bg-[#3267a8] text-white';
                   } else if (cell.questsCompleted >= 5) {
-                    cls = 'border-amber-400 bg-amber-500/35 text-amber-200';
+                    cls = 'bg-[#c99330] text-[#140e04]';
                   } else if (cell.questsCompleted >= 3) {
-                    cls = 'border-emerald-500/80 bg-emerald-500/35 text-emerald-200';
+                    cls = 'bg-[#2e8b57] text-white dark:bg-[#38a169] dark:text-white';
                   } else if (cell.questsCompleted >= 1) {
-                    cls = 'border-emerald-700/80 bg-emerald-900/50 text-emerald-300';
+                    cls =
+                      'bg-[#7ab892] text-[#0e2a1b] dark:bg-[#224a34] dark:text-[#b7e0c6]';
                   }
 
                   return (
@@ -439,34 +572,51 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
                           ? 'Grace Day (Nghỉ chủ động)'
                           : `${cell.questsCompleted} nhiệm vụ · ${cell.focusMinutes}p focus`
                       }`}
-                      className={`flex h-9 flex-col items-center justify-center rounded-[2px] border-2 font-mono text-[9px] leading-none ${cls} ${
-                        cell.isToday ? 'ring-1 ring-amber-400' : ''
+                      className={`flex h-9 flex-col items-center justify-center rounded-none border-2 border-[var(--border-ink)] font-mono text-[9px] leading-none ${cls} ${
+                        cell.isToday
+                          ? 'outline outline-2 outline-offset-1 outline-[var(--px-gold)]'
+                          : ''
                       }`}
                     >
                       <span className="font-bold">{cell.dateKey.slice(8)}</span>
-                      <span className="mt-0.5 text-[8px] opacity-85">
-                        {cell.isRestDay ? 'REST' : cell.questsCompleted > 0 ? `${cell.questsCompleted}` : '·'}
+                      <span className="mt-0.5 text-[8px] opacity-90">
+                        {cell.isRestDay
+                          ? 'REST'
+                          : cell.questsCompleted > 0
+                          ? `${cell.questsCompleted}`
+                          : '·'}
                       </span>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-2 font-mono text-[10px] text-dim studio-divider">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t-2 pt-2 font-mono text-[10px] text-dim studio-divider">
                 <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 border border-slate-600 bg-[var(--bg-surface)]" /> 0
+                  <span className="h-2.5 w-2.5 border border-[var(--border-ink)] bg-[#dfd1b5] dark:bg-[#182921]" />{' '}
+                  0
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 bg-teal-500/50" /> Grace
+                  <span
+                    className="h-2.5 w-2.5 border border-[var(--border-ink)]"
+                    style={{ backgroundColor: '#3267a8' }}
+                  />{' '}
+                  Grace
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 bg-emerald-800" /> 1–2
+                  <span className="h-2.5 w-2.5 border border-[var(--border-ink)] bg-[#7ab892] dark:bg-[#224a34]" />{' '}
+                  1–2
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 bg-emerald-500" /> 3–4
+                  <span className="h-2.5 w-2.5 border border-[var(--border-ink)] bg-[#2e8b57] dark:bg-[#38a169]" />{' '}
+                  3–4
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 bg-amber-400" /> 5+
+                  <span
+                    className="h-2.5 w-2.5 border border-[var(--border-ink)]"
+                    style={{ backgroundColor: '#c99330' }}
+                  />{' '}
+                  5+
                 </span>
               </div>
             </div>
@@ -474,33 +624,55 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
         </div>
       </section>
 
-      {/* 6-Axis Hero Balance Section & Passive Multipliers */}
-      <section className="studio-surface overflow-hidden">
+      {/* 6-Stat Pixel Cards & 6-Axis Radar Chart */}
+      <section className="rpg-window relative overflow-hidden">
+        <PixelRivets />
         <div className="grid grid-cols-1 lg:grid-cols-12">
           <div className="p-5 lg:col-span-7">
-            <h3 className="mb-3 font-display text-base font-extrabold text-main">
-              6 Chỉ Số Anh Hùng
-            </h3>
-            <div className="divide-y-2 studio-divider">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="font-display text-base font-extrabold text-main">
+                6 Chỉ Số Anh Hùng
+              </h3>
+              <span className="font-pixel text-[9px] text-[var(--px-gold-text)]">
+                16-BIT ATTRIBUTES
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               {STAT_META.map((stat) => {
                 const val = player.stats[stat.key] || 0;
                 const barPct = Math.min(100, Math.round((val / maxStatValue) * 100));
+                const StatIcon = stat.Icon;
                 return (
-                  <div key={stat.key} className="py-2.5">
+                  <div key={stat.key} className="px-inset p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="font-pixel text-[10px] font-bold" style={{ color: stat.color }}>
-                          {stat.key}
-                        </span>{' '}
-                        <span className="text-xs font-bold text-main">{stat.label}</span>
-                        <span className="ml-2 text-xs text-dim">— {stat.desc}</span>
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-none border-2 border-[var(--border-ink)] bg-[var(--bg-surface)]">
+                          <StatIcon size={20} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="font-pixel text-[11px] font-bold"
+                              style={{ color: stat.textVar }}
+                            >
+                              {stat.key}
+                            </span>
+                            <span className="truncate text-xs font-bold text-main">
+                              {stat.label}
+                            </span>
+                          </div>
+                          <p className="truncate text-[10px] text-dim">{stat.desc}</p>
+                        </div>
                       </div>
-                      <span className="shrink-0 font-mono text-sm font-bold text-main">{val}</span>
+                      <span className="shrink-0 font-pixel text-sm font-bold text-main">
+                        {val}
+                      </span>
                     </div>
-                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-[2px] border studio-divider studio-subtle">
+                    <div className="rpg-bar-track mt-2.5 h-2.5 w-full">
                       <div
-                        className="h-full transition-all duration-500"
-                        style={{ width: `${barPct}%`, backgroundColor: stat.color }}
+                        className="h-full"
+                        style={{ width: `${barPct}%`, backgroundColor: stat.barHex }}
                       />
                     </div>
                   </div>
@@ -511,26 +683,30 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
             {/* Skill Growth Passive Multipliers */}
             {growthBonuses && (
               <div className="mt-4 border-t-2 pt-3.5 studio-divider">
-                <p className="mb-2 text-xs font-bold text-sub">Hệ Số Bổ Trợ Từ Cây Kĩ Năng:</p>
-                <div className="flex flex-wrap gap-2 font-mono text-[11px]">
-                  <span className="rounded-[2px] border px-2 py-1 text-indigo-400 studio-subtle studio-divider">
+                <p className="mb-2 text-xs font-bold text-sub">
+                  Hệ Số Bổ Trợ Từ Cây Kĩ Năng:
+                </p>
+                <div className="flex flex-wrap gap-2 font-mono text-[11px] font-bold">
+                  <span className="px-inset px-2.5 py-1 text-[var(--px-plum-text)]">
                     +{growthBonuses.xpBonusPct}% XP
                   </span>
-                  <span className="rounded-[2px] border px-2 py-1 text-amber-400 studio-subtle studio-divider">
+                  <span className="px-inset px-2.5 py-1 text-[var(--px-gold-text)]">
                     +{growthBonuses.goldBonusPct}% Gold
                   </span>
-                  <span className="rounded-[2px] border px-2 py-1 text-cyan-400 studio-subtle studio-divider">
+                  <span className="px-inset px-2.5 py-1 text-[var(--px-blue-text)]">
                     +{growthBonuses.masteryBonusPct}% Mastery
                   </span>
-                  <span className="rounded-[2px] border px-2 py-1 text-rose-400 studio-subtle studio-divider">
-                    Max {growthBonuses.maxHearts} ❤️
+                  <span className="px-inset inline-flex items-center gap-1 px-2.5 py-1 text-[var(--px-red-text)]">
+                    Max {growthBonuses.maxHearts} <PxStatVit size={12} />
                   </span>
                 </div>
               </div>
             )}
 
             <div className="mt-4 border-t-2 pt-3.5 studio-divider">
-              <p className="mb-2 text-xs font-bold text-sub">Danh hiệu đã mở khóa (bấm để trang bị):</p>
+              <p className="mb-2 text-xs font-bold text-sub">
+                Danh hiệu đã mở khóa (bấm để trang bị):
+              </p>
               <div className="flex flex-wrap gap-2">
                 {player.unlockedTitles.map((t) => {
                   const active = t === player.activeTitle;
@@ -539,11 +715,11 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
                       key={t}
                       type="button"
                       onClick={() => onSelectTitle(t)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold ${
+                      className={`inline-flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs font-semibold ${
                         active ? 'btn-primary' : 'btn-secondary'
                       }`}
                     >
-                      {active && <CheckCircle2 className="h-3.5 w-3.5" />}
+                      {active && <PxCheck size={12} />}
                       <span>{t}</span>
                     </button>
                   );
@@ -554,70 +730,96 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
 
           <div className="flex flex-col items-center justify-between border-t-2 p-5 lg:col-span-5 lg:border-l-2 lg:border-t-0 studio-divider">
             <div className="w-full">
-              <h3 className="font-display text-base font-extrabold text-main">Biểu Đồ Cân Bằng 6 Trục</h3>
-              <p className="text-xs text-dim">Phản ánh phát triển toàn diện trí tuệ, thể lực và ảnh hưởng</p>
+              <h3 className="font-display text-base font-extrabold text-main">
+                Biểu Đồ Cân Bằng 6 Trục
+              </h3>
+              <p className="text-xs text-dim">
+                Phản ánh phát triển toàn diện trí tuệ, thể lực và ảnh hưởng
+              </p>
             </div>
 
-            <svg viewBox={`0 0 ${svgW} ${svgH}`} className="my-2 w-full max-w-[340px]">
-              {[0.25, 0.5, 0.75, 1].map((scale) => {
-                const ringPts = STAT_META.map((_, idx) => {
-                  const angle = (Math.PI * 2 * idx) / STAT_META.length - Math.PI / 2;
-                  const r = maxRadius * scale;
-                  return `${centerX + Math.cos(angle) * r},${centerY + Math.sin(angle) * r}`;
-                }).join(' ');
-                return (
-                  <polygon
-                    key={scale}
-                    points={ringPts}
-                    fill="none"
-                    stroke="var(--border-strong)"
+            <div className="px-inset my-3 flex w-full items-center justify-center p-2">
+              <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full max-w-[330px]">
+                {[0.25, 0.5, 0.75, 1].map((scale) => {
+                  const ringPts = STAT_META.map((_, idx) => {
+                    const angle = (Math.PI * 2 * idx) / STAT_META.length - Math.PI / 2;
+                    const r = maxRadius * scale;
+                    return `${Math.round(centerX + Math.cos(angle) * r)},${Math.round(
+                      centerY + Math.sin(angle) * r
+                    )}`;
+                  }).join(' ');
+                  return (
+                    <polygon
+                      key={scale}
+                      points={ringPts}
+                      fill="none"
+                      stroke="var(--border-strong)"
+                      strokeWidth="1.5"
+                    />
+                  );
+                })}
+                {points.map((p) => (
+                  <line
+                    key={p.key}
+                    x1={centerX}
+                    y1={centerY}
+                    x2={p.ax}
+                    y2={p.ay}
+                    stroke="var(--border-hairline)"
                     strokeWidth="1"
                   />
-                );
-              })}
-              {points.map((p) => (
-                <line
-                  key={p.key}
-                  x1={centerX}
-                  y1={centerY}
-                  x2={p.ax}
-                  y2={p.ay}
-                  stroke="var(--border-hairline)"
-                  strokeWidth="1"
+                ))}
+                <polygon
+                  points={polygonPoints}
+                  fill="#c99330"
+                  fillOpacity="0.24"
+                  stroke="#c99330"
+                  strokeWidth="2.5"
                 />
-              ))}
-              <polygon
-                points={polygonPoints}
-                fill="rgba(245, 158, 11, 0.2)"
-                stroke="#f59e0b"
-                strokeWidth="2.5"
-              />
-              {points.map((p) => (
-                <g key={p.key}>
-                  <circle cx={p.x} cy={p.y} r="4.5" fill={p.color} stroke="#0b0e16" strokeWidth="1.5" />
-                  <text
-                    x={p.lx}
-                    y={p.ly}
-                    textAnchor={p.textAnchor}
-                    dominantBaseline="middle"
-                    className="fill-current font-mono text-[11px] font-bold text-main"
-                  >
-                    {p.key} ({p.value})
-                  </text>
-                </g>
-              ))}
-            </svg>
+                {points.map((p) => (
+                  <g key={p.key}>
+                    <rect
+                      x={p.x - 4}
+                      y={p.y - 4}
+                      width="8"
+                      height="8"
+                      fill={p.barHex}
+                      stroke="var(--border-ink)"
+                      strokeWidth="1.5"
+                      shapeRendering="crispEdges"
+                    />
+                    <text
+                      x={p.lx}
+                      y={p.ly}
+                      textAnchor={p.textAnchor}
+                      dominantBaseline="middle"
+                      fill="var(--text-primary)"
+                      fontSize="11"
+                      fontWeight="700"
+                      fontFamily="JetBrains Mono, monospace"
+                    >
+                      {p.key} ({p.value})
+                    </text>
+                  </g>
+                ))}
+              </svg>
+            </div>
 
             <div className="w-full border-t-2 pt-3 studio-divider">
               <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-main">
-                <Award className="h-4 w-4 text-amber-400" />
+                <PxStar size={14} />
                 <span>Thành Tựu ({player.achievements.length})</span>
               </div>
               <div className="space-y-1.5 text-xs text-sub">
                 {player.achievements.map((ach) => (
-                  <div key={ach.id} className="flex items-center justify-between gap-2">
+                  <div
+                    key={ach.id}
+                    className="px-inset flex items-center justify-between gap-2 px-2.5 py-1.5"
+                  >
                     <span className="font-medium text-main">{ach.title}</span>
-                    <span className="font-pixel text-[9px] text-amber-400">{ach.rarity}</span>
+                    <span className="font-pixel text-[9px] text-[var(--px-gold-text)]">
+                      {ach.rarity}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -627,16 +829,17 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
       </section>
 
       {/* Daily Reflections & Recent Snapshots Ledger */}
-      <section className="studio-surface p-5">
+      <section className="rpg-pane relative p-5">
+        <PixelRivets />
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <History className="h-4 w-4 text-amber-400" />
+            <PxScroll size={16} color="var(--px-gold-text)" />
             <h3 className="font-display text-base font-extrabold text-main">
               Nhật Ký Rèn Luyện &amp; Phản Tư Từng Ngày
             </h3>
           </div>
-          <span className="inline-flex items-center gap-1 font-mono text-xs text-dim">
-            <MessageSquareText className="h-3.5 w-3.5" />
+          <span className="inline-flex items-center gap-1.5 font-mono text-xs text-dim">
+            <PxBook size={13} />
             {dailySnapshots.filter((s) => Boolean(s.reflectionNote?.trim())).length} phản tư
           </span>
         </div>
@@ -646,7 +849,7 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
             Hoàn thành nhiệm vụ hoặc ghi nhật ký phản tư để bắt đầu lưu lịch sử theo ngày.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="px-inset overflow-x-auto p-2">
             <table className="w-full text-left font-mono text-xs">
               <thead className="border-b-2 text-dim studio-divider">
                 <tr>
@@ -662,29 +865,37 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
               <tbody className="divide-y-2 studio-divider">
                 {dailySnapshots.slice(0, 14).map((s) => (
                   <tr key={s.dateKey} className="align-top">
-                    <td className="whitespace-nowrap py-2 pr-2 font-semibold text-main">{s.dateKey}</td>
+                    <td className="whitespace-nowrap py-2 pr-2 font-semibold text-main">
+                      {s.dateKey}
+                    </td>
                     <td className="whitespace-nowrap py-2 pr-2">
                       {s.isRestDay ? (
-                        <span className="inline-flex items-center gap-1 rounded-[2px] border border-sky-500/40 bg-sky-500/15 px-1.5 py-0.5 font-sans text-[11px] font-semibold text-sky-300">
-                          <Moon className="h-3 w-3" /> Nghỉ chủ động
+                        <span className="inline-flex items-center gap-1 rounded-none border-2 border-[var(--border-ink)] bg-[#3267a8] px-1.5 py-0.5 font-sans text-[11px] font-semibold text-white">
+                          <PxMoon size={11} color="#ffffff" /> Nghỉ chủ động
                         </span>
                       ) : s.questsCompleted > 0 ? (
-                        <span className="inline-flex items-center gap-1 rounded-[2px] border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 font-sans text-[11px] font-semibold text-emerald-300">
-                          <Flame className="h-3 w-3" /> Thực chiến
+                        <span className="inline-flex items-center gap-1 rounded-none border-2 border-[var(--border-ink)] bg-[#2e8b57] px-1.5 py-0.5 font-sans text-[11px] font-semibold text-white">
+                          <PxFlame size={11} /> Thực chiến
                         </span>
                       ) : (
-                        <span className="inline-flex items-center rounded-[2px] border px-1.5 py-0.5 font-sans text-[11px] text-dim studio-divider">
+                        <span className="inline-flex items-center rounded-none border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-1.5 py-0.5 font-sans text-[11px] text-dim">
                           Chưa hoàn thành
                         </span>
                       )}
                     </td>
                     <td className="py-2 pr-2 text-sub">{s.questsCompleted}</td>
                     <td className="py-2 pr-2 text-sub">{s.focusMinutes}p</td>
-                    <td className="py-2 pr-2 text-emerald-400">+{s.xpEarned}</td>
-                    <td className="py-2 pr-2 text-amber-400">+{s.masteryEarned}</td>
+                    <td className="py-2 pr-2 font-bold text-[var(--px-green-text)]">
+                      +{s.xpEarned}
+                    </td>
+                    <td className="py-2 pr-2 font-bold text-[var(--px-gold-text)]">
+                      +{s.masteryEarned}
+                    </td>
                     <td className="min-w-[160px] py-2 font-sans text-xs text-sub">
                       {s.reflectionNote?.trim() ? (
-                        <span className="italic text-main">&ldquo;{s.reflectionNote}&rdquo;</span>
+                        <span className="italic text-main">
+                          &ldquo;{s.reflectionNote}&rdquo;
+                        </span>
                       ) : (
                         <span className="text-dim">—</span>
                       )}

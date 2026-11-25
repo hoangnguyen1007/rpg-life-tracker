@@ -1,35 +1,33 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Activity,
-  Award,
-  BookOpen,
-  Brain,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Coins,
-  Compass,
-  Crown,
-  Flame,
-  Gem,
-  Heart,
-  Infinity as InfinityIcon,
-  Lock,
-  RotateCcw,
-  Shield,
-  ShieldCheck,
-  Sparkles,
-  Target,
-  Unlock,
-  Users,
-  Zap,
-} from 'lucide-react';
 import type {
   PlayerGrowthBonuses,
   PlayerState,
   SkillBranchId,
   SkillNode,
 } from '../types/system';
+import {
+  PixelRivets,
+  PxBolt,
+  PxBook,
+  PxCheck,
+  PxChevron,
+  PxCoin,
+  PxCrown,
+  PxFlame,
+  PxGem,
+  PxLock,
+  PxReset,
+  PxShield,
+  PxSkillTree,
+  PxSparkle,
+  PxStar,
+  PxStatAgi,
+  PxStatCha,
+  PxStatInt,
+  PxStatPer,
+  PxStatVit,
+  PxTarget,
+} from './PixelIcons';
 
 interface SkillTreeViewProps {
   player: PlayerState;
@@ -56,11 +54,10 @@ const BRANCH_META: Record<
     title: string;
     subtitle: string;
     stat: string;
-    accentText: string;
-    borderActive: string;
-    bgSoft: string;
-    lineColor: string;
-    badgeCls: string;
+    hex: string;
+    fillVar: string;
+    textVar: string;
+    badgeText: string;
   }
 > = {
   intellect: {
@@ -68,92 +65,92 @@ const BRANCH_META: Record<
     title: 'Trí Tuệ & Hệ Thống',
     subtitle: 'Tư duy nguyên lý, phân tích & kiến trúc chiến lược',
     stat: 'INT',
-    accentText: 'text-amber-400',
-    borderActive: 'border-amber-500',
-    bgSoft: 'bg-amber-500/10',
-    lineColor: '#f59e0b',
-    badgeCls: 'bg-amber-500/15 text-amber-300 border-amber-500/40',
+    hex: '#c99330',
+    fillVar: 'var(--px-gold)',
+    textVar: 'var(--px-gold-text)',
+    badgeText: '#140e04',
   },
   knowledge: {
     code: 'PER',
     title: 'Tri Thức & Học Sâu',
     subtitle: 'Active Recall, Spaced Repetition & tổng hợp liên ngành',
     stat: 'PER',
-    accentText: 'text-cyan-400',
-    borderActive: 'border-cyan-500',
-    bgSoft: 'bg-cyan-500/10',
-    lineColor: '#06b6d4',
-    badgeCls: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40',
+    hex: '#3267a8',
+    fillVar: 'var(--px-blue)',
+    textVar: 'var(--px-blue-text)',
+    badgeText: '#ffffff',
   },
   execution: {
     code: 'AGI',
     title: 'Kỷ Luật & Thực Thi',
     subtitle: 'Khởi động 2p, Timeboxing, Nếu-Thì & Ultradian Flow',
     stat: 'AGI',
-    accentText: 'text-violet-400',
-    borderActive: 'border-violet-500',
-    bgSoft: 'bg-violet-500/10',
-    lineColor: '#8b5cf6',
-    badgeCls: 'bg-violet-500/15 text-violet-300 border-violet-500/40',
+    hex: '#73499e',
+    fillVar: 'var(--px-plum)',
+    textVar: 'var(--px-plum-text)',
+    badgeText: '#ffffff',
   },
   vitality: {
     code: 'STR/VIT',
     title: 'Thể Lực & Sinh Lực',
     subtitle: 'Giấc ngủ, tải trọng tăng tiến, NSDR & thêm Trái Tim',
     stat: 'VIT',
-    accentText: 'text-emerald-400',
-    borderActive: 'border-emerald-500',
-    bgSoft: 'bg-emerald-500/10',
-    lineColor: '#10b981',
-    badgeCls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40',
+    hex: '#2e8b57',
+    fillVar: 'var(--px-green)',
+    textVar: 'var(--px-green-text)',
+    badgeText: '#ffffff',
   },
   influence: {
     code: 'CHA',
     title: 'Giao Tiếp & Di Sản',
     subtitle: 'Diễn đạt, lắng nghe, thuyết phục & kiến tạo giá trị',
     stat: 'CHA',
-    accentText: 'text-rose-400',
-    borderActive: 'border-rose-500',
-    bgSoft: 'bg-rose-500/10',
-    lineColor: '#f43f5e',
-    badgeCls: 'bg-rose-500/15 text-rose-300 border-rose-500/40',
+    hex: '#b83a4b',
+    fillVar: 'var(--px-red)',
+    textVar: 'var(--px-red-text)',
+    badgeText: '#ffffff',
   },
 };
 
-function renderSkillIcon(icon?: string, branchId?: SkillBranchId, className = 'h-4 w-4') {
+function renderSkillIcon(
+  icon?: string,
+  branchId?: SkillBranchId,
+  size = 18,
+  color = 'currentColor'
+) {
   switch (icon) {
     case 'brain':
-      return <Brain className={className} />;
+      return <PxStatInt size={size} />;
     case 'compass':
-      return <Compass className={className} />;
+      return <PxStatPer size={size} color="var(--px-blue-text)" />;
     case 'book':
-      return <BookOpen className={className} />;
+      return <PxBook size={size} color={color} />;
     case 'zap':
     case 'bolt':
-      return <Zap className={className} />;
+      return <PxBolt size={size} color={color} />;
     case 'flame':
-      return <Flame className={className} />;
+      return <PxFlame size={size} />;
     case 'heart':
-      return <Heart className={className} />;
+      return <PxStatVit size={size} />;
     case 'shield':
-      return <Shield className={className} />;
+      return <PxShield size={size} color={color} />;
     case 'activity':
-      return <Activity className={className} />;
+      return <PxStatAgi size={size} color="var(--px-green-text)" />;
     case 'users':
-      return <Users className={className} />;
+      return <PxStatCha size={size} color="var(--px-plum-text)" />;
     case 'target':
-      return <Target className={className} />;
+      return <PxTarget size={size} color="var(--px-green-text)" />;
     case 'crown':
-      return <Crown className={className} />;
+      return <PxCrown size={size} />;
     case 'award':
-      return <Award className={className} />;
+      return <PxStar size={size} color="var(--px-gold)" />;
     default:
-      if (branchId === 'intellect') return <Brain className={className} />;
-      if (branchId === 'knowledge') return <BookOpen className={className} />;
-      if (branchId === 'execution') return <Zap className={className} />;
-      if (branchId === 'vitality') return <Heart className={className} />;
-      if (branchId === 'influence') return <Users className={className} />;
-      return <Sparkles className={className} />;
+      if (branchId === 'intellect') return <PxStatInt size={size} />;
+      if (branchId === 'knowledge') return <PxBook size={size} color={color} />;
+      if (branchId === 'execution') return <PxBolt size={size} color={color} />;
+      if (branchId === 'vitality') return <PxStatVit size={size} />;
+      if (branchId === 'influence') return <PxStatCha size={size} color="var(--px-plum-text)" />;
+      return <PxSparkle size={size} color="var(--px-gold)" />;
   }
 }
 
@@ -265,14 +262,23 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
     const isSelected = selectedSkill?.id === skill.id;
     const isAscended = ascTier >= 2;
 
-    let frameCls = 'border-slate-700/80 studio-subtle opacity-65 hover:opacity-95';
-    if (isAscended) {
-      frameCls = 'border-amber-400 bg-amber-500/15';
-    } else if (isUnlocked) {
-      frameCls = `${meta.borderActive} ${meta.bgSoft}`;
-    } else if (canUnlockNow) {
-      frameCls = 'border-amber-400 bg-amber-500/10';
-    }
+    const stripeColor = isAscended || canUnlockNow || canAscendNow
+      ? 'var(--px-gold)'
+      : isUnlocked
+        ? meta.fillVar
+        : 'var(--border-strong)';
+
+    const plaqueBg = isUnlocked || canUnlockNow ? 'var(--bg-surface-2)' : 'var(--bg-subtle)';
+    const plaqueShadow = isAscended
+      ? 'inset 2px 2px 0 var(--px-gold), inset -2px -2px 0 var(--border-bevel-lo), 2px 2px 0 rgba(0,0,0,0.4)'
+      : isUnlocked || canUnlockNow
+        ? 'inset 2px 2px 0 var(--border-bevel-hi), inset -2px -2px 0 var(--border-bevel-lo), 2px 2px 0 rgba(0,0,0,0.32)'
+        : 'inset 2px 2px 0 var(--border-bevel-lo), inset -1px -1px 0 var(--border-bevel-hi)';
+
+    const practicePct = Math.min(
+      100,
+      Math.round(((skill.practiceXp || 0) / Math.max(1, skill.xpPerTier || 100)) * 100)
+    );
 
     return (
       <button
@@ -282,53 +288,72 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
           setSelectedId(skill.id);
           setErrorMsg(null);
         }}
-        className={`relative flex w-full flex-col items-center rounded-[2px] border-2 text-center transition ${
-          compact ? 'px-1.5 py-2' : 'px-3 py-3'
-        } ${frameCls} ${
-          isSelected
-            ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-[var(--bg-canvas)]'
-            : ''
-        } ${canUnlockNow || canAscendNow ? 'shadow-[0_0_0_1px_rgba(251,191,36,0.45)]' : ''}`}
+        className={`relative flex w-full flex-col items-center rounded-none border-2 border-[var(--border-ink)] text-center transition-transform active:translate-y-[1px] ${
+          compact ? 'px-1.5 pb-2 pt-3' : 'px-3 pb-3 pt-4'
+        } ${!isUnlocked && !canUnlockNow ? 'opacity-75 hover:opacity-100' : 'hover:brightness-105'}`}
+        style={{
+          backgroundColor: plaqueBg,
+          boxShadow: plaqueShadow,
+          outline: isSelected ? '2px solid var(--px-rivet)' : undefined,
+          outlineOffset: isSelected ? '2px' : undefined,
+        }}
       >
-        {/* Top-Right Status Badge */}
+        {/* Flat 3px Retro Branch / Ascension Top Strip */}
         <span
-          className={`font-pixel absolute -top-2 right-1 rounded-[2px] border px-1 py-0.5 text-[8px] font-bold leading-none ${
-            isAscended
-              ? 'border-amber-300 bg-amber-400 text-[#180f03]'
-              : canAscendNow
-                ? 'border-amber-300 bg-amber-500 text-[#180f03] animate-pulse'
-                : isUnlocked
-                  ? meta.badgeCls
-                  : canUnlockNow
-                    ? 'border-amber-400 bg-amber-500 text-[#180f03] animate-pulse'
-                    : 'border-slate-600 bg-slate-800 text-slate-300'
-          }`}
+          aria-hidden="true"
+          className="pointer-events-none absolute left-0 right-0 top-0 h-[3px]"
+          style={{ backgroundColor: stripeColor }}
+        />
+
+        {/* Top-Right 16-Bit Status Stamp */}
+        <span
+          className="font-pixel absolute -top-2.5 right-1 rounded-none border-2 border-[var(--border-ink)] px-1 py-0.5 text-[8px] font-bold leading-none"
+          style={
+            isAscended || canAscendNow || canUnlockNow
+              ? { backgroundColor: 'var(--px-gold)', color: '#140e04' }
+              : isUnlocked
+                ? { backgroundColor: meta.fillVar, color: meta.badgeText }
+                : { backgroundColor: 'var(--bg-muted)', color: 'var(--text-secondary)' }
+          }
         >
           {!isUnlocked
-            ? `LOCK · ${spCost}SP`
+            ? canUnlockNow
+              ? `MỞ · ${spCost}SP`
+              : `LOCK · ${spCost}SP`
             : isAscended
               ? `B${ascTier} · ∞`
               : `LV.${skill.masteryTier}/${rankCap}`}
         </span>
 
-        {/* Square Pixel Medallion */}
+        {/* Square Recessed Pixel Medallion */}
         <div
-          className={`mt-1 flex items-center justify-center rounded-[2px] border-2 ${
+          className={`px-inset mt-0.5 flex items-center justify-center rounded-none ${
             compact ? 'h-8 w-8' : 'h-10 w-10'
-          } ${
-            isAscended
-              ? 'border-amber-300 bg-amber-400/20 text-amber-300'
-              : isUnlocked
-                ? `${meta.borderActive} ${meta.accentText} bg-[var(--bg-surface)]`
-                : canUnlockNow
-                  ? 'border-amber-400 bg-amber-500/15 text-amber-300'
-                  : 'border-slate-700 bg-[var(--bg-subtle)] text-dim'
           }`}
+          style={{
+            boxShadow: isAscended
+              ? 'inset 0 0 0 2px var(--px-gold)'
+              : isUnlocked
+                ? `inset 0 0 0 2px ${meta.hex}`
+                : canUnlockNow
+                  ? 'inset 0 0 0 2px var(--px-gold)'
+                  : undefined,
+            color: isAscended || canUnlockNow
+              ? 'var(--px-gold-text)'
+              : isUnlocked
+                ? meta.textVar
+                : 'var(--text-muted)',
+          }}
         >
           {!isUnlocked && !canUnlockNow ? (
-            <Lock className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+            <PxLock size={compact ? 14 : 16} color="var(--text-muted)" />
           ) : (
-            renderSkillIcon(skill.icon, branchId, compact ? 'h-4 w-4' : 'h-5 w-5')
+            renderSkillIcon(
+              skill.icon,
+              branchId,
+              compact ? 16 : 20,
+              isAscended || canUnlockNow ? 'var(--px-gold-text)' : meta.textVar
+            )
           )}
         </div>
 
@@ -342,9 +367,14 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
         </div>
 
         {/* Power Rating & Small-Task Contributions */}
-        <div className={`mt-1 flex flex-wrap items-center justify-center gap-1 font-mono ${compact ? 'text-[9px]' : 'text-[10px]'}`}>
-          <span className="rounded-[2px] border border-amber-500/40 bg-amber-500/15 px-1 py-0.2 font-bold text-amber-400">
-            ⚡ {skill.powerRating || 0}
+        <div
+          className={`mt-1 flex flex-wrap items-center justify-center gap-1 font-mono ${
+            compact ? 'text-[9px]' : 'text-[10px]'
+          }`}
+        >
+          <span className="px-inset inline-flex items-center gap-0.5 rounded-none px-1 py-0.5 font-bold text-[var(--px-gold-text)]">
+            <PxBolt size={10} color="var(--px-gold)" />
+            {skill.powerRating || 0}
           </span>
           <span className="text-dim">{skill.tasksContributedCount || 0} task</span>
         </div>
@@ -353,34 +383,45 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
         <div className={`mt-1 font-mono ${compact ? 'text-[9px]' : 'text-[10px]'}`}>
           {!isUnlocked ? (
             canUnlockNow ? (
-              <span className="font-bold text-amber-400">Mở ngay ({spCost} SP)</span>
+              <span className="font-bold text-[var(--px-gold-text)]">Mở ngay ({spCost} SP)</span>
             ) : !prereqOk ? (
               <span className="text-dim">Khóa nhánh</span>
             ) : (
               <span className="text-dim">{spCost} SP</span>
             )
           ) : atCap ? (
-            <span className="font-bold text-amber-400">
-              {canAscendNow ? `Phá GH (${spCost} SP)` : `LV.${skill.masteryTier}/${rankCap} · Bậc ${ascTier} ∞`}
+            <span className="font-bold text-[var(--px-gold-text)]">
+              {canAscendNow
+                ? `Phá GH (${spCost} SP)`
+                : `LV.${skill.masteryTier}/${rankCap} · Bậc ${ascTier} ∞`}
             </span>
           ) : (
-            <span className={canUpgradeNow ? 'font-bold text-emerald-400' : 'text-dim'}>
-              LV.{skill.masteryTier}/${rankCap} · Bậc ${ascTier} ∞ · ${cost.gold}G
-              {cost.runestones > 0 ? `+${cost.runestones}💎` : ''}
+            <span
+              className={`inline-flex items-center justify-center gap-0.5 ${
+                canUpgradeNow ? 'font-bold text-[var(--px-green-text)]' : 'text-dim'
+              }`}
+            >
+              <span>
+                LV.{skill.masteryTier}/{rankCap} · {cost.gold}G
+              </span>
+              {cost.runestones > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  +{cost.runestones}
+                  <PxGem size={10} />
+                </span>
+              )}
             </span>
           )}
         </div>
 
-        {/* Slim Cyan Practice XP Mini-Bar */}
+        {/* 16-Bit Segmented Mastery Practice Bar */}
         <div className="mt-1.5 w-full">
-          <div className="h-1 w-full overflow-hidden rounded-[1px] bg-slate-800/80">
+          <div className="rpg-bar-track h-2 w-full rounded-none">
             <div
-              className="h-full bg-cyan-400 transition-all duration-300"
+              className="h-full transition-all duration-300"
               style={{
-                width: `${Math.min(
-                  100,
-                  Math.round(((skill.practiceXp || 0) / Math.max(1, skill.xpPerTier || 100)) * 100)
-                )}%`,
+                width: `${practicePct}%`,
+                backgroundColor: isAscended ? 'var(--px-gold)' : meta.fillVar,
               }}
             />
           </div>
@@ -406,8 +447,8 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
     const t4On = (t4?.masteryTier ?? 0) >= (t5?.minPrereqLevel ?? 3);
 
     const strokeFor = (active: boolean, child?: SkillNode) => {
-      if ((child?.ascensionTier ?? 0) >= 2) return '#fbbf24';
-      return active ? meta.lineColor : '#475569';
+      if ((child?.ascensionTier ?? 0) >= 2) return '#c99330';
+      return active ? meta.hex : 'var(--border-strong)';
     };
 
     const svgH = compact ? 'h-5' : 'h-7';
@@ -415,29 +456,48 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
     return (
       <div
         key={branchId}
-        className={`flex flex-col border-2 studio-divider bg-[var(--bg-surface)] ${
-          compact ? 'p-2.5' : 'p-4'
+        className={`relative flex flex-col rounded-none border-2 border-[var(--border-ink)] bg-[var(--bg-surface)] ${
+          compact ? 'p-2.5 pt-3.5' : 'p-4 pt-5'
         }`}
+        style={{
+          boxShadow:
+            'inset 2px 2px 0 var(--border-bevel-hi), inset -2px -2px 0 var(--border-bevel-lo)',
+        }}
       >
-        <div className="mb-2.5 border-b-2 pb-2 text-center studio-divider">
+        {/* Top Retro Branch Header Strip */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-0 right-0 top-0 h-[4px]"
+          style={{ backgroundColor: meta.fillVar }}
+        />
+
+        <div className="mb-3 border-b-2 pb-2 text-center studio-divider">
           <div className="flex items-center justify-center gap-1.5">
-            <span className={`font-pixel text-[9px] font-bold ${meta.accentText}`}>
-              [{meta.code}]
+            <span
+              className="font-pixel rounded-none border border-[var(--border-ink)] px-1.5 py-0.5 text-[8px] font-bold"
+              style={{ backgroundColor: meta.fillVar, color: meta.badgeText }}
+            >
+              {meta.code}
             </span>
             <h3 className={`font-display font-extrabold text-main ${compact ? 'text-xs' : 'text-sm'}`}>
               {meta.title}
             </h3>
           </div>
-          {!compact && <p className="mt-0.5 text-[11px] text-dim">{meta.subtitle}</p>}
+          {!compact && <p className="mt-1 text-[11px] text-dim">{meta.subtitle}</p>}
         </div>
 
         {/* Tier 1 */}
-        <div className={compact ? 'mx-auto w-[72%]' : 'mx-auto w-[46%]'}>
+        <div className={compact ? 'mx-auto w-[78%]' : 'mx-auto w-[46%]'}>
           {t1 && renderNodeMedallion(t1, branchId, compact)}
         </div>
 
         {/* T1 -> T2L / T2R Orthogonal Pixel Fork */}
-        <svg viewBox="0 0 200 28" className={`${svgH} w-full overflow-visible`} aria-hidden="true">
+        <svg
+          viewBox="0 0 200 28"
+          shapeRendering="crispEdges"
+          className={`${svgH} w-full overflow-visible`}
+          aria-hidden="true"
+        >
           <path
             d="M 100 0 L 100 12 L 50 12 L 50 28"
             fill="none"
@@ -461,7 +521,12 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
         </div>
 
         {/* T2L / T2R -> T3 Orthogonal Merge */}
-        <svg viewBox="0 0 200 28" className={`${svgH} w-full overflow-visible`} aria-hidden="true">
+        <svg
+          viewBox="0 0 200 28"
+          shapeRendering="crispEdges"
+          className={`${svgH} w-full overflow-visible`}
+          aria-hidden="true"
+        >
           <path
             d="M 50 0 L 50 14 L 100 14 L 100 28"
             fill="none"
@@ -479,12 +544,17 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
         </svg>
 
         {/* Tier 3 */}
-        <div className={compact ? 'mx-auto w-[76%]' : 'mx-auto w-[48%]'}>
+        <div className={compact ? 'mx-auto w-[80%]' : 'mx-auto w-[48%]'}>
           {t3 && renderNodeMedallion(t3, branchId, compact)}
         </div>
 
         {/* T3 -> T4 Vertical Line */}
-        <svg viewBox="0 0 200 24" className={`${compact ? 'h-4' : 'h-6'} w-full overflow-visible`} aria-hidden="true">
+        <svg
+          viewBox="0 0 200 24"
+          shapeRendering="crispEdges"
+          className={`${compact ? 'h-4' : 'h-6'} w-full overflow-visible`}
+          aria-hidden="true"
+        >
           <path
             d="M 100 0 L 100 24"
             fill="none"
@@ -495,12 +565,17 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
         </svg>
 
         {/* Tier 4 */}
-        <div className={compact ? 'mx-auto w-[78%]' : 'mx-auto w-[50%]'}>
+        <div className={compact ? 'mx-auto w-[82%]' : 'mx-auto w-[50%]'}>
           {t4 && renderNodeMedallion(t4, branchId, compact)}
         </div>
 
         {/* T4 -> T5 Infinite Apex Vertical Line */}
-        <svg viewBox="0 0 200 24" className={`${compact ? 'h-4' : 'h-6'} w-full overflow-visible`} aria-hidden="true">
+        <svg
+          viewBox="0 0 200 24"
+          shapeRendering="crispEdges"
+          className={`${compact ? 'h-4' : 'h-6'} w-full overflow-visible`}
+          aria-hidden="true"
+        >
           <path
             d="M 100 0 L 100 24"
             fill="none"
@@ -511,7 +586,7 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
         </svg>
 
         {/* Tier 5 Infinite Apex */}
-        <div className={compact ? 'mx-auto w-[84%]' : 'mx-auto w-[54%]'}>
+        <div className={compact ? 'mx-auto w-[86%]' : 'mx-auto w-[54%]'}>
           {t5 && renderNodeMedallion(t5, branchId, compact)}
         </div>
       </div>
@@ -520,41 +595,57 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Flush Top Growth Summary Strip */}
-      <section className="studio-surface p-4 sm:p-5">
+      {/* 16-Bit Summary Header Plaque */}
+      <section className="studio-surface relative rounded-none p-4 sm:p-5">
+        <PixelRivets />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
+              <div className="px-inset flex h-8 w-8 items-center justify-center rounded-none text-[var(--px-gold-text)]">
+                <PxSkillTree size={18} color="var(--px-gold-text)" />
+              </div>
               <h2 className="font-display text-base font-extrabold text-main sm:text-lg">
                 Cây Kĩ Năng Phát Triển Bản Thân (5 Nhánh × 5 Tầng · Phá Giới Hạn ∞)
               </h2>
-              <span className="font-pixel rounded-[2px] border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-400">
-                {growthBonuses.totalUnlockedNodes}/{treeSkills.length} MỞ · LV.{growthBonuses.totalSkillLevels} · {growthBonuses.totalAscensions} ∞
+              <span
+                className="font-pixel rounded-none border-2 border-[var(--border-ink)] px-2 py-0.5 text-[10px] font-bold"
+                style={{ backgroundColor: 'var(--px-gold)', color: '#140e04' }}
+              >
+                {growthBonuses.totalUnlockedNodes}/{treeSkills.length} MỞ · LV.
+                {growthBonuses.totalSkillLevels} · {growthBonuses.totalAscensions} ∞
               </span>
             </div>
-            <p className="mt-1 text-xs text-sub">
-              <strong className="text-amber-400">Bước 1 (SP):</strong> Mở khóa từng nút (Lv.1–5) &amp; Phá Giới Hạn (+5 cấp vô tận) →{' '}
-              <strong className="text-emerald-400">Bước 2 (Gold / 💎):</strong> Nâng cấp thực lực thụ động.
+            <p className="mt-1.5 text-xs text-sub">
+              <strong className="text-[var(--px-gold-text)]">Bước 1 (SP):</strong> Mở khóa từng nút
+              (Lv.1–5) &amp; Phá Giới Hạn (+5 cấp vô tận) →{' '}
+              <strong className="text-[var(--px-green-text)]">Bước 2 (Gold / Runestones):</strong>{' '}
+              Nâng cấp thực lực thụ động.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 rounded-[2px] border-2 border-amber-500/50 bg-amber-500/10 px-3 py-1.5">
-              <Sparkles className="h-4 w-4 text-amber-400" />
+            <div className="px-inset flex items-center gap-2 rounded-none px-3 py-1.5">
+              <PxSparkle size={16} color="var(--px-gold)" />
               <div className="leading-tight">
-                <div className="font-pixel text-xs font-bold text-amber-400">{sp} SP</div>
+                <div className="font-pixel text-xs font-bold text-[var(--px-gold-text)]">
+                  {sp} SP
+                </div>
                 <div className="font-mono text-[10px] text-dim">
                   Tổng: {player.totalSkillPointsEarned ?? sp} SP
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 rounded-[2px] border-2 px-3 py-1.5 studio-subtle studio-divider">
-              <Coins className="h-4 w-4 text-amber-400" />
-              <span className="font-mono text-xs font-bold text-main">{player.gold} G</span>
+            <div className="px-inset flex items-center gap-2 rounded-none px-3 py-1.5">
+              <PxCoin size={15} />
+              <span className="font-mono text-xs font-bold text-[var(--px-gold-text)]">
+                {player.gold.toLocaleString()} G
+              </span>
               <span className="text-dim">·</span>
-              <Gem className="h-4 w-4 text-cyan-400" />
-              <span className="font-mono text-xs font-bold text-main">{player.runestones}</span>
+              <PxGem size={15} />
+              <span className="font-mono text-xs font-bold text-[var(--px-blue-text)]">
+                {player.runestones.toLocaleString()}
+              </span>
             </div>
 
             {hasAnyInvested && (
@@ -562,10 +653,10 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
                 type="button"
                 disabled={busy}
                 onClick={() => handleAction(onRespecSkills)}
-                className="btn-secondary flex items-center gap-1.5 px-3 py-2 text-xs"
+                className="btn-secondary flex items-center gap-1.5 rounded-none px-3 py-2 text-xs"
                 title="Hoàn trả 100% SP (gồm cả Phá Giới Hạn), Gold & Runestones"
               >
-                <RotateCcw className="h-3.5 w-3.5" />
+                <PxReset size={14} />
                 <span>Tẩy Cây Kĩ Năng</span>
               </button>
             )}
@@ -573,22 +664,52 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
         </div>
 
         {/* Live Passive Growth Bonuses Ledger */}
-        <div className="mt-3.5 grid grid-cols-2 gap-1.5 border-t-2 pt-3 sm:grid-cols-4 lg:grid-cols-7 studio-divider">
+        <div className="mt-3.5 grid grid-cols-2 gap-2 border-t-2 pt-3 sm:grid-cols-4 lg:grid-cols-7 studio-divider">
           {[
-            { label: '+XP', val: `+${growthBonuses.xpBonusPct}%`, cls: 'text-indigo-400' },
-            { label: '+GOLD', val: `+${growthBonuses.goldBonusPct}%`, cls: 'text-amber-400' },
-            { label: '+MASTERY', val: `+${growthBonuses.masteryBonusPct}%`, cls: 'text-cyan-400' },
-            { label: '+FOCUS', val: `+${growthBonuses.focusBonusPct}%`, cls: 'text-violet-400' },
-            { label: '-FATIGUE', val: `-${growthBonuses.fatigueReductionPct}%`, cls: 'text-emerald-400' },
-            { label: '+BOSS', val: `+${growthBonuses.bossDamageBonusPct}%`, cls: 'text-rose-400' },
-            { label: 'MAX HEARTS', val: `${growthBonuses.maxHearts} ❤️`, cls: 'text-rose-400' },
+            { label: '+XP', val: `+${growthBonuses.xpBonusPct}%`, colorVar: 'var(--px-blue-text)' },
+            {
+              label: '+GOLD',
+              val: `+${growthBonuses.goldBonusPct}%`,
+              colorVar: 'var(--px-gold-text)',
+            },
+            {
+              label: '+MASTERY',
+              val: `+${growthBonuses.masteryBonusPct}%`,
+              colorVar: 'var(--px-blue-text)',
+            },
+            {
+              label: '+FOCUS',
+              val: `+${growthBonuses.focusBonusPct}%`,
+              colorVar: 'var(--px-plum-text)',
+            },
+            {
+              label: '-FATIGUE',
+              val: `-${growthBonuses.fatigueReductionPct}%`,
+              colorVar: 'var(--px-green-text)',
+            },
+            {
+              label: '+BOSS',
+              val: `+${growthBonuses.bossDamageBonusPct}%`,
+              colorVar: 'var(--px-red-text)',
+            },
+            {
+              label: 'MAX HEARTS',
+              val: `${growthBonuses.maxHearts}`,
+              colorVar: 'var(--px-red-text)',
+              heart: true,
+            },
           ].map((stat) => (
-            <div
-              key={stat.label}
-              className="rounded-[2px] border px-2 py-1.5 text-center studio-subtle studio-divider"
-            >
-              <div className={`font-pixel text-[9px] font-bold ${stat.cls}`}>{stat.label}</div>
-              <div className="mt-0.5 font-mono text-xs font-bold text-main">{stat.val}</div>
+            <div key={stat.label} className="px-inset rounded-none px-2 py-1.5 text-center">
+              <div
+                className="font-pixel text-[9px] font-bold"
+                style={{ color: stat.colorVar }}
+              >
+                {stat.label}
+              </div>
+              <div className="mt-0.5 flex items-center justify-center gap-1 font-mono text-xs font-bold text-main">
+                <span>{stat.val}</span>
+                {stat.heart && <PxStatVit size={12} />}
+              </div>
             </div>
           ))}
         </div>
@@ -598,7 +719,7 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
           <button
             type="button"
             onClick={() => setBranchView('all')}
-            className={`px-3 py-1.5 text-xs ${
+            className={`rounded-none px-3 py-1.5 text-xs ${
               branchView === 'all' ? 'btn-primary' : 'btn-secondary'
             }`}
           >
@@ -615,11 +736,16 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
                   const firstInBranch = treeSkills.find((s) => s.treeBranch === bId);
                   if (firstInBranch) setSelectedId(firstInBranch.id);
                 }}
-                className={`px-3 py-1.5 text-xs ${
+                className={`inline-flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs ${
                   branchView === bId ? 'btn-primary' : 'btn-secondary'
                 }`}
               >
-                {m.title}
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-2.5 w-2.5 shrink-0 border border-[var(--border-ink)]"
+                  style={{ backgroundColor: m.fillVar }}
+                />
+                <span>{m.title}</span>
               </button>
             );
           })}
@@ -627,17 +753,11 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
       </section>
 
       {/* Main Unified Frame: Blueprint (Left 8 cols) + Flush Inspector (Right 4 cols) */}
-      <section className="studio-surface overflow-hidden">
+      <section className="studio-surface relative overflow-hidden rounded-none">
+        <PixelRivets />
         <div className="grid grid-cols-1 xl:grid-cols-12">
           {/* Interactive 2D Pixel Skill Graph Blueprint */}
-          <div
-            className="overflow-x-auto p-3 sm:p-4 xl:col-span-8"
-            style={{
-              backgroundImage:
-                'radial-gradient(var(--tile-dot) 1px, transparent 1px)',
-              backgroundSize: '14px 14px',
-            }}
-          >
+          <div className="overflow-x-auto bg-[var(--bg-subtle)] p-3 sm:p-4 xl:col-span-8">
             {branchView === 'all' ? (
               <div className="grid min-w-[980px] grid-cols-5 gap-3">
                 {BRANCH_ORDER.map((bId) => renderBranchTree(bId, true))}
@@ -648,340 +768,395 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
           </div>
 
           {/* Flush Right Inspector Pane */}
-          <aside className="border-t-2 p-4 sm:p-5 xl:col-span-4 xl:border-l-2 xl:border-t-0 studio-divider">
-            {selectedSkill ? (() => {
-              const branchId: SkillBranchId =
-                (selectedSkill.treeBranch as SkillBranchId) || 'intellect';
-              const meta = BRANCH_META[branchId] || BRANCH_META.intellect;
-              const prereqOk = areSkillPrerequisitesMet(selectedSkill, skillMap);
-              const isUnlocked = Boolean(selectedSkill.unlocked);
-              const ascTier = selectedSkill.ascensionTier ?? (isUnlocked ? 1 : 0);
-              const rankCap = selectedSkill.unlockedRankCap ?? selectedSkill.maxTier ?? 5;
-              const atCap = isUnlocked && selectedSkill.masteryTier >= rankCap;
-              const spCost = computeUnlockOrAscendSpCost(selectedSkill);
-              const cost = computeSkillUpgradeCost(selectedSkill);
-              const canUnlock = !isUnlocked && prereqOk && sp >= spCost;
-              const canAscend = atCap && sp >= spCost;
-              const canUpgrade =
-                isUnlocked &&
-                !atCap &&
-                player.gold >= cost.gold &&
-                player.runestones >= cost.runestones;
+          <aside className="relative border-t-2 bg-[var(--bg-surface)] p-4 sm:p-5 xl:col-span-4 xl:border-l-2 xl:border-t-0 studio-divider">
+            <PixelRivets />
+            {selectedSkill
+              ? (() => {
+                  const branchId: SkillBranchId =
+                    (selectedSkill.treeBranch as SkillBranchId) || 'intellect';
+                  const meta = BRANCH_META[branchId] || BRANCH_META.intellect;
+                  const prereqOk = areSkillPrerequisitesMet(selectedSkill, skillMap);
+                  const isUnlocked = Boolean(selectedSkill.unlocked);
+                  const ascTier = selectedSkill.ascensionTier ?? (isUnlocked ? 1 : 0);
+                  const rankCap = selectedSkill.unlockedRankCap ?? selectedSkill.maxTier ?? 5;
+                  const atCap = isUnlocked && selectedSkill.masteryTier >= rankCap;
+                  const spCost = computeUnlockOrAscendSpCost(selectedSkill);
+                  const cost = computeSkillUpgradeCost(selectedSkill);
+                  const canUnlock = !isUnlocked && prereqOk && sp >= spCost;
+                  const canAscend = atCap && sp >= spCost;
+                  const canUpgrade =
+                    isUnlocked &&
+                    !atCap &&
+                    player.gold >= cost.gold &&
+                    player.runestones >= cost.runestones;
 
-              const minPrereqLv = selectedSkill.minPrereqLevel ?? 1;
-              const prereqNames = selectedSkill.prerequisiteIds
-                .map((pid) => skillMap.get(pid)?.name || pid)
-                .join(selectedSkill.requireAnyPrerequisite ? ' HOẶC ' : ' VÀ ');
+                  const minPrereqLv = selectedSkill.minPrereqLevel ?? 1;
+                  const prereqNames = selectedSkill.prerequisiteIds
+                    .map((pid) => skillMap.get(pid)?.name || pid)
+                    .join(selectedSkill.requireAnyPrerequisite ? ' HOẶC ' : ' VÀ ');
 
-              const ascensionLabel = !isUnlocked
-                ? 'Chưa mở'
-                : ascTier >= 2
-                  ? `Bậc ${toRoman(ascTier)} — Vô Cực (${rankCap - 4}–${rankCap})`
-                  : `Bậc I (1–${rankCap})`;
+                  const ascensionLabel = !isUnlocked
+                    ? 'Chưa mở'
+                    : ascTier >= 2
+                      ? `Bậc ${toRoman(ascTier)} — Vô Cực (${rankCap - 4}–${rankCap})`
+                      : `Bậc I (1–${rankCap})`;
 
-              const statPerLevel = selectedSkill.masteryTier >= 5 ? 1 : 2;
+                  const statPerLevel = selectedSkill.masteryTier >= 5 ? 1 : 2;
+                  const practicePct = Math.min(
+                    100,
+                    Math.round(
+                      ((selectedSkill.practiceXp || 0) /
+                        Math.max(1, selectedSkill.xpPerTier || 100)) *
+                        100
+                    )
+                  );
 
-              return (
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[2px] border-2 ${meta.borderActive} ${meta.bgSoft} ${meta.accentText}`}
-                    >
-                      {renderSkillIcon(selectedSkill.icon, branchId, 'h-5 w-5')}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span
-                          className={`font-pixel rounded-[2px] border px-1.5 py-0.5 text-[9px] font-bold uppercase ${meta.badgeCls}`}
-                        >
-                          Tầng {selectedSkill.tier || 1} · {selectedSkill.primaryStat}
-                        </span>
-                        <span className="font-mono text-[11px] font-bold text-amber-400">
-                          Lv.{selectedSkill.masteryTier}/{rankCap}
-                        </span>
-                        {selectedSkill.isInfiniteApex && (
-                          <span className="inline-flex items-center gap-0.5 rounded-[2px] border border-amber-400/50 bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">
-                            <InfinityIcon className="h-3 w-3" /> APEX
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="mt-1 font-display text-base font-extrabold text-main">
-                        {selectedSkill.name}
-                      </h3>
-                      <div className="mt-0.5 font-mono text-[11px] text-sub">
-                        {meta.title} · <strong className="text-amber-400">{ascensionLabel}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-xs leading-relaxed text-sub">{selectedSkill.description}</p>
-
-                  {/* Personal Growth Benefit Ledger */}
-                  <div className="rounded-[2px] border-2 p-3 studio-subtle studio-divider">
-                    <div className="font-pixel text-[9px] font-bold uppercase tracking-wider text-amber-400">
-                      HIỆU ỨNG PHÁT TRIỂN THỰC TẾ
-                    </div>
-                    <p className="mt-1 text-xs font-semibold text-main">
-                      {selectedSkill.effectSummary}
-                    </p>
-                    <p className="mt-1.5 font-mono text-[11px] text-dim">
-                      Mỗi cấp: +{statPerLevel} {selectedSkill.primaryStat} · +25 Mastery
-                      {selectedSkill.masteryTier > 0
-                        ? ` (Hiện đã cộng: +${selectedSkill.masteryTier * 25} Mastery)`
-                        : ''}
-                    </p>
-                  </div>
-
-                  {/* Infinite Skill Power & Practice XP Block */}
-                  <div className="space-y-2 rounded-[2px] border-2 border-cyan-500/40 bg-cyan-500/5 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-pixel text-[9px] font-bold uppercase tracking-wider text-cyan-400">
-                        Sức Mạnh Kĩ Năng (Scale Vô Hạn)
-                      </span>
-                      <span className="font-mono text-xs font-extrabold text-amber-400">
-                        ⚡ {selectedSkill.powerRating || 0} Power
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
-                      <div className="rounded-[2px] border px-2 py-1 studio-subtle studio-divider">
-                        <div className="text-dim">Tổng XP</div>
-                        <div className="font-bold text-main">{selectedSkill.totalPracticeXp || 0} XP</div>
-                      </div>
-                      <div className="rounded-[2px] border px-2 py-1 studio-subtle studio-divider">
-                        <div className="text-dim">Thời gian</div>
-                        <div className="font-bold text-main">{selectedSkill.totalPracticeMinutes || 0} phút</div>
-                      </div>
-                      <div className="rounded-[2px] border px-2 py-1 studio-subtle studio-divider">
-                        <div className="text-dim">Đóng góp</div>
-                        <div className="font-bold text-main">{selectedSkill.tasksContributedCount || 0} task</div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="mb-1 flex justify-between font-mono text-[10px]">
-                        <span className="text-cyan-400">Tiến độ +1 Bonus SP</span>
-                        <span className="font-bold text-main">
-                          {selectedSkill.practiceXp || 0} / {selectedSkill.xpPerTier || 100} XP
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-[2px] border studio-divider bg-[var(--bg-surface)]">
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-3">
                         <div
-                          className="h-full bg-cyan-400 transition-all duration-300"
+                          className="px-inset flex h-12 w-12 shrink-0 items-center justify-center rounded-none"
                           style={{
-                            width: `${Math.min(
-                              100,
-                              Math.round(
-                                ((selectedSkill.practiceXp || 0) /
-                                  Math.max(1, selectedSkill.xpPerTier || 100)) *
-                                  100
-                              )
-                            )}%`,
+                            boxShadow: `inset 0 0 0 2px ${meta.hex}`,
+                            color: meta.textVar,
                           }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Recent Small-Task Contributions */}
-                  <div className="rounded-[2px] border-2 p-3 studio-subtle studio-divider">
-                    <div className="mb-1.5 font-display text-xs font-extrabold text-main">
-                      Các Task Nhỏ Đóng Góp Gần Đây
-                    </div>
-                    {selectedSkill.recentContributions && selectedSkill.recentContributions.length > 0 ? (
-                      <div className="divide-y studio-divider">
-                        {selectedSkill.recentContributions.map((rc, idx) => (
-                          <div key={`${rc.dateKey}-${idx}`} className="flex items-center justify-between gap-2 py-1 font-mono text-[10px]">
-                            <span className="min-w-0 flex-1 truncate text-sub">
-                              {rc.dateKey} · <strong className="font-sans text-main">{rc.title}</strong>
+                        >
+                          {renderSkillIcon(selectedSkill.icon, branchId, 22, meta.textVar)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className="font-pixel rounded-none border border-[var(--border-ink)] px-1.5 py-0.5 text-[9px] font-bold uppercase"
+                              style={{ backgroundColor: meta.fillVar, color: meta.badgeText }}
+                            >
+                              Tầng {selectedSkill.tier || 1} · {selectedSkill.primaryStat}
                             </span>
-                            <span className="shrink-0 text-cyan-400">
-                              {rc.minutes}p · +{rc.xpAdded} XP
+                            <span className="font-mono text-[11px] font-bold text-[var(--px-gold-text)]">
+                              Lv.{selectedSkill.masteryTier}/{rankCap}
+                            </span>
+                            {selectedSkill.isInfiniteApex && (
+                              <span
+                                className="inline-flex items-center gap-1 rounded-none border border-[var(--border-ink)] px-1.5 py-0.5 font-pixel text-[8px] font-bold"
+                                style={{ backgroundColor: 'var(--px-gold)', color: '#140e04' }}
+                              >
+                                <PxStar size={10} color="#140e04" /> APEX ∞
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="mt-1 font-display text-base font-extrabold text-main">
+                            {selectedSkill.name}
+                          </h3>
+                          <div className="mt-0.5 font-mono text-[11px] text-sub">
+                            {meta.title} ·{' '}
+                            <strong className="text-[var(--px-gold-text)]">{ascensionLabel}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="text-xs leading-relaxed text-sub">
+                        {selectedSkill.description}
+                      </p>
+
+                      {/* Personal Growth Benefit Ledger */}
+                      <div className="px-inset rounded-none p-3">
+                        <div className="font-pixel text-[9px] font-bold uppercase tracking-wider text-[var(--px-gold-text)]">
+                          HIỆU ỨNG PHÁT TRIỂN THỰC TẾ
+                        </div>
+                        <p className="mt-1 text-xs font-semibold text-main">
+                          {selectedSkill.effectSummary}
+                        </p>
+                        <p className="mt-1.5 font-mono text-[11px] text-dim">
+                          Mỗi cấp: +{statPerLevel} {selectedSkill.primaryStat} · +25 Mastery
+                          {selectedSkill.masteryTier > 0
+                            ? ` (Hiện đã cộng: +${selectedSkill.masteryTier * 25} Mastery)`
+                            : ''}
+                        </p>
+                      </div>
+
+                      {/* Infinite Skill Power & Segmented Mastery Bar */}
+                      <div
+                        className="px-inset space-y-2.5 rounded-none p-3"
+                        style={{ borderLeft: `4px solid ${meta.fillVar}` }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-pixel text-[9px] font-bold uppercase tracking-wider text-[var(--px-blue-text)]">
+                            Sức Mạnh Kĩ Năng (Scale Vô Hạn)
+                          </span>
+                          <span className="inline-flex items-center gap-1 font-mono text-xs font-extrabold text-[var(--px-gold-text)]">
+                            <PxBolt size={13} color="var(--px-gold)" />
+                            {selectedSkill.powerRating || 0} Power
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
+                          <div className="rounded-none border-2 border-[var(--border-ink)] bg-[var(--bg-surface)] px-2 py-1">
+                            <div className="text-dim">Tổng XP</div>
+                            <div className="font-bold text-main">
+                              {selectedSkill.totalPracticeXp || 0} XP
+                            </div>
+                          </div>
+                          <div className="rounded-none border-2 border-[var(--border-ink)] bg-[var(--bg-surface)] px-2 py-1">
+                            <div className="text-dim">Thời gian</div>
+                            <div className="font-bold text-main">
+                              {selectedSkill.totalPracticeMinutes || 0} phút
+                            </div>
+                          </div>
+                          <div className="rounded-none border-2 border-[var(--border-ink)] bg-[var(--bg-surface)] px-2 py-1">
+                            <div className="text-dim">Đóng góp</div>
+                            <div className="font-bold text-main">
+                              {selectedSkill.tasksContributedCount || 0} task
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="mb-1 flex justify-between font-mono text-[10px]">
+                            <span className="font-bold text-[var(--px-blue-text)]">
+                              Tiến độ +1 Bonus SP
+                            </span>
+                            <span className="font-bold text-main">
+                              {selectedSkill.practiceXp || 0} / {selectedSkill.xpPerTier || 100} XP
                             </span>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-[11px] leading-relaxed text-dim">
-                        Hoàn thành các task hằng ngày liên quan đến nhánh này để tự động tích lũy Sức Mạnh &amp; nhận Bonus SP!
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Prerequisite Check */}
-                  {selectedSkill.prerequisiteIds.length > 0 && (
-                    <div
-                      className={`flex items-center gap-2 rounded-[2px] border-2 px-3 py-2 text-xs ${
-                        prereqOk
-                          ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
-                          : 'border-rose-500/50 bg-rose-500/10 text-rose-300'
-                      }`}
-                    >
-                      {prereqOk ? (
-                        <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      ) : (
-                        <Lock className="h-4 w-4 shrink-0" />
-                      )}
-                      <span>
-                        Điều kiện nhánh: <strong>{prereqNames}</strong> (đạt Lv.{minPrereqLv}+)
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Clear 2-Step Upgrade Console */}
-                  <div className="space-y-3 border-t-2 pt-3 studio-divider">
-                    {/* Bước 1 (SP) */}
-                    <div
-                      className={`rounded-[2px] border-2 p-3 ${
-                        !isUnlocked
-                          ? canUnlock
-                            ? 'border-amber-400 bg-amber-500/10'
-                            : 'studio-subtle studio-divider'
-                          : atCap
-                            ? canAscend
-                              ? 'border-amber-400 bg-amber-500/10'
-                              : 'border-amber-500/40 bg-amber-500/5'
-                            : 'border-emerald-500/45 bg-emerald-500/10'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                        <span className="flex items-center gap-1.5 text-main">
-                          {isUnlocked ? (
-                            <Unlock className="h-4 w-4 text-emerald-400" />
-                          ) : (
-                            <Lock className="h-4 w-4 text-amber-400" />
-                          )}
-                          Bước 1 (SP): {isUnlocked && atCap ? 'Phá Giới Hạn Vô Cực' : 'Mở Khóa Nâng Cấp'}
-                        </span>
-                        <span className="font-mono text-[11px] font-bold text-amber-400">
-                          {!isUnlocked
-                            ? `${spCost} SP`
-                            : atCap
-                              ? `${spCost} SP → Lv.${rankCap + 5}`
-                              : `ĐÃ MỞ (Lv.1–${rankCap})`}
-                        </span>
-                      </div>
-
-                      {!isUnlocked && (
-                        <button
-                          type="button"
-                          disabled={!canUnlock || busy}
-                          onClick={() => handleAction(() => onUnlockSkill(selectedSkill.id))}
-                          className="btn-primary mt-2.5 flex w-full items-center justify-center gap-1.5 py-2 text-xs"
-                        >
-                          <Sparkles className="h-4 w-4" />
-                          <span>
-                            {!prereqOk
-                              ? `Cần nhánh trên đạt Lv.${minPrereqLv}+`
-                              : sp < spCost
-                                ? `Thiếu ${spCost - sp} SP`
-                                : `Mở Khóa Nâng Cấp (-${spCost} SP)`}
-                          </span>
-                        </button>
-                      )}
-
-                      {isUnlocked && atCap && (
-                        <button
-                          type="button"
-                          disabled={!canAscend || busy}
-                          onClick={() => handleAction(() => onUnlockSkill(selectedSkill.id))}
-                          className="btn-arcane mt-2.5 flex w-full items-center justify-center gap-1.5 py-2 text-xs"
-                        >
-                          <InfinityIcon className="h-4 w-4" />
-                          <span>
-                            {sp < spCost
-                              ? `Cần thêm ${spCost - sp} SP để Phá Giới Hạn`
-                              : `Phá Giới Hạn Vô Cực (+5 Cấp -> Lv.${rankCap + 1}–${rankCap + 5} | -${spCost} SP)`}
-                          </span>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Bước 2 (Tiền tệ) */}
-                    <div
-                      className={`rounded-[2px] border-2 p-3 ${
-                        !isUnlocked
-                          ? 'opacity-60 studio-subtle studio-divider'
-                          : atCap
-                            ? 'border-amber-400/50 bg-amber-500/10'
-                            : 'border-cyan-500/50 bg-cyan-500/10'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                        <span className="flex items-center gap-1.5 text-main">
-                          <Coins className="h-4 w-4 text-amber-400" />
-                          Bước 2 (Tiền tệ): Nâng Cấp Thực Lực
-                        </span>
-                        <span className="font-mono text-xs text-amber-400">
-                          {atCap
-                            ? `ĐẠT TRẦN LV.${rankCap}`
-                            : `${cost.gold} G${cost.runestones > 0 ? ` · ${cost.runestones} 💎` : ''}`}
-                        </span>
-                      </div>
-
-                      {isUnlocked && atCap ? (
-                        <div className="mt-2 rounded-[2px] border border-amber-400/40 bg-amber-500/10 px-2.5 py-2 text-center text-[11px] font-semibold text-amber-300">
-                          Đã chạm ngưỡng Lv.{rankCap} — dùng SP ở Bước 1 để mở khóa +5 cấp tiếp theo!
+                          <div className="rpg-bar-track h-3 w-full rounded-none">
+                            <div
+                              className="h-full border-t border-white/25 transition-all duration-300"
+                              style={{
+                                width: `${practicePct}%`,
+                                backgroundColor: meta.fillVar,
+                              }}
+                            />
+                          </div>
                         </div>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={!canUpgrade || busy}
-                          onClick={() => handleAction(() => onUpgradeSkill(selectedSkill.id))}
-                          className="btn-emerald mt-2.5 flex w-full items-center justify-center gap-1.5 py-2 text-xs"
+                      </div>
+
+                      {/* Recent Small-Task Contributions */}
+                      <div className="px-inset rounded-none p-3">
+                        <div className="mb-1.5 font-display text-xs font-extrabold text-main">
+                          Các Task Nhỏ Đóng Góp Gần Đây
+                        </div>
+                        {selectedSkill.recentContributions &&
+                        selectedSkill.recentContributions.length > 0 ? (
+                          <div className="divide-y studio-divider">
+                            {selectedSkill.recentContributions.map((rc, idx) => (
+                              <div
+                                key={`${rc.dateKey}-${idx}`}
+                                className="flex items-center justify-between gap-2 py-1 font-mono text-[10px]"
+                              >
+                                <span className="min-w-0 flex-1 truncate text-sub">
+                                  {rc.dateKey} ·{' '}
+                                  <strong className="font-sans text-main">{rc.title}</strong>
+                                </span>
+                                <span className="shrink-0 font-bold text-[var(--px-blue-text)]">
+                                  {rc.minutes}p · +{rc.xpAdded} XP
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] leading-relaxed text-dim">
+                            Hoàn thành các task hằng ngày liên quan đến nhánh này để tự động tích
+                            lũy Sức Mạnh &amp; nhận Bonus SP!
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Prerequisite Check */}
+                      {selectedSkill.prerequisiteIds.length > 0 && (
+                        <div
+                          className="px-inset flex items-center gap-2 rounded-none px-3 py-2 text-xs"
+                          style={{
+                            borderLeft: `4px solid ${
+                              prereqOk ? 'var(--px-green)' : 'var(--px-red)'
+                            }`,
+                            color: prereqOk ? 'var(--px-green-text)' : 'var(--px-red-text)',
+                          }}
                         >
-                          <Zap className="h-4 w-4" />
+                          {prereqOk ? (
+                            <PxCheck size={14} color="var(--px-green-text)" />
+                          ) : (
+                            <PxLock size={14} color="var(--px-red-text)" />
+                          )}
                           <span>
-                            {!isUnlocked
-                              ? 'Hãy Mở Khóa ở Bước 1 trước'
-                              : player.gold < cost.gold
-                                ? `Thiếu ${cost.gold - player.gold} Gold`
-                                : player.runestones < cost.runestones
-                                  ? `Thiếu ${cost.runestones - player.runestones} Runestones`
-                                  : `Nâng Cấp Lv.${selectedSkill.masteryTier + 1} (-${cost.gold} G${
-                                      cost.runestones > 0 ? ` · -${cost.runestones} 💎` : ''
-                                    })`}
+                            Điều kiện nhánh: <strong>{prereqNames}</strong> (đạt Lv.{minPrereqLv}+)
                           </span>
-                        </button>
+                        </div>
                       )}
+
+                      {/* Clear 2-Step Upgrade Console */}
+                      <div className="space-y-3 border-t-2 pt-3 studio-divider">
+                        {/* Bước 1 (SP) */}
+                        <div
+                          className="px-inset rounded-none p-3"
+                          style={{
+                            borderLeft: `4px solid ${
+                              !isUnlocked
+                                ? canUnlock
+                                  ? 'var(--px-gold)'
+                                  : 'var(--border-strong)'
+                                : atCap
+                                  ? 'var(--px-gold)'
+                                  : 'var(--px-green)'
+                            }`,
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                            <span className="flex items-center gap-1.5 text-main">
+                              {isUnlocked ? (
+                                <PxCheck size={14} color="var(--px-green-text)" />
+                              ) : (
+                                <PxLock size={14} color="var(--px-gold-text)" />
+                              )}
+                              Bước 1 (SP):{' '}
+                              {isUnlocked && atCap ? 'Phá Giới Hạn Vô Cực' : 'Mở Khóa Nâng Cấp'}
+                            </span>
+                            <span className="font-mono text-[11px] font-bold text-[var(--px-gold-text)]">
+                              {!isUnlocked
+                                ? `${spCost} SP`
+                                : atCap
+                                  ? `${spCost} SP → Lv.${rankCap + 5}`
+                                  : `ĐÃ MỞ (Lv.1–${rankCap})`}
+                            </span>
+                          </div>
+
+                          {!isUnlocked && (
+                            <button
+                              type="button"
+                              disabled={!canUnlock || busy}
+                              onClick={() => handleAction(() => onUnlockSkill(selectedSkill.id))}
+                              className="btn-primary mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-none py-2 text-xs"
+                            >
+                              <PxSparkle size={14} color="#140e04" />
+                              <span>
+                                {!prereqOk
+                                  ? `Cần nhánh trên đạt Lv.${minPrereqLv}+`
+                                  : sp < spCost
+                                    ? `Thiếu ${spCost - sp} SP`
+                                    : `Mở Khóa Nâng Cấp (-${spCost} SP)`}
+                              </span>
+                            </button>
+                          )}
+
+                          {isUnlocked && atCap && (
+                            <button
+                              type="button"
+                              disabled={!canAscend || busy}
+                              onClick={() => handleAction(() => onUnlockSkill(selectedSkill.id))}
+                              className="btn-arcane mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-none py-2 text-xs"
+                            >
+                              <PxStar size={14} color="#ffffff" />
+                              <span>
+                                {sp < spCost
+                                  ? `Cần thêm ${spCost - sp} SP để Phá Giới Hạn`
+                                  : `Phá Giới Hạn Vô Cực (+5 Cấp -> Lv.${rankCap + 1}–${rankCap + 5} | -${spCost} SP)`}
+                              </span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Bước 2 (Tiền tệ) */}
+                        <div
+                          className={`px-inset rounded-none p-3 ${!isUnlocked ? 'opacity-65' : ''}`}
+                          style={{
+                            borderLeft: `4px solid ${
+                              !isUnlocked
+                                ? 'var(--border-strong)'
+                                : atCap
+                                  ? 'var(--px-gold)'
+                                  : 'var(--px-green)'
+                            }`,
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                            <span className="flex items-center gap-1.5 text-main">
+                              <PxCoin size={14} />
+                              Bước 2 (Tiền tệ): Nâng Cấp Thực Lực
+                            </span>
+                            <span className="inline-flex items-center gap-1 font-mono text-xs text-[var(--px-gold-text)]">
+                              {atCap ? (
+                                `ĐẠT TRẦN LV.${rankCap}`
+                              ) : (
+                                <>
+                                  <span>{cost.gold} G</span>
+                                  {cost.runestones > 0 && (
+                                    <>
+                                      <span>· {cost.runestones}</span>
+                                      <PxGem size={12} />
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </span>
+                          </div>
+
+                          {isUnlocked && atCap ? (
+                            <div className="mt-2 rounded-none border-2 border-[var(--border-ink)] bg-[var(--bg-surface)] px-2.5 py-2 text-center text-[11px] font-semibold text-[var(--px-gold-text)]">
+                              Đã chạm ngưỡng Lv.{rankCap} — dùng SP ở Bước 1 để mở khóa +5 cấp tiếp
+                              theo!
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={!canUpgrade || busy}
+                              onClick={() => handleAction(() => onUpgradeSkill(selectedSkill.id))}
+                              className="btn-emerald mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-none py-2 text-xs"
+                            >
+                              <PxBolt size={14} color="#ffffff" />
+                              <span>
+                                {!isUnlocked
+                                  ? 'Hãy Mở Khóa ở Bước 1 trước'
+                                  : player.gold < cost.gold
+                                    ? `Thiếu ${cost.gold - player.gold} Gold`
+                                    : player.runestones < cost.runestones
+                                      ? `Thiếu ${cost.runestones - player.runestones} Runestones`
+                                      : `Nâng Cấp Lv.${selectedSkill.masteryTier + 1} (-${cost.gold} G${
+                                          cost.runestones > 0
+                                            ? ` · -${cost.runestones} Runestones`
+                                            : ''
+                                        })`}
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {errorMsg && (
+                        <p
+                          className="px-inset rounded-none px-3 py-2 text-xs font-semibold text-[var(--px-red-text)]"
+                          style={{ borderLeft: '4px solid var(--px-red)' }}
+                        >
+                          {errorMsg}
+                        </p>
+                      )}
+
+                      <div className="px-inset rounded-none px-3 py-2 text-[11px] text-dim">
+                        <strong className="text-sub">Nguồn SP thực tế:</strong> Hoàn thành Quest
+                        (+1/+2 SP), Lên Cấp (+2 SP), Vượt ải Boss (+2/+4 SP).
+                      </div>
                     </div>
-                  </div>
-
-                  {errorMsg && (
-                    <p className="rounded-[2px] border-2 border-rose-500/50 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-                      {errorMsg}
-                    </p>
-                  )}
-
-                  <div className="rounded-[2px] border px-3 py-2 text-[11px] text-dim studio-subtle studio-divider">
-                    <strong>Nguồn SP thực tế:</strong> Hoàn thành Quest (+1/+2 SP), Lên Cấp (+2 SP), Vượt ải Boss (+2/+4 SP).
-                  </div>
-                </div>
-              );
-            })() : null}
+                  );
+                })()
+              : null}
           </aside>
         </div>
       </section>
 
       {/* Collapsible Custom Goal Skills Footer Table */}
       {customSkills.length > 0 && onVerifyCustomSkill && (
-        <section className="studio-surface overflow-hidden">
+        <section className="studio-surface relative overflow-hidden rounded-none">
+          <PixelRivets />
           <button
             type="button"
             onClick={() => setShowCustomSkills((v) => !v)}
-            className="flex w-full items-center justify-between px-5 py-3.5 text-left"
+            className="flex w-full items-center justify-between px-5 py-3.5 text-left hover:bg-[var(--bg-surface-2)]"
           >
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" />
+              <PxShield size={16} color="var(--px-green-text)" />
               <span className="font-display text-sm font-bold text-main">
                 Kỹ Năng Mục Tiêu Cá Nhân ({customSkills.length})
               </span>
             </div>
-            {showCustomSkills ? (
-              <ChevronUp className="h-4 w-4 text-dim" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-dim" />
-            )}
+            <PxChevron dir={showCustomSkills ? 'up' : 'down'} size={14} color="var(--text-muted)" />
           </button>
 
           {showCustomSkills && (
@@ -989,11 +1164,14 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
               {customSkills.map((sk) => {
                 const open = verifyingId === sk.id;
                 return (
-                  <div key={sk.id} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div
+                    key={sk.id}
+                    className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold text-main">{sk.name}</span>
-                        <span className="font-mono rounded-[2px] border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                        <span className="px-inset rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--px-gold-text)]">
                           Tier {sk.masteryTier}/{sk.maxTier} · {sk.primaryStat}
                         </span>
                       </div>
@@ -1004,7 +1182,7 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
                             value={proofText}
                             onChange={(e) => setProofText(e.target.value)}
                             placeholder="Mô tả kết quả thực tế..."
-                            className="flex-1 px-2.5 py-1 text-xs"
+                            className="flex-1 rounded-none px-2.5 py-1 text-xs"
                           />
                           <button
                             type="button"
@@ -1013,7 +1191,7 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
                               setVerifyingId(null);
                               setProofText('');
                             }}
-                            className="btn-primary px-3 py-1 text-xs"
+                            className="btn-primary rounded-none px-3 py-1 text-xs"
                           >
                             Xác nhận
                           </button>
@@ -1028,7 +1206,7 @@ export const SkillTreeView: React.FC<SkillTreeViewProps> = ({
                           setVerifyingId(sk.id);
                           setProofText('');
                         }}
-                        className="btn-secondary shrink-0 px-3 py-1.5 text-xs"
+                        className="btn-secondary shrink-0 rounded-none px-3 py-1.5 text-xs"
                       >
                         Xác thực nâng Tier
                       </button>

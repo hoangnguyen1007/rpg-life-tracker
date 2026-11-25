@@ -1,20 +1,4 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  BarChart3,
-  BookOpen,
-  BrainCircuit,
-  Check,
-  Copy,
-  Eye,
-  Loader2,
-  RefreshCw,
-  Save,
-  ShieldAlert,
-  Sparkles,
-  Target,
-  Trash2,
-  UserCheck,
-} from 'lucide-react';
 import type {
   AIPersona,
   Goal,
@@ -24,6 +8,20 @@ import type {
 } from '../types/system';
 import { systemApi } from '../utils/api';
 import { HERO_AVATAR_CATALOG, PixelHeroSprite } from './DungeonSprites';
+import {
+  PixelRivets,
+  PxBook,
+  PxCheck,
+  PxEye,
+  PxRefresh,
+  PxSave,
+  PxScroll,
+  PxShield,
+  PxSparkle,
+  PxTarget,
+  PxTrash,
+  PxWarn,
+} from './PixelIcons';
 import { BossBannerIllustration } from './VisualIllustrations';
 import { WeeklyReviewDossier } from './WeeklyReviewDossier';
 
@@ -198,19 +196,24 @@ export const ProfileGoalsConsole: React.FC<ProfileGoalsConsoleProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Internal 2-Button Sub-Tab Header */}
-      <div className="studio-surface flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Chuyển mục Hồ sơ và Tổng kết">
+      {/* Internal 16-Bit 2-Button Sub-Tab Header */}
+      <div className="rpg-pane relative flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+        <PixelRivets />
+        <div
+          className="flex flex-wrap items-center gap-2"
+          role="tablist"
+          aria-label="Chuyển mục Hồ sơ và Tổng kết"
+        >
           <button
             type="button"
             role="tab"
             aria-selected={subTab === 'profile'}
             onClick={() => setSubTab('profile')}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs ${
+            className={`inline-flex items-center gap-2 rounded-none px-3.5 py-2 text-xs ${
               subTab === 'profile' ? 'btn-primary' : 'btn-secondary'
             }`}
           >
-            <UserCheck className="h-3.5 w-3.5" />
+            <PxShield size={14} />
             <span>Hồ Sơ &amp; Mục Tiêu</span>
           </button>
           <button
@@ -218,11 +221,11 @@ export const ProfileGoalsConsole: React.FC<ProfileGoalsConsoleProps> = ({
             role="tab"
             aria-selected={subTab === 'review'}
             onClick={() => setSubTab('review')}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs ${
+            className={`inline-flex items-center gap-2 rounded-none px-3.5 py-2 text-xs ${
               subTab === 'review' ? 'btn-primary' : 'btn-secondary'
             }`}
           >
-            <BarChart3 className="h-3.5 w-3.5" />
+            <PxScroll size={14} />
             <span>Tổng Kết 7/30 Ngày</span>
           </button>
         </div>
@@ -237,336 +240,488 @@ export const ProfileGoalsConsole: React.FC<ProfileGoalsConsoleProps> = ({
         <WeeklyReviewDossier />
       ) : (
         <>
-      <section className="studio-surface overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12">
-          {/* Left: Goal Architect + Flat Goals Ledger */}
-          <div className="divide-y-2 lg:col-span-6 studio-divider">
-            <div className="p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <BrainCircuit className="h-5 w-5 text-amber-400" />
-                <h2 className="font-display text-lg font-extrabold text-main">
-                  Khởi tạo Mục tiêu bằng ngôn ngữ tự nhiên
-                </h2>
+          <section className="rpg-window relative overflow-hidden">
+            <PixelRivets />
+            <div className="grid grid-cols-1 lg:grid-cols-12">
+              {/* Left: Goal Architect + Flat Goals Ledger */}
+              <div className="divide-y-2 lg:col-span-6 studio-divider">
+                <div className="p-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <PxTarget size={18} color="var(--px-gold-text)" />
+                    <h2 className="font-display text-lg font-extrabold text-main">
+                      Khởi tạo Mục tiêu bằng ngôn ngữ tự nhiên
+                    </h2>
+                  </div>
+
+                  <form onSubmit={handleGoalSubmit} className="space-y-3">
+                    <textarea
+                      rows={3}
+                      value={goalInput}
+                      onChange={(e) => setGoalInput(e.target.value)}
+                      placeholder="VD: Tôi muốn bứt phá năng lực chuyên môn trong 90 ngày, duy trì rèn luyện thể chất 4 buổi/tuần, hoặc hoàn thành một dự án sáng tạo độc lập..."
+                      className="w-full p-3 text-sm"
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {EXAMPLE_GOALS.map((ex) => (
+                          <button
+                            key={ex.label}
+                            type="button"
+                            onClick={() => setGoalInput(ex.text)}
+                            className="btn-secondary rounded-none px-2.5 py-1 text-xs"
+                          >
+                            + {ex.label}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={analyzingGoal || !goalInput.trim()}
+                        className="btn-primary flex items-center gap-2 rounded-none px-4 py-2 text-xs"
+                      >
+                        {analyzingGoal ? (
+                          <PxRefresh size={14} color="#140e04" className="animate-spin" />
+                        ) : (
+                          <PxSparkle size={14} color="#140e04" />
+                        )}
+                        <span>
+                          {analyzingGoal ? 'Đang phân tích...' : 'Phân tích & Tạo Boss'}
+                        </span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 border-b-2 px-5 py-3.5 studio-divider">
+                    <PxTarget size={16} />
+                    <h3 className="font-display text-base font-extrabold text-main">
+                      Mục tiêu hiện tại ({goals.length})
+                    </h3>
+                  </div>
+
+                  {goals.length === 0 ? (
+                    <div className="p-6 text-center text-sm text-sub">
+                      Chưa có mục tiêu nào. Nhập mục tiêu ở khung trên để AI tự chia nhỏ cột mốc, phát hiện kỹ năng còn thiếu và tạo Boss Mission.
+                    </div>
+                  ) : (
+                    <div className="divide-y-2 studio-divider">
+                      {goals.map((g) => {
+                        const woopGoal = g as Goal & {
+                          woopObstacle?: string;
+                          ifThenPlan?: string;
+                        };
+                        return (
+                          <div key={g.id} className="space-y-3 p-5">
+                            <BossBannerIllustration title={g.title} />
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                  <span className="rounded-none border-2 border-[var(--border-ink)] bg-[var(--px-gold)] px-2 py-0.5 font-mono text-[10px] font-bold text-[#140e04]">
+                                    {g.category}
+                                  </span>
+                                  <span className="font-mono text-dim">
+                                    Deadline: {g.deadline}
+                                  </span>
+                                </div>
+                                <h4 className="mt-1 font-display text-base font-bold text-main">
+                                  {g.title}
+                                </h4>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => onDeleteGoal(g.id)}
+                                title="Xóa mục tiêu"
+                                className="btn-secondary rounded-none p-1.5 text-dim hover:text-[var(--px-red-text)]"
+                              >
+                                <PxTrash size={14} />
+                              </button>
+                            </div>
+                            <p className="text-xs text-sub">
+                              <strong>Phương pháp:</strong> {g.recommendedMethod}
+                            </p>
+                            {(woopGoal.woopObstacle || woopGoal.ifThenPlan) && (
+                              <div className="px-inset space-y-2 border-2 border-[var(--px-gold)] p-3 text-xs">
+                                {woopGoal.woopObstacle && (
+                                  <div className="flex items-start gap-2 text-sub">
+                                    <PxWarn size={14} className="mt-0.5" />
+                                    <span>
+                                      <strong className="text-main">
+                                        Rào cản nội tại (WOOP):
+                                      </strong>{' '}
+                                      {woopGoal.woopObstacle}
+                                    </span>
+                                  </div>
+                                )}
+                                {woopGoal.ifThenPlan && (
+                                  <div className="flex items-start gap-2 text-sub">
+                                    <PxBook
+                                      size={14}
+                                      color="var(--px-blue-text)"
+                                      className="mt-0.5"
+                                    />
+                                    <span>
+                                      <strong className="text-main">
+                                        Kế hoạch Nếu–Thì (Gollwitzer):
+                                      </strong>{' '}
+                                      {woopGoal.ifThenPlan}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <div className="space-y-1 text-xs text-sub">
+                              {g.subMilestones.map((m, idx) => (
+                                <div key={idx} className="flex items-start gap-1.5">
+                                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 bg-[var(--px-gold)]" />
+                                  <span>{m}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <form onSubmit={handleGoalSubmit} className="space-y-3">
-                <textarea
-                  rows={3}
-                  value={goalInput}
-                  onChange={(e) => setGoalInput(e.target.value)}
-                  placeholder="VD: Tôi muốn bứt phá năng lực chuyên môn trong 90 ngày, duy trì rèn luyện thể chất 4 buổi/tuần, hoặc hoàn thành một dự án sáng tạo độc lập..."
-                  className="w-full p-3 text-sm"
-                />
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {EXAMPLE_GOALS.map((ex) => (
-                      <button
-                        key={ex.label}
-                        type="button"
-                        onClick={() => setGoalInput(ex.text)}
-                        className="btn-secondary px-2.5 py-1 text-xs"
-                      >
-                        + {ex.label}
-                      </button>
-                    ))}
+              {/* Right: Personalization & Custom AI System Prompt */}
+              <div className="border-t-2 p-5 lg:col-span-6 lg:border-l-2 lg:border-t-0 studio-divider">
+                <div className="mb-4 flex items-center gap-2 border-b-2 pb-3 studio-divider">
+                  <PxShield size={18} color="var(--px-gold-text)" />
+                  <h2 className="font-display text-lg font-extrabold text-main">
+                    Cá nhân hóa Hồ sơ &amp; Chỉ thị AI
+                  </h2>
+                </div>
+
+                <form onSubmit={handleProfileSave} className="space-y-3.5 text-sm">
+                  {/* 6-Hero 2D Pixel Avatar Style Customizer */}
+                  <div className="px-inset p-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-pixel text-[10px] font-bold uppercase tracking-wide text-[var(--px-gold-text)]">
+                        Chọn Nhân Vật &amp; Tạo Hình 2D Pixel
+                      </span>
+                      <span className="font-mono text-[10px] text-dim">
+                        Đang chọn:{' '}
+                        {HERO_AVATAR_CATALOG.find((a) => a.id === avatarStyle)?.name ||
+                          avatarStyle}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {HERO_AVATAR_CATALOG.map((av) => {
+                        const isPicked = avatarStyle === av.id;
+                        return (
+                          <button
+                            key={av.id}
+                            type="button"
+                            onClick={() => setAvatarStyle(av.id)}
+                            className={`flex items-center gap-2 rounded-none border-2 p-2 text-left ${
+                              isPicked
+                                ? 'border-[var(--px-gold)] bg-[var(--accent-soft)]'
+                                : 'border-[var(--border-ink)] bg-[var(--bg-surface)] hover:border-[var(--px-gold)]'
+                            }`}
+                          >
+                            <div className="px-inset shrink-0 p-0.5">
+                              <PixelHeroSprite
+                                avatarStyle={av.id}
+                                rank={player.rank}
+                                size={40}
+                                className="anim-hero-idle"
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[11px] font-bold text-main">
+                                {av.name}
+                              </div>
+                              <div className="truncate font-mono text-[9px] font-bold text-[var(--px-gold-text)]">
+                                {av.title}
+                              </div>
+                              <div className="line-clamp-1 text-[10px] text-dim">
+                                {av.desc}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-sub">
+                        Tên hiển thị
+                      </label>
+                      <input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-sub">
+                        Danh xưng / Class
+                      </label>
+                      <input
+                        value={hunterClass}
+                        onChange={(e) => setHunterClass(e.target.value)}
+                        className="w-full px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-sub">
+                        Vai trò / Lĩnh vực
+                      </label>
+                      <input
+                        value={currentRole}
+                        onChange={(e) => setCurrentRole(e.target.value)}
+                        placeholder="VD: Kỹ sư, Sinh viên, Nhà nghiên cứu, Creator..."
+                        className="w-full px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-sub">
+                        Giờ tập trung tốt nhất
+                      </label>
+                      <input
+                        value={peakHours}
+                        onChange={(e) => setPeakHours(e.target.value)}
+                        className="w-full px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-sub">
+                      Tóm tắt bối cảnh cá nhân
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
+                      className="w-full px-3 py-2 text-sm"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-[var(--px-green-text)]">
+                        Điểm mạnh
+                      </label>
+                      <input
+                        value={strengthsText}
+                        onChange={(e) => setStrengthsText(e.target.value)}
+                        className="w-full px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-[var(--px-red-text)]">
+                        Điểm yếu / Rào cản
+                      </label>
+                      <input
+                        value={weaknessesText}
+                        onChange={(e) => setWeaknessesText(e.target.value)}
+                        className="w-full px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-sub">
+                        Kỹ năng muốn phát triển
+                      </label>
+                      <input
+                        value={targetSkillsText}
+                        onChange={(e) => setTargetSkillsText(e.target.value)}
+                        className="w-full px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-sub">
+                        Sở thích
+                      </label>
+                      <input
+                        value={interestsText}
+                        onChange={(e) => setInterestsText(e.target.value)}
+                        className="w-full px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-sub">
+                        Phương pháp học ưa thích
+                      </label>
+                      <input
+                        value={learningStyle}
+                        onChange={(e) => setLearningStyle(e.target.value)}
+                        className="w-full px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-sub">
+                        Phong cách AI (Persona)
+                      </label>
+                      <select
+                        value={aiPersona}
+                        onChange={(e) => setAiPersona(e.target.value as AIPersona)}
+                        className="w-full px-3 py-2 text-sm"
+                      >
+                        <option value="strategic_mentor">
+                          Strategic Mentor (Thực tế, tối ưu)
+                        </option>
+                        <option value="strict_system">Strict System (Kỷ luật cao)</option>
+                        <option value="supportive_coach">
+                          Supportive Coach (Đồng hành)
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-sub">
+                      Quy tắc cá nhân cố định
+                    </label>
+                    <input
+                      value={personalRules}
+                      onChange={(e) => setPersonalRules(e.target.value)}
+                      placeholder="VD: Không xếp việc nặng sau 21:30..."
+                      className="w-full px-3 py-2 text-sm"
+                    />
+                  </div>
+
+                  <div className="border-t-2 pt-3 studio-divider">
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <label className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--px-plum-text)]">
+                        <PxBook size={13} color="var(--px-plum-text)" />
+                        <span>Custom System Prompt cho AI</span>
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {PROMPT_PRESETS.map((p) => (
+                          <button
+                            key={p.label}
+                            type="button"
+                            onClick={() => setCustomSystemPrompt(p.prompt)}
+                            className="btn-secondary rounded-none px-2 py-0.5 text-[11px]"
+                          >
+                            + {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={customSystemPrompt}
+                      onChange={(e) => setCustomSystemPrompt(e.target.value)}
+                      placeholder="Nhập chỉ thị riêng bạn muốn AI luôn tuân thủ khi phân tích & gợi ý..."
+                      className="w-full p-2.5 text-xs"
+                    />
+                  </div>
+
                   <button
                     type="submit"
-                    disabled={analyzingGoal || !goalInput.trim()}
-                    className="btn-primary flex items-center gap-2 px-4 py-2 text-xs"
+                    disabled={savingProfile}
+                    className="btn-primary flex w-full items-center justify-center gap-2 rounded-none py-2.5 text-xs"
                   >
-                    {analyzingGoal ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    <span>{analyzingGoal ? 'Đang phân tích...' : 'Phân tích & Tạo Boss'}</span>
+                    {savingProfile ? (
+                      <PxRefresh size={14} color="#140e04" className="animate-spin" />
+                    ) : (
+                      <PxSave size={14} color="#140e04" />
+                    )}
+                    <span>Lưu Hồ Sơ &amp; System Prompt</span>
                   </button>
-                </div>
-              </form>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 border-b-2 px-5 py-3.5 studio-divider">
-                <Target className="h-4 w-4 text-amber-400" />
-                <h3 className="font-display text-base font-extrabold text-main">
-                  Mục tiêu hiện tại ({goals.length})
-                </h3>
-              </div>
-
-              {goals.length === 0 ? (
-                <div className="p-6 text-center text-sm text-sub">
-                  Chưa có mục tiêu nào. Nhập mục tiêu ở khung trên để AI tự chia nhỏ cột mốc, phát hiện kỹ năng còn thiếu và tạo Boss Mission.
-                </div>
-              ) : (
-                <div className="divide-y-2 studio-divider">
-                  {goals.map((g) => {
-                    const woopGoal = g as Goal & { woopObstacle?: string; ifThenPlan?: string };
-                    return (
-                      <div key={g.id} className="space-y-3 p-5">
-                        <BossBannerIllustration title={g.title} />
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2 text-xs">
-                              <span className="rounded-[2px] border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-mono font-bold text-amber-400">
-                                {g.category}
-                              </span>
-                              <span className="font-mono text-dim">Deadline: {g.deadline}</span>
-                            </div>
-                            <h4 className="mt-1 font-display text-base font-bold text-main">{g.title}</h4>
-                          </div>
-                          <button type="button" onClick={() => onDeleteGoal(g.id)} className="p-1 text-dim hover:text-rose-500">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <p className="text-xs text-sub">
-                          <strong>Phương pháp:</strong> {g.recommendedMethod}
-                        </p>
-                        {(woopGoal.woopObstacle || woopGoal.ifThenPlan) && (
-                          <div className="space-y-1.5 rounded-[2px] border-2 border-amber-500/40 bg-amber-500/10 p-3 text-xs">
-                            {woopGoal.woopObstacle && (
-                              <div className="flex items-start gap-1.5 text-sub">
-                                <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
-                                <span>
-                                  <strong className="text-main">Rào cản nội tại (WOOP):</strong> {woopGoal.woopObstacle}
-                                </span>
-                              </div>
-                            )}
-                            {woopGoal.ifThenPlan && (
-                              <div className="flex items-start gap-1.5 text-sub">
-                                <BookOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-400" />
-                                <span>
-                                  <strong className="text-main">Kế hoạch Nếu–Thì (Gollwitzer):</strong> {woopGoal.ifThenPlan}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        <div className="space-y-1 text-xs text-sub">
-                          {g.subMilestones.map((m, idx) => (
-                            <div key={idx}>• {m}</div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right: Personalization & Custom AI System Prompt */}
-          <div className="border-t-2 p-5 lg:col-span-6 lg:border-l-2 lg:border-t-0 studio-divider">
-            <div className="mb-4 flex items-center gap-2 border-b-2 pb-3 studio-divider">
-              <UserCheck className="h-5 w-5 text-amber-400" />
-              <h2 className="font-display text-lg font-extrabold text-main">
-                Cá nhân hóa Hồ sơ &amp; Chỉ thị AI
-              </h2>
-            </div>
-
-          <form onSubmit={handleProfileSave} className="space-y-3.5 text-sm">
-            {/* 6-Hero 2D Pixel Avatar Style Customizer */}
-            <div className="rounded-[2px] border-2 p-3 studio-subtle studio-divider">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="font-display text-xs font-extrabold uppercase tracking-wide text-amber-400">
-                  Chọn Nhân Vật &amp; Tạo Hình 2D Pixel
-                </span>
-                <span className="font-mono text-[10px] text-dim">
-                  Đang chọn: {HERO_AVATAR_CATALOG.find((a) => a.id === avatarStyle)?.name || avatarStyle}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {HERO_AVATAR_CATALOG.map((av) => {
-                  const isPicked = avatarStyle === av.id;
-                  return (
-                    <button
-                      key={av.id}
-                      type="button"
-                      onClick={() => setAvatarStyle(av.id)}
-                      className={`flex items-center gap-2 rounded-[2px] border-2 p-2 text-left transition ${
-                        isPicked
-                          ? 'border-amber-400 bg-amber-500/15'
-                          : 'studio-divider bg-[var(--bg-surface)] hover:border-amber-400/60'
-                      }`}
-                    >
-                      <div className="shrink-0 rounded-[2px] border p-0.5 studio-subtle studio-divider">
-                        <PixelHeroSprite
-                          avatarStyle={av.id}
-                          rank={player.rank}
-                          size={40}
-                          className="anim-hero-idle"
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[11px] font-bold text-main">{av.name}</div>
-                        <div className="truncate font-mono text-[9px] text-amber-400">{av.title}</div>
-                        <div className="line-clamp-1 text-[10px] text-dim">{av.desc}</div>
-                      </div>
-                    </button>
-                  );
-                })}
+                </form>
               </div>
             </div>
+          </section>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-sub">Tên hiển thị</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-sub">Danh xưng / Class</label>
-                <input value={hunterClass} onChange={(e) => setHunterClass(e.target.value)} className="w-full px-3 py-2 text-sm" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-sub">Vai trò / Lĩnh vực</label>
-                <input value={currentRole} onChange={(e) => setCurrentRole(e.target.value)} placeholder="VD: Kỹ sư, Sinh viên, Nhà nghiên cứu, Creator..." className="w-full px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-sub">Giờ tập trung tốt nhất</label>
-                <input value={peakHours} onChange={(e) => setPeakHours(e.target.value)} className="w-full px-3 py-2 text-sm" />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-sub">Tóm tắt bối cảnh cá nhân</label>
-              <textarea rows={2} value={bio} onChange={(e) => setBio(e.target.value)} className="w-full px-3 py-2 text-sm" />
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-emerald-700 dark:text-emerald-400">Điểm mạnh</label>
-                <input value={strengthsText} onChange={(e) => setStrengthsText(e.target.value)} className="w-full px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-rose-700 dark:text-rose-400">Điểm yếu / Rào cản</label>
-                <input value={weaknessesText} onChange={(e) => setWeaknessesText(e.target.value)} className="w-full px-3 py-2 text-sm" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-sub">Kỹ năng muốn phát triển</label>
-                <input value={targetSkillsText} onChange={(e) => setTargetSkillsText(e.target.value)} className="w-full px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-sub">Sở thích</label>
-                <input value={interestsText} onChange={(e) => setInterestsText(e.target.value)} className="w-full px-3 py-2 text-sm" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-sub">Phương pháp học ưa thích</label>
-                <input value={learningStyle} onChange={(e) => setLearningStyle(e.target.value)} className="w-full px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-sub">Phong cách AI (Persona)</label>
-                <select value={aiPersona} onChange={(e) => setAiPersona(e.target.value as AIPersona)} className="w-full px-3 py-2 text-sm">
-                  <option value="strategic_mentor">Strategic Mentor (Thực tế, tối ưu)</option>
-                  <option value="strict_system">Strict System (Kỷ luật cao)</option>
-                  <option value="supportive_coach">Supportive Coach (Đồng hành)</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-sub">Quy tắc cá nhân cố định</label>
-              <input value={personalRules} onChange={(e) => setPersonalRules(e.target.value)} placeholder="VD: Không xếp việc nặng sau 21:30..." className="w-full px-3 py-2 text-sm" />
-            </div>
-
-            <div className="border-t pt-3 studio-divider">
-              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                <label className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                  Custom System Prompt cho AI
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {PROMPT_PRESETS.map((p) => (
-                    <button key={p.label} type="button" onClick={() => setCustomSystemPrompt(p.prompt)} className="btn-secondary px-2 py-0.5 text-[11px]">
-                      + {p.label}
-                    </button>
-                  ))}
+          {/* Collapsible Distilled AI Context Dossier */}
+          <section className="rpg-pane relative p-5">
+            <PixelRivets />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <PxEye size={16} color="var(--px-gold-text)" />
+                <div>
+                  <h3 className="font-display text-sm font-bold text-main">
+                    Xem Context đang gửi cho AI
+                  </h3>
+                  <p className="text-xs text-dim">
+                    Tự động chắt lọc từ hồ sơ, lịch 7 ngày, mục tiêu và chỉ số của bạn.
+                  </p>
                 </div>
               </div>
-              <textarea
-                rows={3}
-                value={customSystemPrompt}
-                onChange={(e) => setCustomSystemPrompt(e.target.value)}
-                placeholder="Nhập chỉ thị riêng bạn muốn AI luôn tuân thủ khi phân tích & gợi ý..."
-                className="w-full p-2.5 text-xs"
-              />
-            </div>
-
-            <button type="submit" disabled={savingProfile} className="btn-primary flex w-full items-center justify-center gap-2 py-2.5 text-xs">
-              {savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              <span>Lưu Hồ Sơ & System Prompt</span>
-            </button>
-          </form>
-          </div>
-        </div>
-      </section>
-
-      {/* Collapsible Distilled AI Context Dossier (Clean by default) */}
-      <section className="studio-surface p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Eye className="h-4 w-4 text-amber-400" />
-            <div>
-              <h3 className="font-display text-sm font-bold text-main">
-                Xem Context đang gửi cho AI
-              </h3>
-              <p className="text-xs text-dim">
-                Tự động chắt lọc từ hồ sơ, lịch 7 ngày, mục tiêu và chỉ số của bạn.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setShowContextPreview((v) => !v)}
-              className="btn-secondary px-3 py-1.5 text-xs"
-            >
-              {showContextPreview ? 'Ẩn Context' : 'Xem Context'}
-            </button>
-            {showContextPreview && (
-              <>
-                <button type="button" onClick={refreshContextPreview} disabled={loadingContext} className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs">
-                  <RefreshCw className={`h-3.5 w-3.5 ${loadingContext ? 'animate-spin' : ''}`} />
-                  <span>Làm mới</span>
-                </button>
+              <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!contextPreview) return;
-                    navigator.clipboard.writeText(`${contextPreview.systemInstruction}\n\n${contextPreview.contextDossier}`);
-                    setCopiedContext(true);
-                    setTimeout(() => setCopiedContext(false), 2000);
-                  }}
-                  className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs"
+                  onClick={() => setShowContextPreview((v) => !v)}
+                  className="btn-secondary rounded-none px-3 py-1.5 text-xs"
                 >
-                  {copiedContext ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                  <span>{copiedContext ? 'Đã copy' : 'Copy'}</span>
+                  {showContextPreview ? 'Ẩn Context' : 'Xem Context'}
                 </button>
-              </>
-            )}
-          </div>
-        </div>
+                {showContextPreview && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={refreshContextPreview}
+                      disabled={loadingContext}
+                      className="btn-secondary flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs"
+                    >
+                      <PxRefresh
+                        size={13}
+                        className={loadingContext ? 'animate-spin' : ''}
+                      />
+                      <span>Làm mới</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!contextPreview) return;
+                        navigator.clipboard.writeText(
+                          `${contextPreview.systemInstruction}\n\n${contextPreview.contextDossier}`
+                        );
+                        setCopiedContext(true);
+                        setTimeout(() => setCopiedContext(false), 2000);
+                      }}
+                      className="btn-secondary flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs"
+                    >
+                      {copiedContext ? (
+                        <PxCheck size={13} color="var(--px-green-text)" />
+                      ) : (
+                        <PxScroll size={13} />
+                      )}
+                      <span>{copiedContext ? 'Đã copy' : 'Copy'}</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
 
-        {showContextPreview && contextPreview && (
-          <div className="mt-4 grid grid-cols-1 gap-4 border-t-2 pt-4 lg:grid-cols-2 studio-divider">
-            <div>
-              <p className="mb-1.5 text-xs font-semibold text-sub">1. System Instruction</p>
-              <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-[2px] border-2 p-3 font-mono text-xs leading-relaxed text-main studio-subtle studio-divider">
-                {contextPreview.systemInstruction}
-              </pre>
-            </div>
-            <div>
-              <p className="mb-1.5 text-xs font-semibold text-sub">2. Hồ sơ ngữ cảnh chắt lọc</p>
-              <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-[2px] border-2 p-3 font-mono text-xs leading-relaxed text-main studio-subtle studio-divider">
-                {contextPreview.contextDossier}
-              </pre>
-            </div>
-          </div>
-        )}
-      </section>
+            {showContextPreview && contextPreview && (
+              <div className="mt-4 grid grid-cols-1 gap-4 border-t-2 pt-4 lg:grid-cols-2 studio-divider">
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold text-sub">
+                    1. System Instruction
+                  </p>
+                  <pre className="px-inset max-h-60 overflow-y-auto whitespace-pre-wrap p-3 font-mono text-xs leading-relaxed text-main">
+                    {contextPreview.systemInstruction}
+                  </pre>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold text-sub">
+                    2. Hồ sơ ngữ cảnh chắt lọc
+                  </p>
+                  <pre className="px-inset max-h-60 overflow-y-auto whitespace-pre-wrap p-3 font-mono text-xs leading-relaxed text-main">
+                    {contextPreview.contextDossier}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </section>
         </>
       )}
     </div>
