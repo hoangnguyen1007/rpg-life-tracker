@@ -757,6 +757,15 @@ export interface AssistantSettings {
   customRules: ActivityRule[];
   autoPauseQuestOnIdle?: boolean; // default true
   distractionBudgetMinutes?: number; // default 45
+  dailyFocusGoalMinutes?: number; // default 180 (3h/day)
+  hudVisibleOnStart?: boolean; // default true
+  dndUntil?: string | null; // ISO timestamp; blocks non-critical toasts when > now
+  backupEnabled?: boolean; // default true
+  backupDir?: string; // default '' -> data/backups/
+  backupRetentionDays?: number; // default 14
+  lanAccessEnabled?: boolean; // default false
+  lanPairToken?: string; // 32-char random hex secret
+  lanPairPin?: string; // 6-digit numeric PIN for easy phone pairing
 }
 
 export interface StartupStatusPayload {
@@ -834,4 +843,144 @@ export interface AssistantOverviewPayload {
   briefing: MorningBriefingPayload;
   nudges: AssistantNudge[];
   trackerRunning: boolean;
+  distractionAlertLevel?: 'none' | 'soft_hud' | 'toast';
+  distractionStreakSeconds?: number;
+  dndActive?: boolean;
+  dndUntil?: string | null;
+  externalTrackerActive?: boolean;
+}
+
+export type WeeklyGrade = 'S' | 'A' | 'B' | 'C' | 'D';
+
+export interface HeatmapDayCell {
+  dateKey: string; // YYYY-MM-DD
+  focusMinutes: number;
+  distractionMinutes: number;
+  questsCompleted: number;
+  focusScore: number;
+  intensity: 0 | 1 | 2 | 3 | 4;
+}
+
+export interface DailyFocusTrendPoint {
+  dateKey: string;
+  label: string; // e.g. "25/11"
+  deepWorkMinutes: number;
+  studyMinutes: number;
+  distractionMinutes: number;
+  questsCompleted: number;
+  focusScore: number;
+}
+
+export interface AppUsageRankItem {
+  processName: string;
+  category: ActivityCategory;
+  minutes: number;
+}
+
+export interface StatGrowthBalanceItem {
+  stat: AttributeKey;
+  currentValue: number;
+  sharePct: number;
+  status: 'strong' | 'balanced' | 'lagging';
+}
+
+export interface LongTermAnalyticsPayload {
+  range: '7d' | '30d';
+  startDate: string;
+  endDate: string;
+  totalFocusMinutes: number;
+  totalDeepWorkMinutes: number;
+  totalStudyMinutes: number;
+  totalDistractionMinutes: number;
+  avgFocusScore: number;
+  questsCompleted: number;
+  questsTotal: number;
+  completionRatePct: number;
+  empiricalPeakHour: string | null; // e.g. "09:00–10:00"
+  grade: WeeklyGrade;
+  heatmap30d: HeatmapDayCell[];
+  dailyTrend: DailyFocusTrendPoint[];
+  topHelpfulApps: AppUsageRankItem[];
+  topDrainingApps: AppUsageRankItem[];
+  statBalance: StatGrowthBalanceItem[];
+  weakestStats: AttributeKey[];
+}
+
+export interface WeeklyReviewDiagnosis {
+  headline: string;
+  strengths: string[];
+  bottlenecks: string[];
+  nextWeekTopPriority: string;
+  recommendedFocusWindow: string;
+  mode: 'llm' | 'heuristic';
+}
+
+export interface WeeklyReviewRecord {
+  id: string;
+  weekStart: string;
+  weekEnd: string;
+  grade: WeeklyGrade;
+  metrics: {
+    totalFocusMinutes: number;
+    totalDistractionMinutes: number;
+    avgFocusScore: number;
+    questsCompleted: number;
+    completionRatePct: number;
+    empiricalPeakHour: string | null;
+  };
+  diagnosis: WeeklyReviewDiagnosis;
+  createdAt: string;
+}
+
+export interface WeeklyBlueprintBlockDraft {
+  id: string;
+  dayOfWeek: number; // 0..6 (0=Sun, 1=Mon..6=Sat)
+  dayLabel: string;
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  title: string;
+  type: TimetableBlockType;
+  energyCost: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
+  primaryStat: AttributeKey;
+  goalId?: string;
+  skillId?: string;
+  reason: string;
+  selected: boolean;
+}
+
+export interface WeeklyBlueprintDraft {
+  generatedAt: string;
+  mode: 'llm' | 'heuristic';
+  empiricalPeakHour: string | null;
+  weakestStats: AttributeKey[];
+  summary: string;
+  blocks: WeeklyBlueprintBlockDraft[];
+}
+
+export interface BackupFileEntry {
+  filename: string;
+  fullPath: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+export interface BackupStatusPayload {
+  enabled: boolean;
+  backupDir: string;
+  resolvedDir: string;
+  retentionDays: number;
+  lastBackupAt: string | null;
+  backups: BackupFileEntry[];
+}
+
+export interface LanAccessPayload {
+  enabled: boolean;
+  port: number;
+  primaryIp: string | null;
+  tailscaleIp: string | null;
+  allAddresses: Array<{ label: string; ip: string; mobileUrl: string }>;
+  mobileUrl: string | null;
+  qrSvg: string | null;
+  pairPin: string;
+  pairToken: string;
 }

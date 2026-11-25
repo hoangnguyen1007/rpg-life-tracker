@@ -37,6 +37,7 @@ import type {
   SuggestedQuestItem,
   SystemResetMode,
   TimetableBlock,
+  WeeklyReviewRecord,
 } from './types.ts';
 
 export function buildDefaultAssistantSettings(): AssistantSettings {
@@ -60,6 +61,15 @@ export function buildDefaultAssistantSettings(): AssistantSettings {
     customRules: [],
     autoPauseQuestOnIdle: true,
     distractionBudgetMinutes: 45,
+    dailyFocusGoalMinutes: 180,
+    hudVisibleOnStart: true,
+    dndUntil: null,
+    backupEnabled: true,
+    backupDir: '',
+    backupRetentionDays: 14,
+    lanAccessEnabled: false,
+    lanPairToken: '',
+    lanPairPin: '',
   };
 }
 
@@ -840,6 +850,15 @@ class SystemDatabase {
         toast_sent INTEGER NOT NULL DEFAULT 0
       );
 
+      CREATE TABLE IF NOT EXISTS weekly_reviews (
+        id TEXT PRIMARY KEY,
+        week_start TEXT NOT NULL,
+        week_end TEXT NOT NULL,
+        grade TEXT NOT NULL,
+        data TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_quests_date_status ON quests(date_key, status);
       CREATE INDEX IF NOT EXISTS idx_timetable_day_start ON timetable_blocks(day_of_week, start_time);
       CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_logs(timestamp DESC);
@@ -847,6 +866,7 @@ class SystemDatabase {
       CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON ai_chat_messages(thread_id, created_at ASC);
       CREATE INDEX IF NOT EXISTS idx_activity_date ON activity_logs(date_key, started_at DESC);
       CREATE INDEX IF NOT EXISTS idx_nudges_date ON assistant_nudges(date_key, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_weekly_reviews_created ON weekly_reviews(created_at DESC);
     `);
   }
 
@@ -902,9 +922,9 @@ class SystemDatabase {
       .run(JSON.stringify(nowIso), nowIso);
   }
 
-  checkpointWal(): void {
+  checkpointWal(truncate = false): void {
     try {
-      this.db.exec('PRAGMA wal_checkpoint(PASSIVE)');
+      this.db.exec(truncate ? 'PRAGMA wal_checkpoint(TRUNCATE)' : 'PRAGMA wal_checkpoint(PASSIVE)');
     } catch {
       // Ignore checkpoint failure
     }
@@ -1997,18 +2017,33 @@ class SystemDatabase {
   getAssistantSettings(): AssistantSettings {
     const saved = this.getKV<Partial<AssistantSettings>>('assistant_settings');
     const defaults = buildDefaultAssistantSettings();
-    if (!saved) return defaults;
-    return {
+    const merged: AssistantSettings = {
       ...defaults,
-      ...saved,
-      customRules: Array.isArray(saved.customRules) ? saved.customRules : [],
+      ...(saved || {}),
+      customRules: Array.isArray(saved?.customRules) ? saved.customRules : [],
     };
+    let needsPersist = false;
+    if (!merged.lanPairToken || merged.lanPairToken.length < 16) {
+      merged.lanPairToken = crypto.randomBytes(16).toString('hex');
+      needsPersist = true;
+    }
+    if (!merged.lanPairPin || !/^\d{6}$/.test(merged.lanPairPin)) {
+      merged.lanPairPin = String(crypto.randomInt(100000, 1000000));
+      needsPersist = true;
+    }
+    if (needsPersist) {
+      this.setKV('assistant_settings', merged);
+    }
+    return merged;
   }
 
   saveAssistantSettings(settings: AssistantSettings): AssistantSettings {
+    const existing = this.getAssistantSettings();
     const normalized: AssistantSettings = {
       ...buildDefaultAssistantSettings(),
       ...settings,
+      lanPairToken: settings.lanPairToken || existing.lanPairToken,
+      lanPairPin: settings.lanPairPin || existing.lanPairPin,
       customRules: Array.isArray(settings.customRules) ? settings.customRules : [],
     };
     this.setKV('assistant_settings', normalized);
@@ -2172,6 +2207,117 @@ class SystemDatabase {
   dismissAssistantNudge(id: string): void {
     this.db.prepare('UPDATE assistant_nudges SET dismissed = 1 WHERE id = ?').run(id);
     this.touchLastSaved();
+  }
+
+  getActivityLogsRange(startDateKey: string, endDateKey: string): ActivityLogEntry[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, date_key, process_name, window_title, category,
+                duration_seconds, started_at, ended_at, credited_to_skill
+         FROM activity_logs
+         WHERE date_key >= ? AND date_key <= ?
+         ORDER BY date_key ASC, started_at ASC`
+      )
+      .all(startDateKey, endDateKey) as Array<{
+      id: string;
+      date_key: string;
+      process_name: string;
+      window_title: string;
+      category: ActivityCategory;
+      duration_seconds: number;
+      started_at: string;
+      ended_at: string;
+      credited_to_skill: number;
+    }>;
+
+    return rows.map((r) => ({
+      id: r.id,
+      dateKey: r.date_key,
+      processName: r.process_name,
+      windowTitle: r.window_title,
+      category: r.category,
+      durationSeconds: r.duration_seconds,
+      startedAt: r.started_at,
+      endedAt: r.ended_at,
+      creditedToSkill: r.credited_to_skill === 1,
+    }));
+  }
+
+  getDailyProgressRange(days: number): DailyProgressSnapshot[] {
+    const limit = Math.max(1, Math.min(365, Math.round(days || 30)));
+    return this.getDailySnapshots(limit);
+  }
+
+  getWeeklyReviews(limit = 12): WeeklyReviewRecord[] {
+    const rows = this.db
+      .prepare('SELECT data FROM weekly_reviews ORDER BY created_at DESC LIMIT ?')
+      .all(Math.max(1, Math.min(50, limit))) as Array<{ data: string }>;
+    return rows.map((r) => JSON.parse(r.data) as WeeklyReviewRecord);
+  }
+
+  saveWeeklyReview(review: WeeklyReviewRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO weekly_reviews (id, week_start, week_end, grade, data, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           week_start = excluded.week_start,
+           week_end = excluded.week_end,
+           grade = excluded.grade,
+           data = excluded.data`
+      )
+      .run(
+        review.id,
+        review.weekStart,
+        review.weekEnd,
+        review.grade,
+        JSON.stringify(review),
+        review.createdAt
+      );
+    this.touchLastSaved();
+  }
+
+  restoreFromBackupFile(
+    sourcePath: string,
+    preRestoreBackupPath: string
+  ): { preRestoreBackup: string } {
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error('Không tìm thấy file sao lưu để khôi phục.');
+    }
+    this.checkpointWal(true);
+    const preDir = path.dirname(preRestoreBackupPath);
+    if (!fs.existsSync(preDir)) {
+      fs.mkdirSync(preDir, { recursive: true });
+    }
+    if (fs.existsSync(DB_PATH)) {
+      fs.copyFileSync(DB_PATH, preRestoreBackupPath);
+    }
+
+    try {
+      this.db.close();
+    } catch {
+      // Ignore close errors
+    }
+
+    for (const suffix of ['-wal', '-shm']) {
+      const sidecar = `${DB_PATH}${suffix}`;
+      if (fs.existsSync(sidecar)) {
+        try {
+          fs.unlinkSync(sidecar);
+        } catch {
+          // Ignore sidecar cleanup error
+        }
+      }
+    }
+
+    fs.copyFileSync(sourcePath, DB_PATH);
+    this.db = new DatabaseSync(DB_PATH);
+    this.initSchema();
+    this.seedIfEmpty();
+    this.touchLastSaved();
+    this.checkpointWal(false);
+
+    return { preRestoreBackup: path.basename(preRestoreBackupPath) };
   }
 
   resetAll(mode: SystemResetMode = 'clean', options?: { clearChats?: boolean }): void {

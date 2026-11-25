@@ -509,16 +509,25 @@ class DesktopTrackerService {
   private worker: ChildProcessWithoutNullStreams | null = null;
   private shouldRun = false;
   private restartTimer: NodeJS.Timeout | null = null;
+  private externalFallbackTimer: NodeJS.Timeout | null = null;
   private stdoutBuffer = '';
 
   private activeBlock: ActivityLogEntry | null = null;
   private currentApp: DailyActivitySummary['currentApp'] = null;
   private continuousDeepWorkSeconds = 0;
   private continuousDistractionSeconds = 0;
+  private activeDistractionStreakSec = 0;
   private lastPollAtMs: number | null = null;
+  private lastExternalIngestAt = 0;
+
+  isExternalTrackerActive(): boolean {
+    return this.lastExternalIngestAt > 0 && Date.now() - this.lastExternalIngestAt < 60_000;
+  }
 
   isRunning(): boolean {
-    return Boolean(this.shouldRun && this.worker && !this.worker.killed);
+    return Boolean(
+      this.isExternalTrackerActive() || (this.shouldRun && this.worker && !this.worker.killed)
+    );
   }
 
   getContinuousDeepWorkMinutes(): number {
@@ -529,8 +538,63 @@ class DesktopTrackerService {
     return this.continuousDistractionSeconds / 60;
   }
 
+  getActiveDistractionStreakSeconds(): number {
+    if (this.activeDistractionStreakSec <= 0) return 0;
+    const dateKey = getVnTodayKey();
+    const hasRunningQuest = db
+      .getQuests(dateKey)
+      .some((q) => q.status === 'pending' && Boolean(q.startedAt) && !q.isPaused);
+    if (!hasRunningQuest) {
+      this.activeDistractionStreakSec = 0;
+      return 0;
+    }
+    return this.activeDistractionStreakSec;
+  }
+
   getCurrentApp(): DailyActivitySummary['currentApp'] {
     return this.currentApp;
+  }
+
+  private stopPowerShellWorkerOnly(): void {
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
+    if (this.worker && !this.worker.killed) {
+      const child = this.worker;
+      this.worker = null;
+      try {
+        child.kill();
+      } catch {
+        // Ignore kill error
+      }
+    } else {
+      this.worker = null;
+    }
+  }
+
+  private scheduleExternalFallbackCheck(): void {
+    if (this.externalFallbackTimer) {
+      clearTimeout(this.externalFallbackTimer);
+      this.externalFallbackTimer = null;
+    }
+    if (!this.shouldRun || process.platform !== 'win32' || process.env.THE_SYSTEM_DB_PATH) {
+      return;
+    }
+    this.externalFallbackTimer = setTimeout(() => {
+      this.externalFallbackTimer = null;
+      if (
+        this.shouldRun &&
+        !this.isExternalTrackerActive() &&
+        (!this.worker || this.worker.killed)
+      ) {
+        const latest = db.getAssistantSettings();
+        if (latest.trackerEnabled) {
+          this.spawnWorker(latest.pollIntervalSeconds);
+        }
+      }
+    }, 62_000);
+    this.externalFallbackTimer.unref?.();
   }
 
   start(): void {
@@ -542,24 +606,22 @@ class DesktopTrackerService {
       return;
     }
     this.shouldRun = true;
+    if (this.isExternalTrackerActive()) {
+      this.stopPowerShellWorkerOnly();
+      this.scheduleExternalFallbackCheck();
+      return;
+    }
     if (this.worker && !this.worker.killed) return;
     this.spawnWorker(settings.pollIntervalSeconds);
   }
 
   stop(): void {
     this.shouldRun = false;
-    if (this.restartTimer) {
-      clearTimeout(this.restartTimer);
-      this.restartTimer = null;
+    if (this.externalFallbackTimer) {
+      clearTimeout(this.externalFallbackTimer);
+      this.externalFallbackTimer = null;
     }
-    if (this.worker && !this.worker.killed) {
-      try {
-        this.worker.kill();
-      } catch {
-        // Ignore kill error
-      }
-    }
-    this.worker = null;
+    this.stopPowerShellWorkerOnly();
     this.lastPollAtMs = null;
   }
 
@@ -573,6 +635,10 @@ class DesktopTrackerService {
 
   private spawnWorker(pollIntervalSeconds: number): void {
     if (!this.shouldRun || process.platform !== 'win32' || process.env.THE_SYSTEM_DB_PATH) return;
+    if (this.isExternalTrackerActive()) {
+      this.scheduleExternalFallbackCheck();
+      return;
+    }
 
     const encoded = buildPsTrackerScript(pollIntervalSeconds);
     const child = spawn(
@@ -585,10 +651,20 @@ class DesktopTrackerService {
     this.stdoutBuffer = '';
 
     child.stdout.on('data', (chunk: Buffer) => {
+      if (this.isExternalTrackerActive()) {
+        this.stopPowerShellWorkerOnly();
+        this.scheduleExternalFallbackCheck();
+        return;
+      }
       this.stdoutBuffer += chunk.toString('utf8');
       const lines = this.stdoutBuffer.split(/\r?\n/);
       this.stdoutBuffer = lines.pop() ?? '';
       for (const line of lines) {
+        if (this.isExternalTrackerActive()) {
+          this.stopPowerShellWorkerOnly();
+          this.scheduleExternalFallbackCheck();
+          return;
+        }
         const trimmed = line.trim();
         if (!trimmed || !trimmed.startsWith('{')) continue;
         try {
@@ -619,9 +695,13 @@ class DesktopTrackerService {
         this.worker = null;
       }
       if (this.shouldRun && !this.restartTimer) {
+        if (this.isExternalTrackerActive()) {
+          this.scheduleExternalFallbackCheck();
+          return;
+        }
         this.restartTimer = setTimeout(() => {
           this.restartTimer = null;
-          if (this.shouldRun) {
+          if (this.shouldRun && !this.isExternalTrackerActive()) {
             const latest = db.getAssistantSettings();
             if (latest.trackerEnabled) {
               this.spawnWorker(latest.pollIntervalSeconds);
@@ -630,6 +710,27 @@ class DesktopTrackerService {
         }, 5000);
       }
     });
+  }
+
+  ingestExternalSample(sample: {
+    processName: string;
+    windowTitle?: string;
+    idleSeconds?: number;
+    durationSeconds?: number;
+    source?: string;
+  }): ActivityCategory {
+    if (sample.source === 'tauri-rust') {
+      this.lastExternalIngestAt = Date.now();
+      this.stopPowerShellWorkerOnly();
+      this.scheduleExternalFallbackCheck();
+    }
+    const entry = this.recordSample({
+      processName: sample.processName || 'Idle',
+      windowTitle: sample.windowTitle || '',
+      idleSeconds: sample.idleSeconds,
+      durationSeconds: sample.durationSeconds,
+    });
+    return entry.category;
   }
 
   private syncRunningQuestWithPoll(
@@ -644,7 +745,16 @@ class DesktopTrackerService {
     const runningQuest = db
       .getQuests(dateKey)
       .find((q) => q.status === 'pending' && Boolean(q.startedAt) && !q.isPaused);
-    if (!runningQuest) return;
+    if (!runningQuest) {
+      this.activeDistractionStreakSec = 0;
+      return;
+    }
+
+    if (category === 'distraction') {
+      this.activeDistractionStreakSec += dur;
+    } else {
+      this.activeDistractionStreakSec = 0;
+    }
 
     let mutated = false;
     if (category === 'deep_work' || category === 'study_research') {
@@ -671,6 +781,7 @@ class DesktopTrackerService {
         (runningQuest.pausedAccumulatedSeconds || 0) + activeElapsed;
       runningQuest.startedAt = undefined;
       runningQuest.isPaused = true;
+      this.activeDistractionStreakSec = 0;
       mutated = true;
 
       db.addAssistantNudge({
@@ -722,6 +833,7 @@ class DesktopTrackerService {
       this.activeBlock = null;
       this.continuousDeepWorkSeconds = 0;
       this.continuousDistractionSeconds = 0;
+      this.activeDistractionStreakSec = 0;
     }
     this.lastPollAtMs = nowMs;
 

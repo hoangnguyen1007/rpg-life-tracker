@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'SilentlyContinue'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
@@ -29,12 +29,31 @@ function New-PixelShieldIcon {
 
 $notifyIcon = New-Object System.Windows.Forms.NotifyIcon
 $notifyIcon.Icon = New-PixelShieldIcon
-$notifyIcon.Text = 'RPG Life Tracker — Trợ Lý PC'
+$notifyIcon.Text = 'RPG Life Tracker — Bấm chuột trái để Hiện/Ẩn Mini HUD'
 $notifyIcon.Visible = $true
+
+function Invoke-ToggleMiniHud {
+  try {
+    $body = @{ action = 'toggle' } | ConvertTo-Json
+    Invoke-RestMethod -Uri "$baseUrl/api/hud/control" -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 4 | Out-Null
+  } catch {
+    $exePath = Join-Path (Split-Path $scriptDir -Parent) 'src-tauri\target\release\rpg-life-tracker.exe'
+    if (Test-Path $exePath) {
+      Start-Process -FilePath 'explorer.exe' -ArgumentList $exePath
+    } else {
+      Start-Process "$baseUrl/#/hud"
+    }
+  }
+}
 
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 
-$itemOpenApp = New-Object System.Windows.Forms.ToolStripMenuItem('Mở RPG Life Tracker (Desktop Window)')
+$itemToggleHud = New-Object System.Windows.Forms.ToolStripMenuItem('Hiện / Ẩn Mini HUD (2D Pixel)')
+$itemToggleHud.Add_Click({
+  Invoke-ToggleMiniHud
+})
+
+$itemOpenApp = New-Object System.Windows.Forms.ToolStripMenuItem('Mở RPG Life Tracker (Dashboard)')
 $itemOpenApp.Add_Click({
   $openScript = Join-Path $scriptDir 'open-desktop-app.ps1'
   Start-Process -FilePath 'powershell.exe' -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$openScript`"" -WindowStyle Hidden
@@ -75,6 +94,7 @@ $itemExit.Add_Click({
   [System.Windows.Forms.Application]::Exit()
 })
 
+$menu.Items.Add($itemToggleHud) | Out-Null
 $menu.Items.Add($itemOpenApp) | Out-Null
 $menu.Items.Add($itemOpenBrowser) | Out-Null
 $menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
@@ -84,6 +104,12 @@ $menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
 $menu.Items.Add($itemExit) | Out-Null
 
 $notifyIcon.ContextMenuStrip = $menu
+$notifyIcon.Add_MouseClick({
+  param($s, $e)
+  if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+    Invoke-ToggleMiniHud
+  }
+})
 $notifyIcon.Add_DoubleClick({
   $openScript = Join-Path $scriptDir 'open-desktop-app.ps1'
   Start-Process -FilePath 'powershell.exe' -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$openScript`"" -WindowStyle Hidden

@@ -398,3 +398,133 @@
 .anim-heart-crit {
   animation: heart-critical 0.85s ease-in-out infinite;
 }
+
+html.hud-mode,
+html.hud-mode body,
+html.hud-mode #root,
+body.hud-mode {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  overflow: hidden !important;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+.px-hud-frame {
+  border-radius: 0;
+  background: #181523;
+  border: 2px solid #09070f;
+  box-shadow:
+    inset 2px 2px 0 #3f3859,
+    inset -2px -2px 0 #0e0c16,
+    4px 4px 0 rgba(0, 0, 0, 0.72);
+  image-rendering: pixelated;
+}
+
+@keyframes px-alert-blink {
+  0%,
+  100% {
+    border-color: #d94154;
+    box-shadow:
+      inset 2px 2px 0 #822233,
+      inset -2px -2px 0 #2b0910,
+      4px 4px 0 rgba(0, 0, 0, 0.75);
+  }
+  50% {
+    border-color: #e2a23b;
+    box-shadow:
+      inset 2px 2px 0 #8f611b,
+      inset -2px -2px 0 #261805,
+      4px 4px 0 rgba(0, 0, 0, 0.75);
+  }
+}
+
+.px-hud-frame-alert {
+  animation: px-alert-blink 0.9s steps(2, end) infinite;
+}
+
+.px-hud-inset {
+  border-radius: 0;
+  background: #100e18;
+  border: 2px solid #09070f;
+  box-shadow:
+    inset 2px 2px 0 #07050c,
+    inset -1px -1px 0 #2e2942;
+}
+
+.px-hud-btn {
+  border-radius: 0;
+  border: 2px solid #09070f;
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.22),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.45);
+  image-rendering: pixelated;
+  cursor: pointer;
+}
+
+.px-hud-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.px-hud-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 2px 2px 0 rgba(0, 0, 0, 0.45),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.px-hud-btn-slate {
+  background: #2b263d;
+  color: #f1eef9;
+}
+
+.px-hud-btn-gold {
+  background: #c99330;
+  color: #140e04;
+}
+
+.px-hud-btn-green {
+  background: #2e8b57;
+  color: #ffffff;
+}
+
+.px-hud-btn-red {
+  background: #b83a4b;
+  color: #ffffff;
+}
+
+.px-hud-btn-blue {
+  background: #3267a8;
+  color: #ffffff;
+}
+
+.px-hud-groove {
+  height: 2px;
+  background: #09070f;
+  border-bottom: 1px solid #2e2942;
+}
+
+.px-hud-bar-track {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0;
+  background: #0c0a14;
+  border: 2px solid #09070f;
+  box-shadow: inset 1px 1px 0 #050408;
+}
+
+.px-hud-bar-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent 7px,
+    rgba(9, 7, 15, 0.72) 7px,
+    rgba(9, 7, 15, 0.72) 9px
+  );
+}

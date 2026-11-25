@@ -9,7 +9,9 @@ import { getVnDayOfWeek, getVnNowMinutes, getVnNowParts, getVnTodayKey } from '.
 import type {
   AssistantNudge,
   AssistantOverviewPayload,
+  AssistantSettings,
   MorningBriefingPayload,
+  Quest,
   SystemStatePayload,
 } from './types.ts';
 import { getStartupStatus } from './windows-startup.ts';
@@ -85,6 +87,12 @@ export function isWithinQuietHours(
     return nowMinutes >= start && nowMinutes < end;
   }
   return false;
+}
+
+export function isDndActive(settings: { dndUntil?: string | null }): boolean {
+  if (!settings?.dndUntil) return false;
+  const untilMs = new Date(settings.dndUntil).getTime();
+  return Number.isFinite(untilMs) && untilMs > Date.now();
 }
 
 export function buildMorningBriefing(state: SystemStatePayload): MorningBriefingPayload {
@@ -164,6 +172,76 @@ class AssistantDaemonService {
     }
   }
 
+  setDndMinutes(minutes: number): { dndActive: boolean; dndUntil: string | null } {
+    const mins = Number.isFinite(minutes) && minutes > 0 ? Math.min(24 * 60, minutes) : 0;
+    const settings = db.getAssistantSettings();
+    const dndUntil = mins > 0 ? new Date(Date.now() + mins * 60_000).toISOString() : null;
+    const updated = db.saveAssistantSettings({
+      ...settings,
+      dndUntil,
+    });
+    const dndActive = isDndActive(updated);
+    return {
+      dndActive,
+      dndUntil: dndActive ? (updated.dndUntil ?? null) : null,
+    };
+  }
+
+  private computeDistractionGuardState(
+    settings: AssistantSettings,
+    quests: Quest[],
+    plannedRestMode = false
+  ): {
+    distractionAlertLevel: 'none' | 'soft_hud' | 'toast';
+    distractionStreakSeconds: number;
+    hasRunningQuest: boolean;
+  } {
+    const dateKey = getVnTodayKey();
+    const hasRunningQuest = quests.some(
+      (q) => q.dateKey === dateKey && q.status === 'pending' && Boolean(q.startedAt) && !q.isPaused
+    );
+    const distractionStreakSeconds = hasRunningQuest
+      ? desktopTracker.getActiveDistractionStreakSeconds()
+      : 0;
+    const nowMin = getVnNowMinutes();
+    const quiet = isWithinQuietHours(nowMin, settings.quietHoursStart, settings.quietHoursEnd);
+
+    if (
+      !settings.distractionGuardEnabled ||
+      plannedRestMode ||
+      isDndActive(settings) ||
+      quiet ||
+      !hasRunningQuest
+    ) {
+      return {
+        distractionAlertLevel: 'none',
+        distractionStreakSeconds,
+        hasRunningQuest,
+      };
+    }
+
+    const toastThresholdSec = Math.max(60, (settings.distractionThresholdMinutes || 3) * 60);
+    if (distractionStreakSeconds >= toastThresholdSec) {
+      return {
+        distractionAlertLevel: 'toast',
+        distractionStreakSeconds,
+        hasRunningQuest,
+      };
+    }
+    if (distractionStreakSeconds >= 30) {
+      return {
+        distractionAlertLevel: 'soft_hud',
+        distractionStreakSeconds,
+        hasRunningQuest,
+      };
+    }
+    return {
+      distractionAlertLevel: 'none',
+      distractionStreakSeconds,
+      hasRunningQuest,
+    };
+  }
+
   private async emitNudge(params: {
     dateKey: string;
     kind: AssistantNudge['kind'];
@@ -175,11 +253,12 @@ class AssistantDaemonService {
     const player = db.getPlayer();
     const nowMin = getVnNowMinutes();
     const quiet = isWithinQuietHours(nowMin, settings.quietHoursStart, settings.quietHoursEnd);
+    const dnd = isDndActive(settings);
 
     let toastSent = false;
     if (
       params.forceToast ||
-      (settings.windowsToastEnabled && !quiet && !player.plannedRestMode)
+      (settings.windowsToastEnabled && !quiet && !dnd && !player.plannedRestMode)
     ) {
       toastSent = await sendWindowsToast(params.title, params.message);
     }
@@ -208,6 +287,7 @@ class AssistantDaemonService {
 
       if (
         isWithinQuietHours(nowMin, settings.quietHoursStart, settings.quietHoursEnd) ||
+        isDndActive(settings) ||
         player.plannedRestMode
       ) {
         return;
@@ -220,8 +300,13 @@ class AssistantDaemonService {
       const dayAnalysis = analyzeDaySchedule(timetable, todayDow, player.energyLevel);
       const todayQuests = db.getQuests(dateKey);
 
-      // 1. Morning Briefing (07:05 - 11:30, once per day)
+      const currentCategory = desktopTracker.getCurrentApp()?.category;
+      const inPureDeepFocus =
+        currentCategory === 'deep_work' || currentCategory === 'study_research';
+
+      // 1. Morning Briefing (07:05 - 11:30, once per day; suppressed during pure deep focus)
       if (
+        !inPureDeepFocus &&
         nowMin >= 7 * 60 + 5 &&
         nowMin <= 11 * 60 + 30 &&
         !todayNudges.some((n) => n.kind === 'morning_briefing')
@@ -239,37 +324,28 @@ class AssistantDaemonService {
         });
       }
 
-      // 2. Distraction Guard
-      const hasRunningQuest = todayQuests.some(
-        (q) => q.status === 'pending' && Boolean(q.startedAt) && !q.isPaused
+      // 2. 2-Tier Calm Distraction Guard (Tier 1 >=30s soft_hud only; Tier 2 toast after threshold + cooldown)
+      const guard = this.computeDistractionGuardState(
+        settings,
+        todayQuests,
+        Boolean(player.plannedRestMode)
       );
-      const inScheduledFocusBlock = dayAnalysis.blocks.some((b) => {
-        if (b.type !== 'fixed_habit' && b.type !== 'class_work') return false;
-        const s = timeToMinutes(b.startTime);
-        const e = timeToMinutes(b.endTime);
-        return nowMin >= s && nowMin < e;
-      });
-
-      if (
-        settings.distractionGuardEnabled &&
-        (hasRunningQuest || inScheduledFocusBlock) &&
-        desktopTracker.getContinuousDistractionMinutes() >=
-          (settings.distractionThresholdMinutes || 3)
-      ) {
+      if (guard.distractionAlertLevel === 'toast') {
         const cooldownMs = (settings.distractionCooldownMinutes || 15) * 60 * 1000;
         if (Date.now() - this.lastDistractionNudgeAt >= cooldownMs) {
           this.lastDistractionNudgeAt = Date.now();
           const appName = desktopTracker.getCurrentApp()?.processName || 'ứng dụng giải trí';
+          const streakMins = Math.max(1, Math.round(guard.distractionStreakSeconds / 60));
           await this.emitNudge({
             dateKey,
             kind: 'distraction_guard',
             title: 'Nhắc nhẹ Tập Trung',
-            message: `Bạn đang mở ${appName} hơn ${settings.distractionThresholdMinutes || 3} phút trong phiên tập trung. Quay lại nhịp chính nhé!`,
+            message: `Bạn đang mở ${appName} khoảng ${streakMins} phút trong phiên tập trung. Quay lại nhịp chính nhé!`,
           });
         }
       }
 
-      // 3. Upcoming Block / Quest Reminder (5m before start)
+      // 3. Upcoming Block / Quest Reminder (5m before start; fixed blocks allowed in deep focus)
       if (settings.upcomingBlockReminderEnabled) {
         const lead = Math.max(1, settings.upcomingReminderLeadMinutes || 5);
         for (const blk of dayAnalysis.blocks) {
@@ -289,28 +365,30 @@ class AssistantDaemonService {
             }
           }
         }
-        for (const q of todayQuests) {
-          if (q.status !== 'pending') continue;
-          const m = q.scheduledSlot.match(/^(\d{1,2}:\d{2})/);
-          if (!m) continue;
-          const s = timeToMinutes(m[1]);
-          const diff = s - nowMin;
-          if (diff >= 1 && diff <= lead) {
-            const key = `${dateKey}::q::${q.id}`;
-            if (!this.remindedBlockKeys.has(key)) {
-              this.remindedBlockKeys.add(key);
-              await this.emitNudge({
-                dateKey,
-                kind: 'upcoming_block',
-                title: `Sắp tới Quest: ${q.title}`,
-                message: `Còn ${diff} phút tới giờ (${q.scheduledSlot}). Bấm ▶ Bắt đầu khi sẵn sàng!`,
-              });
+        if (!inPureDeepFocus) {
+          for (const q of todayQuests) {
+            if (q.status !== 'pending') continue;
+            const m = q.scheduledSlot.match(/^(\d{1,2}:\d{2})/);
+            if (!m) continue;
+            const s = timeToMinutes(m[1]);
+            const diff = s - nowMin;
+            if (diff >= 1 && diff <= lead) {
+              const key = `${dateKey}::q::${q.id}`;
+              if (!this.remindedBlockKeys.has(key)) {
+                this.remindedBlockKeys.add(key);
+                await this.emitNudge({
+                  dateKey,
+                  kind: 'upcoming_block',
+                  title: `Sắp tới Quest: ${q.title}`,
+                  message: `Còn ${diff} phút tới giờ (${q.scheduledSlot}). Bấm ▶ Bắt đầu khi sẵn sàng!`,
+                });
+              }
             }
           }
         }
       }
 
-      // 4. Ultradian Break Nudge (default >= 80 min continuous focus)
+      // 4. Ultradian Break Nudge (default >= 80 min continuous focus; allowed in deep focus when enabled)
       if (
         settings.ultradianBreakEnabled &&
         desktopTracker.getContinuousDeepWorkMinutes() >= (settings.ultradianBreakMinutes || 80) &&
@@ -325,9 +403,10 @@ class AssistantDaemonService {
         });
       }
 
-      // 5. Evening Wind-down (default 22:30, once per day)
+      // 5. Evening Wind-down (default 22:30, once per day; suppressed during pure deep focus)
       const windMin = timeToMinutes(settings.eveningWinddownTime || '22:30');
       if (
+        !inPureDeepFocus &&
         settings.eveningWinddownEnabled &&
         nowMin >= windMin &&
         !todayNudges.some((n) => n.kind === 'evening_winddown')
@@ -482,13 +561,26 @@ class AssistantDaemonService {
 
   getOverview(state: SystemStatePayload): AssistantOverviewPayload {
     const dateKey = getVnTodayKey();
+    const settings = db.getAssistantSettings();
+    const dndActive = isDndActive(settings);
+    const dndUntil = dndActive ? (settings.dndUntil ?? null) : null;
+    const guard = this.computeDistractionGuardState(
+      settings,
+      state.quests,
+      Boolean(state.player.plannedRestMode)
+    );
     return {
-      settings: db.getAssistantSettings(),
+      settings,
       startup: getStartupStatus(),
       activity: desktopTracker.getDailySummary(dateKey),
       briefing: buildMorningBriefing(state),
       nudges: db.getAssistantNudges(20),
       trackerRunning: desktopTracker.isRunning(),
+      distractionAlertLevel: guard.distractionAlertLevel,
+      distractionStreakSeconds: guard.distractionStreakSeconds,
+      dndActive,
+      dndUntil,
+      externalTrackerActive: desktopTracker.isExternalTrackerActive(),
     };
   }
 }

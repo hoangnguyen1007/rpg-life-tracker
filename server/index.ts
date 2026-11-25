@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
@@ -6,6 +7,26 @@ import cors from 'cors';
 import { computeRankFromMastery, computeXpToNextLevel, db, getTodayKey } from './db.ts';
 import { assistantDaemon } from './assistant-daemon.ts';
 import { desktopTracker } from './desktop-tracker.ts';
+import {
+  checkPinRateLimit,
+  clearPinFailures,
+  constantTimeEqual,
+  ensureDailyAutoBackup,
+  getBackupStatus,
+  getLanAccessInfo,
+  lanAuthMiddleware,
+  recordPinFailure,
+  requireLocalhost,
+  resolveBackupDir,
+  restoreBackupByFilename,
+  runBackupNow,
+} from './backup-network.ts';
+import {
+  applyWeeklyBlueprint,
+  computeLongTermReview,
+  generateWeeklyAiReview,
+  generateWeeklyBlueprint,
+} from './ai-analytics.ts';
 import {
   installWindowsStartup,
   launchSystemTray,
@@ -69,6 +90,7 @@ import type {
   SystemResetMode,
   SystemStatePayload,
   TimetableBlock,
+  WeeklyBlueprintBlockDraft,
 } from './types.ts';
 
 const app = express();
@@ -76,6 +98,7 @@ const PORT = Number(process.env.PORT) || 3001;
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
+app.use(lanAuthMiddleware);
 
 function uid(prefix: string): string {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
@@ -3258,6 +3281,397 @@ app.post('/api/assistant/activity/convert-to-quest', (req, res) => {
   });
 });
 
+// ==================== PHASE 1: DND, RUST WIN32 INGEST, BACKUP, LAN QR & AI ANALYTICS ====================
+app.post('/api/assistant/dnd', (req, res) => {
+  const { minutes } = (req.body || {}) as { minutes?: number };
+  const safeMins = Math.max(0, Math.min(720, Number(minutes) || 0));
+  const dndRes = assistantDaemon.setDndMinutes(safeMins);
+  db.checkpointWal();
+  res.json({
+    ok: true,
+    ...dndRes,
+    overview: assistantDaemon.getOverview(buildStatePayload()),
+  });
+});
+
+app.post('/api/assistant/activity/ingest', (req, res) => {
+  if (!requireLocalhost(req, res)) return;
+  const body = (req.body || {}) as {
+    processName?: string;
+    windowTitle?: string;
+    idleSeconds?: number;
+    durationSeconds?: number;
+    source?: 'tauri-rust' | 'manual';
+  };
+  if (!body.processName || !body.processName.trim()) {
+    res.status(400).json({ error: 'processName is required' });
+    return;
+  }
+  const category = desktopTracker.ingestExternalSample({
+    processName: body.processName.trim(),
+    windowTitle: body.windowTitle || '',
+    idleSeconds: body.idleSeconds,
+    durationSeconds: body.durationSeconds,
+    source: body.source || 'manual',
+  });
+  db.checkpointWal();
+  res.json({
+    ok: true,
+    category,
+    overview: assistantDaemon.getOverview(buildStatePayload()),
+  });
+});
+
+app.get('/api/backup/status', (_req, res) => {
+  try {
+    res.json(getBackupStatus());
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Backup status failed' });
+  }
+});
+
+app.post('/api/backup/run', (_req, res) => {
+  try {
+    const backup = runBackupNow();
+    const status = getBackupStatus();
+    res.json({
+      ok: true,
+      backup,
+      status,
+      message: `Đã sao lưu "${backup.filename}" thành công!`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Sao lưu thất bại.' });
+  }
+});
+
+app.post('/api/backup/config', (req, res) => {
+  if (!requireLocalhost(req, res)) return;
+  try {
+    const body = (req.body || {}) as {
+      enabled?: boolean;
+      backupDir?: string;
+      retentionDays?: number;
+    };
+    const current = db.getAssistantSettings();
+    const nextDir = typeof body.backupDir === 'string' ? body.backupDir.trim() : current.backupDir ?? '';
+    const nextRetention =
+      typeof body.retentionDays === 'number'
+        ? Math.max(1, Math.min(365, Math.round(body.retentionDays)))
+        : current.backupRetentionDays ?? 14;
+    const nextEnabled =
+      typeof body.enabled === 'boolean' ? body.enabled : current.backupEnabled !== false;
+
+    const validatedDir = resolveBackupDir(nextDir);
+    fs.accessSync(validatedDir, fs.constants.W_OK);
+
+    db.saveAssistantSettings({
+      ...current,
+      backupEnabled: nextEnabled,
+      backupDir: nextDir,
+      backupRetentionDays: nextRetention,
+    });
+    const status = getBackupStatus();
+    db.checkpointWal();
+    res.json({
+      ok: true,
+      status,
+      message: `Đã lưu cấu hình sao lưu (${status.resolvedDir}).`,
+    });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Thư mục sao lưu không hợp lệ.' });
+  }
+});
+
+app.post('/api/backup/restore', (req, res) => {
+  if (!requireLocalhost(req, res)) return;
+  try {
+    const { filename } = (req.body || {}) as { filename?: string };
+    const result = restoreBackupByFilename(filename || '');
+    res.json({
+      ok: true,
+      preRestoreBackup: result.preRestoreBackup,
+      message: `Đã khôi phục từ "${filename}" (đã tự tạo bản dự phòng "${result.preRestoreBackup}").`,
+      state: buildStatePayload(),
+    });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Khôi phục thất bại.' });
+  }
+});
+
+app.get('/api/network/lan-info', async (req, res) => {
+  if (!requireLocalhost(req, res)) return;
+  try {
+    res.json(await getLanAccessInfo(PORT));
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to inspect LAN info' });
+  }
+});
+
+app.post('/api/network/lan-config', async (req, res) => {
+  if (!requireLocalhost(req, res)) return;
+  try {
+    const body = (req.body || {}) as { enabled?: boolean; rotateToken?: boolean };
+    const current = db.getAssistantSettings();
+    const nextEnabled =
+      typeof body.enabled === 'boolean' ? body.enabled : Boolean(current.lanAccessEnabled);
+    let nextToken = current.lanPairToken;
+    let nextPin = current.lanPairPin;
+
+    if (body.rotateToken) {
+      nextToken = crypto.randomBytes(16).toString('hex');
+      nextPin = String(crypto.randomInt(100000, 1000000));
+    }
+
+    db.saveAssistantSettings({
+      ...current,
+      lanAccessEnabled: nextEnabled,
+      lanPairToken: nextToken,
+      lanPairPin: nextPin,
+    });
+    db.checkpointWal();
+
+    const lan = await getLanAccessInfo(PORT);
+    res.json({
+      ok: true,
+      lan,
+      message: body.rotateToken
+        ? 'Đã tạo mã bảo mật & PIN 6 số mới cho kết nối Điện thoại!'
+        : nextEnabled
+          ? 'Đã bật kết nối Điện thoại qua mạng LAN / Tailscale.'
+          : 'Đã tắt truy cập từ mạng LAN.',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'LAN config failed' });
+  }
+});
+
+app.post('/api/network/pair-pin', (req, res) => {
+  const remoteIp = req.ip || req.socket.remoteAddress;
+  const rateCheck = checkPinRateLimit(remoteIp);
+  if (!rateCheck.allowed) {
+    res.status(429).json({
+      ok: false,
+      error: `Quá nhiều lần nhập sai mã PIN. Vui lòng thử lại sau ${rateCheck.retryAfterSec}s.`,
+    });
+    return;
+  }
+
+  const { pin } = (req.body || {}) as { pin?: string };
+  const settings = db.getAssistantSettings();
+  if (!settings.lanAccessEnabled) {
+    res.status(403).json({ ok: false, error: 'Truy cập LAN hiện đang tắt trên PC.' });
+    return;
+  }
+  const cleanPin = String(pin || '').trim();
+  if (!cleanPin || !constantTimeEqual(cleanPin, settings.lanPairPin || '')) {
+    recordPinFailure(remoteIp);
+    res.status(401).json({ ok: false, error: 'Mã PIN 6 số không đúng.' });
+    return;
+  }
+  clearPinFailures(remoteIp);
+  res.json({ ok: true, token: settings.lanPairToken });
+});
+
+app.get('/api/analytics/review', (req, res) => {
+  try {
+    const range = req.query.range === '30d' ? '30d' : '7d';
+    res.json({
+      analytics: computeLongTermReview(range),
+      reviews: db.getWeeklyReviews(12),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Analytics failed' });
+  }
+});
+
+app.post('/api/analytics/weekly-review/generate', async (req, res) => {
+  try {
+    const range = (req.body || {}).range === '30d' ? '30d' : '7d';
+    const result = await generateWeeklyAiReview(range);
+    db.checkpointWal();
+    res.json({
+      ok: true,
+      ...result,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Weekly review generation failed' });
+  }
+});
+
+app.post('/api/schedule/weekly-blueprint', async (req, res) => {
+  try {
+    const { focusNote, maxBlocksPerDay } = (req.body || {}) as {
+      focusNote?: string;
+      maxBlocksPerDay?: number;
+    };
+    const draft = await generateWeeklyBlueprint({ focusNote, maxBlocksPerDay });
+    res.json(draft);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Weekly blueprint generation failed' });
+  }
+});
+
+app.post('/api/schedule/weekly-blueprint/apply', (req, res) => {
+  try {
+    const { blocks, syncTodayQuests } = (req.body || {}) as {
+      blocks?: WeeklyBlueprintBlockDraft[];
+      syncTodayQuests?: boolean;
+    };
+    if (!Array.isArray(blocks) || blocks.length === 0) {
+      res.status(400).json({ error: 'Danh sách khung giờ blueprint trống.' });
+      return;
+    }
+    const result = applyWeeklyBlueprint(blocks, syncTodayQuests !== false);
+    res.json({
+      ok: true,
+      ...result,
+      message: `Đã áp dụng ${result.addedBlocksCount} khung giờ vào Thời Khóa Biểu${result.addedQuestsCount > 0 ? ` và đồng bộ ${result.addedQuestsCount} Quest hôm nay` : ''}!`,
+      state: buildStatePayload(),
+    });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Apply blueprint failed' });
+  }
+});
+
+// ==================== NATIVE MINI HUD CONTROL BRIDGE (WEB <-> TAURI .EXE <-> TRAY) ====================
+type HudBridgeAction = 'show' | 'hide' | 'toggle' | 'dock';
+let hudNativeVisible = false;
+let lastHudBridgeAt = 0;
+let pendingHudAction: HudBridgeAction | null = null;
+const hudWaiters: Array<(action: HudBridgeAction | null) => void> = [];
+
+const TAURI_EXE_PATH = path.resolve(
+  process.cwd(),
+  'src-tauri',
+  'target',
+  'release',
+  'rpg-life-tracker.exe'
+);
+
+function isNativeHudBridgeAlive(): boolean {
+  return Date.now() - lastHudBridgeAt < 32_000;
+}
+
+function flushHudActionToWaiters(action: HudBridgeAction): boolean {
+  if (hudWaiters.length === 0) {
+    pendingHudAction = action;
+    return false;
+  }
+  const next = hudWaiters.shift();
+  if (next) next(action);
+  return true;
+}
+
+function launchNativeHudExeDetached(): boolean {
+  if (process.platform !== 'win32' || !fs.existsSync(TAURI_EXE_PATH)) {
+    return false;
+  }
+  try {
+    // Launch via explorer.exe so Windows puts the desktop app cleanly in interactive Session 1
+    const child = spawn('explorer.exe', [TAURI_EXE_PATH], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+app.get('/api/hud/status', (req, res) => {
+  if (!requireLocalhost(req, res)) return;
+  const nativeRunning = isNativeHudBridgeAlive();
+  res.json({
+    nativeRunning,
+    visible: nativeRunning ? hudNativeVisible : false,
+    exeAvailable: process.platform === 'win32' && fs.existsSync(TAURI_EXE_PATH),
+  });
+});
+
+app.post('/api/hud/sync-state', (req, res) => {
+  if (!requireLocalhost(req, res)) return;
+  const { visible } = (req.body || {}) as { visible?: boolean };
+  lastHudBridgeAt = Date.now();
+  if (typeof visible === 'boolean') {
+    hudNativeVisible = visible;
+  }
+  res.json({ ok: true, visible: hudNativeVisible });
+});
+
+app.get('/api/hud/wait-command', (req, res) => {
+  if (!requireLocalhost(req, res)) return;
+  lastHudBridgeAt = Date.now();
+  if (pendingHudAction) {
+    const action = pendingHudAction;
+    pendingHudAction = null;
+    res.json({ action });
+    return;
+  }
+  if (req.query.visible === 'true') hudNativeVisible = true;
+  else if (req.query.visible === 'false') hudNativeVisible = false;
+
+  let settled = false;
+  const finish = (action: HudBridgeAction | null) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    const idx = hudWaiters.indexOf(finish);
+    if (idx >= 0) hudWaiters.splice(idx, 1);
+    if (!res.headersSent) {
+      res.json({ action });
+    }
+  };
+
+  const timer = setTimeout(() => finish(null), 20_000);
+  hudWaiters.push(finish);
+  req.on('close', () => {
+    if (!settled) {
+      settled = true;
+      clearTimeout(timer);
+      const idx = hudWaiters.indexOf(finish);
+      if (idx >= 0) hudWaiters.splice(idx, 1);
+    }
+  });
+});
+
+app.post('/api/hud/control', (req, res) => {
+  if (!requireLocalhost(req, res)) return;
+  const { action } = (req.body || {}) as { action?: HudBridgeAction };
+  const safeAction: HudBridgeAction =
+    action === 'show' || action === 'hide' || action === 'dock' ? action : 'toggle';
+
+  const nativeRunning = isNativeHudBridgeAlive();
+  if (!nativeRunning) {
+    if (safeAction === 'hide') {
+      hudNativeVisible = false;
+      res.json({ ok: true, nativeRunning: false, visible: false, launched: false });
+      return;
+    }
+    const launched = launchNativeHudExeDetached();
+    if (launched) {
+      hudNativeVisible = true;
+      pendingHudAction = safeAction === 'dock' ? 'dock' : 'show';
+      res.json({ ok: true, nativeRunning: true, visible: true, launched: true });
+      return;
+    }
+    res.json({ ok: false, nativeRunning: false, visible: false, launched: false, exeAvailable: false });
+    return;
+  }
+
+  const nextVisible =
+    safeAction === 'show' || safeAction === 'dock'
+      ? true
+      : safeAction === 'hide'
+        ? false
+        : !hudNativeVisible;
+  hudNativeVisible = nextVisible;
+  flushHudActionToWaiters(safeAction);
+  res.json({ ok: true, nativeRunning: true, visible: nextVisible, launched: false });
+});
+
 const distDir = path.resolve(process.cwd(), 'dist');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
@@ -3267,8 +3681,9 @@ if (fs.existsSync(distDir)) {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`\n[THE SYSTEM // SYS.OS] Neural Core online at http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n[THE SYSTEM // SYS.OS] Neural Core online at http://0.0.0.0:${PORT}`);
+  ensureDailyAutoBackup();
   desktopTracker.start();
   assistantDaemon.start();
 });

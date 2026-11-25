@@ -4,6 +4,8 @@ import {
   Coins,
   Command,
   Edit3,
+  Eye,
+  EyeOff,
   Flame,
   Gem,
   Moon,
@@ -26,6 +28,8 @@ interface TopSystemHudProps {
   soundEnabled?: boolean;
   lastSavedAt?: string;
   assistantSummary?: SystemStatePayload['assistantSummary'];
+  hudVisible?: boolean;
+  onToggleHudVisible?: () => void;
   onOpenAssistant?: () => void;
   onToggleTheme: () => void;
   onToggleSound?: () => void;
@@ -41,6 +45,8 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
   theme,
   soundEnabled = true,
   assistantSummary,
+  hudVisible = false,
+  onToggleHudVisible,
   onOpenAssistant,
   onToggleTheme,
   onToggleSound,
@@ -226,6 +232,26 @@ export const TopSystemHud: React.FC<TopSystemHudProps> = ({
             >
               <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
               <span>Focus {assistantSummary.focusScore}%</span>
+            </button>
+          )}
+
+          {onToggleHudVisible && (
+            <button
+              type="button"
+              onClick={onToggleHudVisible}
+              className={`flex items-center gap-1.5 border-2 px-2.5 py-1.5 font-mono text-[11px] font-bold transition rounded-[2px] ${
+                hudVisible
+                  ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-600 hover:bg-cyan-500/25 dark:text-cyan-300'
+                  : 'studio-subtle studio-divider text-sub hover:border-amber-500/50 hover:text-main'
+              }`}
+              title={
+                hudVisible
+                  ? 'Mini HUD 2D Pixel đang hiện — bấm để ẩn (hoặc bấm icon khay hệ thống / Ctrl+Shift+Space)'
+                  : 'Mini HUD 2D Pixel đang ẩn — bấm để hiện ngay lên màn hình (Ctrl+Shift+Space)'
+              }
+            >
+              {hudVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+              <span>{hudVisible ? 'Mini HUD: Hiện' : 'Mini HUD: Ẩn'}</span>
             </button>
           )}
 

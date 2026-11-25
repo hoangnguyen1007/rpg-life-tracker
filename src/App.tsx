@@ -5,6 +5,8 @@ import {
   CalendarClock,
   Coffee,
   Command,
+  Eye,
+  EyeOff,
   Ghost,
   GitBranch,
   Loader2,
@@ -31,8 +33,9 @@ import type {
   RejectionReason,
   SystemResetMode,
   SystemStatePayload,
+  WeeklyBlueprintBlockDraft,
 } from './types/system';
-import { systemApi } from './utils/api';
+import { isLanAuthError, isTauriDesktop, setLanToken, systemApi } from './utils/api';
 import { soundEngine } from './utils/soundEngine';
 import { getVnTodayKey } from './utils/timeVn';
 import { TopSystemHud } from './components/TopSystemHud';
@@ -50,9 +53,21 @@ import { AwakeningWizardModal } from './components/AwakeningWizardModal';
 import { DeathCheckpointModal } from './components/DeathCheckpointModal';
 import { ResetProgressModal } from './components/ResetProgressModal';
 import { AssistantCenterView } from './components/AssistantCenterView';
+import { FloatingHudPage } from './components/FloatingHudPage';
+import { MobileQuickView } from './components/MobileQuickView';
 
 type TabKey = 'quests' | 'skills' | 'campaign' | 'timetable' | 'hero' | 'assistant';
 type HeroSubTab = 'status' | 'profile' | 'shop' | 'shadows';
+type AppViewMode = 'main' | 'hud' | 'mobile';
+
+function getViewModeFromLocation(): AppViewMode {
+  if (typeof window === 'undefined') return 'main';
+  const rawHash = window.location.hash.replace(/^#/, '').split('?')[0].toLowerCase();
+  const rawPath = window.location.pathname.toLowerCase();
+  if (rawHash === '/hud' || rawHash === 'hud' || rawPath === '/hud') return 'hud';
+  if (rawHash === '/mobile' || rawHash === 'mobile' || rawPath === '/mobile') return 'mobile';
+  return 'main';
+}
 
 interface SystemAlert {
   id: string;
@@ -70,6 +85,8 @@ const NAV_TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function App() {
+  const [viewMode, setViewMode] = useState<AppViewMode>(() => getViewModeFromLocation());
+  const [lanAuthRequired, setLanAuthRequired] = useState(false);
   const [state, setState] = useState<SystemStatePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -136,6 +153,8 @@ export default function App() {
   const [paletteBusy, setPaletteBusy] = useState(false);
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const [alert, setAlert] = useState<SystemAlert | null>(null);
+  const [hudVisible, setHudVisible] = useState<boolean>(() => isTauriDesktop());
+  const hudPopupRef = useRef<Window | null>(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -157,21 +176,51 @@ export default function App() {
     return () => clearTimeout(t);
   }, [alert]);
 
-  const loadState = useCallback(async () => {
+  useEffect(() => {
+    const syncRoute = () => setViewMode(getViewModeFromLocation());
+    window.addEventListener('hashchange', syncRoute);
+    window.addEventListener('popstate', syncRoute);
+    return () => {
+      window.removeEventListener('hashchange', syncRoute);
+      window.removeEventListener('popstate', syncRoute);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (viewMode === 'hud') {
+      document.documentElement.classList.add('hud-mode');
+      document.body.classList.add('hud-mode');
+    } else {
+      document.documentElement.classList.remove('hud-mode');
+      document.body.classList.remove('hud-mode');
+    }
+    return () => {
+      document.documentElement.classList.remove('hud-mode');
+      document.body.classList.remove('hud-mode');
+    };
+  }, [viewMode]);
+
+  const loadState = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const data = await systemApi.getState();
       setState(data);
       setError(null);
+      setLanAuthRequired(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể kết nối tới máy chủ.');
+      if (isLanAuthError(err)) {
+        setLanAuthRequired(true);
+        setError(null);
+      } else {
+        setError(err instanceof Error ? err.message : 'Không thể kết nối tới máy chủ.');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadState();
+    void loadState(false);
   }, [loadState]);
 
   const loadAssistantOverview = useCallback(async () => {
@@ -179,7 +228,10 @@ export default function App() {
     try {
       const ov = await systemApi.getAssistantOverview();
       setAssistantOverview(ov);
-    } catch {
+    } catch (err) {
+      if (isLanAuthError(err)) {
+        setLanAuthRequired(true);
+      }
       // Non-fatal if assistant endpoint is temporarily unavailable
     } finally {
       setAssistantLoading(false);
@@ -198,6 +250,18 @@ export default function App() {
     }, 20000);
     return () => clearInterval(timer);
   }, [activeTab, loadAssistantOverview]);
+
+  useEffect(() => {
+    const isStartupBootRetry = !state && (viewMode === 'hud' || isTauriDesktop());
+    if (viewMode !== 'hud' && viewMode !== 'mobile' && !isStartupBootRetry) return;
+    if (lanAuthRequired) return;
+    const intervalMs = !state ? 1200 : viewMode === 'hud' ? 4000 : 10000;
+    const timer = setInterval(() => {
+      void loadState(true);
+      void loadAssistantOverview();
+    }, intervalMs);
+    return () => clearInterval(timer);
+  }, [viewMode, lanAuthRequired, state, loadState, loadAssistantOverview]);
 
   const openCommandPalette = useCallback(() => {
     soundEngine.click();
@@ -289,6 +353,316 @@ export default function App() {
       origin: { y: 0.6 },
       colors: ['#f59e0b', '#ef4444', '#8b5cf6', '#10b981'],
     });
+  }, []);
+
+  const handlePairWithPin = useCallback(
+    async (pin: string) => {
+      const res = await systemApi.pairWithLanPin(pin);
+      if (res.ok) {
+        if (res.token) setLanToken(res.token);
+        setLanAuthRequired(false);
+        await Promise.all([loadState(false), loadAssistantOverview()]);
+      }
+      return { ok: res.ok, error: res.error };
+    },
+    [loadState, loadAssistantOverview]
+  );
+
+  const handleStartQuest = useCallback(
+    async (questId: string) => {
+      soundEngine.systemPing();
+      const updated = await systemApi.startQuest(questId);
+      setState(updated);
+      pushAlert('Đã bắt đầu', 'Đang ghi nhận tiến độ phiên làm việc.');
+    },
+    [pushAlert]
+  );
+
+  const handlePauseQuest = useCallback(
+    async (questId: string) => {
+      soundEngine.click();
+      const updated = await systemApi.pauseQuest(questId);
+      setState(updated);
+      pushAlert('Đã tạm dừng phiên', 'Thời gian tích lũy đã được lưu tự động.');
+    },
+    [pushAlert]
+  );
+
+  const handleCompleteQuest = useCallback(
+    async (questId: string, proofNote?: string) => {
+      const res = await systemApi.completeQuest(questId, { proofNote });
+      setState(res.state);
+      const extraDetail = `${res.actualDurationMinutes ? ` · ${res.actualDurationMinutes}p thực` : ''}${
+        res.contributedSkillName
+          ? ` · +${res.skillPracticeXpGain ?? 0} Skill XP (${res.contributedSkillName})`
+          : ''
+      }`;
+      if (res.leveledUp || res.rankPromoted) {
+        triggerLevelUpFx();
+        pushAlert(
+          'THĂNG CẤP!',
+          `Level ${res.state.player.level} (${res.state.player.rank}) · +${res.spGain ?? 2} SP${extraDetail}!`
+        );
+      } else {
+        soundEngine.questComplete();
+        pushAlert(
+          'Hoàn thành nhiệm vụ',
+          `+${res.xpGain} XP · +${res.goldGain}G · +${res.spGain ?? 1} SP${
+            res.runestoneGain > 0 ? ` · +${res.runestoneGain} 💎` : ''
+          }${extraDetail}`
+        );
+      }
+    },
+    [pushAlert, triggerLevelUpFx]
+  );
+
+  const handleCheckinEnergy = useCallback(
+    async (energy: number) => {
+      soundEngine.systemPing();
+      const updated = await systemApi.checkin({ energyLevel: energy });
+      setState(updated);
+      pushAlert(
+        'Đã cập nhật thể trạng',
+        `Năng lượng hôm nay: ${energy}% — AI sẽ cân chỉnh độ nặng bài phù hợp (HP giữ nguyên).`
+      );
+    },
+    [pushAlert]
+  );
+
+  const handleQuickAddQuest = useCallback(
+    async (title: string, durationMinutes: number) => {
+      soundEngine.systemPing();
+      const updated = await systemApi.createCustomQuest({
+        title,
+        durationMinutes,
+        primaryStat: 'PER',
+        type: 'daily',
+      });
+      setState(updated);
+      pushAlert('Đã thêm nhiệm vụ nhanh', `"${title}" (${durationMinutes}p) đã vào bảng hôm nay.`);
+    },
+    [pushAlert]
+  );
+
+  const handleSetDnd = useCallback(
+    async (minutes: number) => {
+      soundEngine.systemPing();
+      const res = await systemApi.setAssistantDnd(minutes);
+      setAssistantOverview(res.overview);
+      pushAlert(
+        minutes > 0 ? 'Đã bật Do Not Disturb' : 'Đã tắt DND',
+        minutes > 0
+          ? `Tạm tắt nhắc xao nhãng trong ${minutes} phút.`
+          : 'Trợ lý PC tiếp tục giám sát bình thường.'
+      );
+    },
+    [pushAlert]
+  );
+
+  const handleApplyWeeklyBlueprint = useCallback(
+    async (blocks: WeeklyBlueprintBlockDraft[], syncTodayQuests = true) => {
+      soundEngine.arise();
+      const res = await systemApi.applyWeeklyBlueprint(blocks, syncTodayQuests);
+      setState(res.state);
+      pushAlert('Đã áp dụng Blueprint tuần', res.message);
+    },
+    [pushAlert]
+  );
+
+  const handleOpenMainApp = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (isTauriDesktop()) {
+      const tauri = (
+        window as unknown as {
+          __TAURI__?: { core?: { invoke?: (cmd: string) => Promise<unknown> } };
+        }
+      ).__TAURI__;
+      if (tauri?.core?.invoke) {
+        void tauri.core.invoke('open_main_dashboard');
+        return;
+      }
+    }
+    if (window.location.hash) {
+      window.location.hash = '';
+    }
+    if (
+      window.location.pathname.toLowerCase() === '/hud' ||
+      window.location.pathname.toLowerCase() === '/mobile'
+    ) {
+      window.history.pushState({}, '', '/');
+    }
+    setViewMode('main');
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || viewMode !== 'main') return;
+    type TauriBridge = {
+      core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> };
+      event?: {
+        listen?: (
+          event: string,
+          handler: (ev: { payload: unknown }) => void
+        ) => Promise<() => void>;
+      };
+    };
+    const tauri = (window as unknown as { __TAURI__?: TauriBridge }).__TAURI__;
+
+    if (isTauriDesktop() && tauri?.core?.invoke) {
+      let unlisten: (() => void) | null = null;
+      const syncTauriHud = () => {
+        tauri.core
+          ?.invoke?.('get_hud_visible')
+          .then((val) => {
+            if (typeof val === 'boolean') setHudVisible(val);
+          })
+          .catch(() => {});
+      };
+      syncTauriHud();
+      window.addEventListener('focus', syncTauriHud);
+      if (tauri.event?.listen) {
+        tauri.event
+          .listen('tauri-hud-visibility', (ev) => {
+            if (typeof ev.payload === 'boolean') setHudVisible(ev.payload);
+          })
+          .then((fn) => {
+            unlisten = fn;
+          })
+          .catch(() => {});
+      }
+      return () => {
+        window.removeEventListener('focus', syncTauriHud);
+        if (unlisten) unlisten();
+      };
+    }
+
+    const syncViaBackendBridge = () => {
+      systemApi
+        .getHudStatus()
+        .then((st) => {
+          if (st.nativeRunning) {
+            setHudVisible(Boolean(st.visible));
+          } else {
+            const open = Boolean(hudPopupRef.current && !hudPopupRef.current.closed);
+            setHudVisible(open);
+          }
+        })
+        .catch(() => {
+          const open = Boolean(hudPopupRef.current && !hudPopupRef.current.closed);
+          setHudVisible(open);
+        });
+    };
+    syncViaBackendBridge();
+    window.addEventListener('focus', syncViaBackendBridge);
+    const interval = window.setInterval(syncViaBackendBridge, 3000);
+    return () => {
+      window.removeEventListener('focus', syncViaBackendBridge);
+      window.clearInterval(interval);
+    };
+  }, [viewMode]);
+
+  const handleToggleHudVisible = useCallback(async () => {
+    soundEngine.click();
+    if (typeof window === 'undefined') return;
+    const tauri = (
+      window as unknown as {
+        __TAURI__?: {
+          core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> };
+        };
+      }
+    ).__TAURI__;
+
+    if (isTauriDesktop() && tauri?.core?.invoke) {
+      try {
+        const nextVisible = await tauri.core.invoke('set_hud_visible', {
+          visible: !hudVisible,
+        });
+        const resolved = typeof nextVisible === 'boolean' ? nextVisible : !hudVisible;
+        setHudVisible(resolved);
+        pushAlert(
+          resolved ? 'Đã hiện Mini HUD' : 'Đã ẩn Mini HUD',
+          resolved
+            ? 'Mini HUD 2D Pixel đang nổi trên góc màn hình (Ctrl+Shift+Space để ẩn/hiện nhanh).'
+            : 'Mini HUD đã ẩn gọn về khay chạy ẩn — bấm icon khay hệ thống hoặc nút Mini HUD để hiện lại.'
+        );
+      } catch {
+        // Ignore IPC error
+      }
+      return;
+    }
+
+    // Web Browser -> directly control the REAL native transparent Mini HUD (.exe) via backend bridge!
+    try {
+      const action = hudVisible ? 'hide' : 'show';
+      const res = await systemApi.controlNativeHud(action);
+      if (res.ok) {
+        setHudVisible(Boolean(res.visible));
+        pushAlert(
+          res.visible ? 'Đã hiện Mini HUD trên màn hình' : 'Đã ẩn Mini HUD',
+          res.launched
+            ? 'Đang khởi chạy Mini HUD 2D Pixel trong suốt ở góc phải thanh Taskbar!'
+            : res.visible
+              ? 'Mini HUD 2D Pixel đã hiện lên ngay phía trên thanh Taskbar.'
+              : 'Mini HUD đã ẩn gọn về khay hệ thống (bấm icon khay hoặc nút này để hiện lại).'
+        );
+        return;
+      }
+    } catch {
+      // Fall through to browser popup only if backend bridge / .exe unavailable
+    }
+
+    if (hudPopupRef.current && !hudPopupRef.current.closed) {
+      hudPopupRef.current.close();
+      hudPopupRef.current = null;
+      setHudVisible(false);
+      pushAlert('Đã ẩn cửa sổ Mini HUD', 'Bạn có thể bấm "Mini HUD: Ẩn" để mở lại bất cứ lúc nào.');
+    } else {
+      const popup = window.open('/#/hud', 'rpg_hud', 'width=440,height=280');
+      hudPopupRef.current = popup;
+      setHudVisible(Boolean(popup));
+      if (popup) {
+        pushAlert('Đã mở Mini HUD (Trình duyệt)', 'Chạy bản rpg-life-tracker.exe để dùng HUD trong suốt Always-on-Top.');
+      }
+    }
+  }, [hudVisible, pushAlert]);
+
+  const handleDockHudCorner = useCallback(() => {
+    soundEngine.click();
+    if (typeof window === 'undefined') return;
+    const tauri = (
+      window as unknown as {
+        __TAURI__?: { core?: { invoke?: (cmd: string) => Promise<unknown> } };
+      }
+    ).__TAURI__;
+    if (isTauriDesktop() && tauri?.core?.invoke) {
+      void tauri.core.invoke('dock_hud_corner').then(() => {
+        setHudVisible(true);
+        pushAlert('Đã đưa Mini HUD về góc Taskbar', 'Mini HUD đã đậu gọn ở góc phải phía trên thanh tác vụ.');
+      });
+      return;
+    }
+    void systemApi
+      .controlNativeHud('dock')
+      .then((res) => {
+        if (res.ok) {
+          setHudVisible(true);
+          pushAlert('Đã đưa Mini HUD về góc Taskbar', 'Mini HUD đã hiện lại ở góc phải phía trên thanh tác vụ.');
+        }
+      })
+      .catch(() => {});
+  }, [pushAlert]);
+
+  const handleHideHudFromSelf = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const tauri = (
+      window as unknown as {
+        __TAURI__?: {
+          core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> };
+        };
+      }
+    ).__TAURI__;
+    if (isTauriDesktop() && tauri?.core?.invoke) {
+      void tauri.core.invoke('set_hud_visible', { visible: false });
+    }
   }, []);
 
   const handleCreateChatThread = useCallback(
@@ -472,6 +846,24 @@ export default function App() {
         },
       },
       {
+        id: 'action-toggle-hud',
+        group: 'Giao diện',
+        label: hudVisible
+          ? 'Ẩn 2D Pixel HUD nổi (Ctrl+Shift+Space)'
+          : 'Hiện 2D Pixel HUD nổi (Ctrl+Shift+Space)',
+        hint: hudVisible ? 'Đang hiện' : 'Đang ẩn',
+        keywords: 'hud an hien floating widget pixel taskbar',
+        icon: hudVisible ? (
+          <EyeOff className="h-4 w-4 text-amber-400" />
+        ) : (
+          <Eye className="h-4 w-4 text-cyan-400" />
+        ),
+        run: async () => {
+          await handleToggleHudVisible();
+          setCommandPaletteOpen(false);
+        },
+      },
+      {
         id: 'action-assistant',
         group: 'Hệ thống',
         label: 'Mở Trợ Lý PC & Khởi động cùng Windows',
@@ -500,7 +892,7 @@ export default function App() {
     ];
 
     return [...quickActions, ...tabItems];
-  }, [handleTogglePlannedRest, pushAlert, state?.player.plannedRestMode, theme]);
+  }, [handleToggleHudVisible, handleTogglePlannedRest, hudVisible, pushAlert, state?.player.plannedRestMode, theme]);
 
   const filteredCommands = useMemo(() => {
     const q = commandQuery.trim().toLowerCase();
@@ -517,6 +909,58 @@ export default function App() {
     setSelectedCommandIdx(0);
   }, [commandQuery]);
 
+  if (viewMode === 'mobile') {
+    if (loading && !state && !lanAuthRequired) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center">
+          <Loader2 className="h-9 w-9 animate-spin text-amber-500" />
+          <p className="font-pixel mt-3 text-xs text-sub">LOADING MOBILE SYSTEM...</p>
+        </div>
+      );
+    }
+    return (
+      <MobileQuickView
+        state={state}
+        overview={assistantOverview}
+        authRequired={lanAuthRequired}
+        onPairWithPin={handlePairWithPin}
+        onCheckinEnergy={handleCheckinEnergy}
+        onStartQuest={handleStartQuest}
+        onPauseQuest={handlePauseQuest}
+        onCompleteQuest={(id) => handleCompleteQuest(id)}
+        onQuickAddQuest={handleQuickAddQuest}
+        onToggleDnd={handleSetDnd}
+        onRefresh={async () => {
+          await Promise.all([loadState(true), loadAssistantOverview()]);
+        }}
+      />
+    );
+  }
+
+  if (viewMode === 'hud') {
+    if (loading && !state) {
+      return (
+        <div className="flex h-screen w-screen items-center justify-center bg-transparent">
+          <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
+        </div>
+      );
+    }
+    return (
+      <FloatingHudPage
+        state={state}
+        overview={assistantOverview}
+        onStartQuest={handleStartQuest}
+        onPauseQuest={handlePauseQuest}
+        onCompleteQuest={(id) => handleCompleteQuest(id)}
+        onQuickAddQuest={handleQuickAddQuest}
+        onToggleDnd={handleSetDnd}
+        onConvertFocusToQuest={handleConvertFocusToQuest}
+        onHideHud={isTauriDesktop() ? handleHideHudFromSelf : undefined}
+        onOpenMainApp={handleOpenMainApp}
+      />
+    );
+  }
+
   if (loading && !state) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center">
@@ -532,7 +976,7 @@ export default function App() {
         <div className="rpg-window max-w-md p-6 text-center">
           <h2 className="font-display text-lg font-bold text-rose-500">Lỗi kết nối máy chủ</h2>
           <p className="mt-2 text-sm text-sub">{error}</p>
-          <button onClick={loadState} className="btn-primary mt-4 px-4 py-2 text-xs">
+          <button onClick={() => void loadState(false)} className="btn-primary mt-4 px-4 py-2 text-xs">
             Thử lại
           </button>
         </div>
@@ -581,6 +1025,8 @@ export default function App() {
           soundEnabled={soundEnabled}
           lastSavedAt={state.storageInfo?.lastSavedAt}
           assistantSummary={state.assistantSummary}
+          hudVisible={hudVisible}
+          onToggleHudVisible={() => void handleToggleHudVisible()}
           onOpenAssistant={() => {
             soundEngine.click();
             setActiveTab('assistant');
@@ -955,6 +1401,7 @@ export default function App() {
                 <TimetablePlanner
                   weeklyAnalysis={state.weeklyAnalysis}
                   quests={state.quests}
+                  onApplyWeeklyBlueprint={handleApplyWeeklyBlueprint}
                   onAiPlanDaySchedule={async (p) => {
                     soundEngine.arise();
                     const res = await systemApi.aiPlanDaySchedule(p);
@@ -1141,6 +1588,11 @@ export default function App() {
                   )}
                   loading={assistantLoading}
                   onRefresh={loadAssistantOverview}
+                  onSetDnd={handleSetDnd}
+                  onStateChanged={(nextState) => setState(nextState)}
+                  hudVisible={hudVisible}
+                  onToggleHudVisible={() => void handleToggleHudVisible()}
+                  onDockHudCorner={handleDockHudCorner}
                   onToggleTracker={async (enabled) => {
                     soundEngine.systemPing();
                     const ov = await systemApi.toggleDesktopTracker(enabled);

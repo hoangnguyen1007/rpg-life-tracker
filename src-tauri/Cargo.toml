@@ -1,0 +1,45 @@
+[package]
+name = "rpg-life-tracker"
+version = "1.0.0"
+description = "RPG Life Tracker — Native Windows Desktop Shell (Tauri v2)"
+authors = ["Hoang Nguyen"]
+edition = "2021"
+
+[lib]
+name = "rpg_life_tracker_lib"
+# Desktop-only crate type avoids redundant LTO passes and .dll/.lib artifacts;
+# add "staticlib", "cdylib" back if ever targeting Android/iOS.
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2.12", default-features = false, features = ["json"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_StationsAndDesktops",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+panic = "abort"
+lto = false
+opt-level = "s"
+strip = true

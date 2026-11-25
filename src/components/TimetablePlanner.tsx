@@ -13,6 +13,7 @@ import {
   Sparkles,
   Trash2,
   Wand2,
+  X,
 } from 'lucide-react';
 import type {
   AIDayPlanResult,
@@ -20,6 +21,8 @@ import type {
   Quest,
   TimetableBlock,
   TimetableBlockType,
+  WeeklyBlueprintBlockDraft,
+  WeeklyBlueprintDraft,
 } from '../types/system';
 import { systemApi } from '../utils/api';
 import {
@@ -39,6 +42,7 @@ interface TimetablePlannerProps {
   onClearTimetable: (dayOfWeek?: number) => Promise<void>;
   onImportText: (rawText: string, replaceAll?: boolean) => Promise<void>;
   onAiPlanDaySchedule?: (payload: { prompt: string; dayOfWeek: number }) => Promise<AIDayPlanResult>;
+  onApplyWeeklyBlueprint?: (blocks: WeeklyBlueprintBlockDraft[], syncTodayQuests: boolean) => Promise<void>;
 }
 
 const DAY_PILLS = [
@@ -393,6 +397,7 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
   onClearTimetable,
   onImportText,
   onAiPlanDaySchedule,
+  onApplyWeeklyBlueprint,
 }) => {
   const [todayDow, setTodayDow] = useState<number>(() => getVnDayOfWeek());
   const [todayKey, setTodayKey] = useState<string>(() => getVnTodayKey());
@@ -419,6 +424,16 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
   const [aiDayPrompt, setAiDayPrompt] = useState('');
   const [aiPlanning, setAiPlanning] = useState(false);
   const [aiPlanSummary, setAiPlanSummary] = useState<string | null>(null);
+
+  // AI Weekly Blueprint Modal/Drawer
+  const [showBlueprintModal, setShowBlueprintModal] = useState(false);
+  const [blueprintFocusNote, setBlueprintFocusNote] = useState('');
+  const [blueprintGenerating, setBlueprintGenerating] = useState(false);
+  const [blueprintApplying, setBlueprintApplying] = useState(false);
+  const [blueprintDraft, setBlueprintDraft] = useState<WeeklyBlueprintDraft | null>(null);
+  const [blueprintBlocks, setBlueprintBlocks] = useState<WeeklyBlueprintBlockDraft[]>([]);
+  const [blueprintSyncToday, setBlueprintSyncToday] = useState(true);
+  const [blueprintNotice, setBlueprintNotice] = useState<string | null>(null);
 
   // Batch Multi-Day Form
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -581,6 +596,43 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
     }
   };
 
+  const handleGenerateBlueprint = async () => {
+    setBlueprintGenerating(true);
+    setBlueprintNotice(null);
+    try {
+      const draft = await systemApi.generateWeeklyBlueprint({
+        focusNote: blueprintFocusNote.trim() || undefined,
+        maxBlocksPerDay: 2,
+      });
+      setBlueprintDraft(draft);
+      setBlueprintBlocks(draft.blocks);
+    } catch (err) {
+      setBlueprintNotice(err instanceof Error ? err.message : 'Không thể tạo bản nháp tuần.');
+    } finally {
+      setBlueprintGenerating(false);
+    }
+  };
+
+  const handleApplyBlueprint = async () => {
+    const selected = blueprintBlocks.filter((b) => b.selected);
+    if (selected.length === 0) return;
+    setBlueprintApplying(true);
+    setBlueprintNotice(null);
+    try {
+      if (onApplyWeeklyBlueprint) {
+        await onApplyWeeklyBlueprint(blueprintBlocks, blueprintSyncToday);
+      } else {
+        const res = await systemApi.applyWeeklyBlueprint(blueprintBlocks, blueprintSyncToday);
+        setImportNotice(res.message);
+      }
+      setShowBlueprintModal(false);
+    } catch (err) {
+      setBlueprintNotice(err instanceof Error ? err.message : 'Không thể áp dụng lịch tuần.');
+    } finally {
+      setBlueprintApplying(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Top Action Bar & Visual Weekly Balance Chart */}
@@ -594,6 +646,21 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBlueprintModal(true);
+                  setBlueprintNotice(null);
+                  if (!blueprintDraft) {
+                    void handleGenerateBlueprint();
+                  }
+                }}
+                className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>✨ AI Lập Lịch Tuần (Blueprint)</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setActiveTool(activeTool === 'text' ? 'none' : 'text')}
@@ -839,6 +906,209 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
             </p>
           )}
         </section>
+      )}
+
+      {/* AI Weekly Blueprint Modal / Drawer */}
+      {showBlueprintModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
+          <div className="rpg-window studio-surface flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden">
+            <div className="flex items-center justify-between border-b-2 px-5 py-4 studio-divider">
+              <div>
+                <h3 className="font-display text-base font-extrabold text-main">
+                  ✨ AI Lập Lịch Tuần Tự Động (Weekly Blueprint)
+                </h3>
+                <p className="text-xs text-sub">
+                  Tự động rà soát 7 ngày trống, né giờ ngủ 23:30–07:00 &amp; lịch cố định, ưu tiên Giờ Vàng và bù các chỉ số còn yếu.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBlueprintModal(false)}
+                className="btn-secondary p-1.5"
+                aria-label="Đóng"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto p-5">
+              {/* Focus Note & Generate Bar */}
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={blueprintFocusNote}
+                  onChange={(e) => setBlueprintFocusNote(e.target.value)}
+                  placeholder="Ghi chú ưu tiên tuần này (VD: Ưu tiên đồ án + ôn ngoại ngữ + tập thể dục)..."
+                  className="flex-1 px-3 py-2 text-xs"
+                />
+                <button
+                  type="button"
+                  disabled={blueprintGenerating}
+                  onClick={handleGenerateBlueprint}
+                  className="btn-primary flex shrink-0 items-center justify-center gap-1.5 px-4 py-2 text-xs"
+                >
+                  {blueprintGenerating ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  <span>{blueprintDraft ? 'Tạo Lại Bản Nháp' : 'Tạo Bản Nháp Tuần'}</span>
+                </button>
+              </div>
+
+              {blueprintNotice && (
+                <p className="rounded-[2px] border-2 border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
+                  {blueprintNotice}
+                </p>
+              )}
+
+              {blueprintGenerating && !blueprintDraft && (
+                <div className="py-10 text-center text-xs text-sub">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-amber-400" />
+                  <p className="mt-2">AI đang phân tích dữ liệu 7 ngày &amp; sắp xếp khung giờ không trùng lịch...</p>
+                </div>
+              )}
+
+              {blueprintDraft && (
+                <>
+                  {/* Summary & Empirical Peak Hour */}
+                  <div className="space-y-2 rounded-[2px] border-2 p-3.5 studio-subtle studio-divider">
+                    <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
+                      <span className="rounded-[2px] border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-bold text-amber-400">
+                        {blueprintDraft.mode === 'llm' ? 'LIVE LLM' : 'SMART HEURISTIC'}
+                      </span>
+                      <span className="text-cyan-400">
+                        Giờ Vàng Thực Tế: <strong>{blueprintDraft.empiricalPeakHour || 'Chưa đủ dữ liệu'}</strong>
+                      </span>
+                      {blueprintDraft.weakestStats.length > 0 && (
+                        <span className="text-emerald-400">
+                          Chỉ số cần bù: <strong>{blueprintDraft.weakestStats.join(' · ')}</strong>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-main">{blueprintDraft.summary}</p>
+                  </div>
+
+                  {/* Proposed Conflict-Free Blocks Grouped by Day T2 -> CN */}
+                  <div className="space-y-3">
+                    {DAY_PILLS.map((dp) => {
+                      const dayBlocks = blueprintBlocks
+                        .map((blk, idx) => ({ blk, idx }))
+                        .filter(({ blk }) => blk.dayOfWeek === dp.dow);
+                      if (dayBlocks.length === 0) return null;
+
+                      return (
+                        <div key={dp.dow} className="rounded-[2px] border-2 studio-divider overflow-hidden">
+                          <div className="border-b-2 px-3.5 py-2 font-display text-xs font-extrabold text-main studio-subtle studio-divider">
+                            {dp.full} ({dayBlocks.length} khối đề xuất)
+                          </div>
+                          <div className="divide-y-2 studio-divider">
+                            {dayBlocks.map(({ blk, idx }) => (
+                              <div key={blk.id} className="space-y-1.5 p-3 text-xs">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={blk.selected}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setBlueprintBlocks((prev) =>
+                                        prev.map((item, i) =>
+                                          i === idx ? { ...item, selected: checked } : item
+                                        )
+                                      );
+                                    }}
+                                    className="h-4 w-4 accent-amber-500"
+                                  />
+                                  <input
+                                    type="time"
+                                    value={blk.startTime}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setBlueprintBlocks((prev) =>
+                                        prev.map((item, i) =>
+                                          i === idx ? { ...item, startTime: val } : item
+                                        )
+                                      );
+                                    }}
+                                    className="px-2 py-1 font-mono text-xs"
+                                  />
+                                  <span className="text-dim">–</span>
+                                  <input
+                                    type="time"
+                                    value={blk.endTime}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setBlueprintBlocks((prev) =>
+                                        prev.map((item, i) =>
+                                          i === idx ? { ...item, endTime: val } : item
+                                        )
+                                      );
+                                    }}
+                                    className="px-2 py-1 font-mono text-xs"
+                                  />
+                                  <input
+                                    value={blk.title}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setBlueprintBlocks((prev) =>
+                                        prev.map((item, i) =>
+                                          i === idx ? { ...item, title: val } : item
+                                        )
+                                      );
+                                    }}
+                                    className="min-w-[180px] flex-1 px-2.5 py-1 text-xs font-semibold"
+                                  />
+                                  <span className="rounded-[2px] border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-400">
+                                    +{blk.primaryStat}
+                                  </span>
+                                </div>
+                                <p className="pl-6 text-[11px] text-sub">{blk.reason}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {blueprintDraft && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t-2 px-5 py-3.5 studio-subtle studio-divider">
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-main">
+                  <input
+                    type="checkbox"
+                    checked={blueprintSyncToday}
+                    onChange={(e) => setBlueprintSyncToday(e.target.checked)}
+                    className="h-4 w-4 accent-amber-500"
+                  />
+                  <span>Đồng bộ luôn thành Quest cho các khối hôm nay</span>
+                </label>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBlueprintModal(false)}
+                    className="btn-secondary px-3.5 py-2 text-xs"
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    type="button"
+                    disabled={blueprintApplying || blueprintBlocks.filter((b) => b.selected).length === 0}
+                    onClick={handleApplyBlueprint}
+                    className="btn-primary flex items-center gap-1.5 px-4 py-2 text-xs"
+                  >
+                    {blueprintApplying && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    <span>
+                      Áp dụng cả tuần ({blueprintBlocks.filter((b) => b.selected).length} khối)
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Google-Calendar-style 2D Pixel Weekly Time-Grid */}

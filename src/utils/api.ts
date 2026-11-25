@@ -8,9 +8,13 @@ import type {
   AssistantSettings,
   AttributeKey,
   AuditLogEntry,
+  BackupFileEntry,
+  BackupStatusPayload,
   ChatContextScope,
   DaySettlementReport,
   DeathReport,
+  LanAccessPayload,
+  LongTermAnalyticsPayload,
   PlayerProfile,
   Quest,
   QuestRank,
@@ -22,16 +26,136 @@ import type {
   SystemStatePayload,
   TaskDraftAnalysis,
   TimetableBlock,
+  WeeklyBlueprintBlockDraft,
+  WeeklyBlueprintDraft,
+  WeeklyReviewRecord,
 } from '../types/system';
 
+const LAN_TOKEN_STORAGE_KEY = 'rpg_lan_token';
+
+export class LanAuthError extends Error {
+  readonly code = 'LAN_AUTH_REQUIRED';
+  readonly status = 401;
+
+  constructor(message = 'Cần ghép nối LAN bằng mã PIN hoặc QR token để truy cập.') {
+    super(message);
+    this.name = 'LanAuthError';
+  }
+}
+
+export function isLanAuthError(err: unknown): boolean {
+  if (err instanceof LanAuthError) return true;
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: unknown; status?: unknown; message?: unknown };
+  return (
+    e.code === 'LAN_AUTH_REQUIRED' ||
+    e.status === 401 ||
+    (typeof e.message === 'string' && e.message.includes('LAN_AUTH_REQUIRED'))
+  );
+}
+
+export function setLanToken(token: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (token && token.trim()) {
+      window.localStorage.setItem(LAN_TOKEN_STORAGE_KEY, token.trim());
+    } else {
+      window.localStorage.removeItem(LAN_TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage errors in restricted contexts
+  }
+}
+
+function extractTokenFromLocation(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    let foundToken: string | null = null;
+    const url = new URL(window.location.href);
+
+    const searchToken = url.searchParams.get('token');
+    if (searchToken && searchToken.trim()) {
+      foundToken = searchToken.trim();
+      url.searchParams.delete('token');
+    }
+
+    if (url.hash && url.hash.includes('?')) {
+      const [hashPath, hashQuery] = url.hash.split('?', 2);
+      const hashParams = new URLSearchParams(hashQuery);
+      const hashToken = hashParams.get('token');
+      if (hashToken && hashToken.trim()) {
+        foundToken = foundToken || hashToken.trim();
+        hashParams.delete('token');
+        const nextHashQuery = hashParams.toString();
+        url.hash = nextHashQuery ? `${hashPath}?${nextHashQuery}` : hashPath;
+      }
+    }
+
+    if (foundToken) {
+      window.localStorage.setItem(LAN_TOKEN_STORAGE_KEY, foundToken);
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+      return foundToken;
+    }
+  } catch {
+    // Ignore malformed URL edge cases
+  }
+  return null;
+}
+
+export function isTauriDesktop(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.location.protocol === 'tauri:' ||
+    window.location.hostname === 'tauri.localhost' ||
+    Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__)
+  );
+}
+
+export const API_BASE = isTauriDesktop() ? 'http://127.0.0.1:3001' : '';
+
+export function resolveApiUrl(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE}${url}`;
+}
+
+export function getLanToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const urlToken = extractTokenFromLocation();
+  if (urlToken) return urlToken;
+  try {
+    return window.localStorage.getItem(LAN_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
+  const lanToken = getLanToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(lanToken ? { 'x-system-lan-token': lanToken } : {}),
+    ...((options?.headers as Record<string, string> | undefined) || {}),
+  };
+
+  const res = await fetch(resolveApiUrl(url), {
     ...options,
+    headers,
   });
   if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}));
-    throw new Error((errBody as { error?: string }).error || `Request failed: ${res.status}`);
+    const errBody = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      code?: string;
+      message?: string;
+    };
+    if (
+      res.status === 401 &&
+      (errBody.error === 'LAN_AUTH_REQUIRED' ||
+        errBody.code === 'LAN_AUTH_REQUIRED' ||
+        !errBody.error)
+    ) {
+      throw new LanAuthError(errBody.message || errBody.error || 'LAN_AUTH_REQUIRED');
+    }
+    throw new Error(errBody.error || errBody.message || `Request failed: ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -508,5 +632,131 @@ export const systemApi = {
     }>('/api/assistant/activity/convert-to-quest', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+
+  getBackupStatus: () => request<BackupStatusPayload>('/api/backup/status'),
+
+  runBackupNow: () =>
+    request<{
+      ok: boolean;
+      backup: BackupFileEntry;
+      status: BackupStatusPayload;
+      message: string;
+    }>('/api/backup/run', { method: 'POST' }),
+
+  updateBackupConfig: (payload: {
+    enabled?: boolean;
+    backupDir?: string;
+    retentionDays?: number;
+  }) =>
+    request<{ ok: boolean; status: BackupStatusPayload; message: string }>('/api/backup/config', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  restoreBackup: (filename: string) =>
+    request<{
+      ok: boolean;
+      preRestoreBackup: string;
+      message: string;
+      state: SystemStatePayload;
+    }>('/api/backup/restore', {
+      method: 'POST',
+      body: JSON.stringify({ filename }),
+    }),
+
+  getLanInfo: () => request<LanAccessPayload>('/api/network/lan-info'),
+
+  updateLanConfig: (payload: { enabled?: boolean; rotateToken?: boolean }) =>
+    request<{ ok: boolean; lan: LanAccessPayload; message: string }>('/api/network/lan-config', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  pairWithLanPin: async (
+    pin: string
+  ): Promise<{ ok: boolean; token?: string; error?: string }> => {
+    const res = await fetch(resolveApiUrl('/api/network/pair-pin'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      token?: string;
+      error?: string;
+      message?: string;
+    };
+    if (!res.ok || !data.ok) {
+      return {
+        ok: false,
+        error: data.error || data.message || `Ghép nối thất bại (${res.status})`,
+      };
+    }
+    if (data.token) {
+      setLanToken(data.token);
+    }
+    return { ok: true, token: data.token };
+  },
+
+  getLongTermReview: (range: '7d' | '30d' = '7d') =>
+    request<{ analytics: LongTermAnalyticsPayload; reviews: WeeklyReviewRecord[] }>(
+      `/api/analytics/review?range=${range}`
+    ),
+
+  generateWeeklyReview: () =>
+    request<{
+      ok: boolean;
+      review: WeeklyReviewRecord;
+      reviews: WeeklyReviewRecord[];
+      analytics: LongTermAnalyticsPayload;
+    }>('/api/analytics/weekly-review/generate', { method: 'POST' }),
+
+  generateWeeklyBlueprint: (payload?: { focusNote?: string; maxBlocksPerDay?: number }) =>
+    request<WeeklyBlueprintDraft>('/api/schedule/weekly-blueprint', {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    }),
+
+  applyWeeklyBlueprint: (blocks: WeeklyBlueprintBlockDraft[], syncTodayQuests = true) =>
+    request<{
+      ok: boolean;
+      addedBlocksCount: number;
+      addedQuestsCount: number;
+      message: string;
+      state: SystemStatePayload;
+    }>('/api/schedule/weekly-blueprint/apply', {
+      method: 'POST',
+      body: JSON.stringify({ blocks, syncTodayQuests }),
+    }),
+
+  setAssistantDnd: (minutes: number) =>
+    request<{
+      ok: boolean;
+      dndActive: boolean;
+      dndUntil: string | null;
+      overview: AssistantOverviewPayload;
+    }>('/api/assistant/dnd', {
+      method: 'POST',
+      body: JSON.stringify({ minutes }),
+    }),
+
+  getHudStatus: () =>
+    request<{
+      nativeRunning: boolean;
+      visible: boolean;
+      exeAvailable: boolean;
+    }>('/api/hud/status'),
+
+  controlNativeHud: (action: 'show' | 'hide' | 'toggle' | 'dock') =>
+    request<{
+      ok: boolean;
+      nativeRunning: boolean;
+      visible: boolean;
+      launched?: boolean;
+      exeAvailable?: boolean;
+    }>('/api/hud/control', {
+      method: 'POST',
+      body: JSON.stringify({ action }),
     }),
 };

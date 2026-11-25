@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "RPG Life Tracker",
+  "version": "1.0.0",
+  "identifier": "com.hoangnguyen.rpglifetracker",
+  "build": {
+    "beforeDevCommand": "npm.cmd run dev:client",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm.cmd run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "RPG Life Tracker — The System",
+        "url": "index.html",
+        "width": 1360,
+        "height": 860,
+        "minWidth": 960,
+        "minHeight": 640,
+        "center": true,
+        "resizable": true,
+        "visible": false
+      },
+      {
+        "label": "hud",
+        "title": "RPG Life Tracker HUD",
+        "url": "index.html#/hud",
+        "width": 404,
+        "height": 186,
+        "alwaysOnTop": true,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "shadow": false,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ]
+  }
+}

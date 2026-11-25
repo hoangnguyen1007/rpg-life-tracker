@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  BarChart3,
   BookOpen,
   BrainCircuit,
   Check,
@@ -24,10 +25,12 @@ import type {
 import { systemApi } from '../utils/api';
 import { HERO_AVATAR_CATALOG, PixelHeroSprite } from './DungeonSprites';
 import { BossBannerIllustration } from './VisualIllustrations';
+import { WeeklyReviewDossier } from './WeeklyReviewDossier';
 
 interface ProfileGoalsConsoleProps {
   player: PlayerState;
   goals: Goal[];
+  initialSubTab?: 'profile' | 'review';
   onSaveProfile: (
     profile: Partial<PlayerProfile> & { hunterClass?: string; activeTitle?: string }
   ) => Promise<void>;
@@ -85,10 +88,17 @@ const PROMPT_PRESETS = [
 export const ProfileGoalsConsole: React.FC<ProfileGoalsConsoleProps> = ({
   player,
   goals,
+  initialSubTab = 'profile',
   onSaveProfile,
   onAnalyzeGoal,
   onDeleteGoal,
 }) => {
+  const [subTab, setSubTab] = useState<'profile' | 'review'>(initialSubTab);
+
+  useEffect(() => {
+    setSubTab(initialSubTab);
+  }, [initialSubTab]);
+
   const [name, setName] = useState(player.profile.name);
   const [hunterClass, setHunterClass] = useState(player.hunterClass);
   const [avatarStyle, setAvatarStyle] = useState<HeroAvatarStyle>(
@@ -188,6 +198,45 @@ export const ProfileGoalsConsole: React.FC<ProfileGoalsConsoleProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Internal 2-Button Sub-Tab Header */}
+      <div className="studio-surface flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Chuyển mục Hồ sơ và Tổng kết">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={subTab === 'profile'}
+            onClick={() => setSubTab('profile')}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs ${
+              subTab === 'profile' ? 'btn-primary' : 'btn-secondary'
+            }`}
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            <span>Hồ Sơ &amp; Mục Tiêu</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={subTab === 'review'}
+            onClick={() => setSubTab('review')}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs ${
+              subTab === 'review' ? 'btn-primary' : 'btn-secondary'
+            }`}
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            <span>Tổng Kết 7/30 Ngày</span>
+          </button>
+        </div>
+        <span className="font-mono text-[11px] text-dim">
+          {subTab === 'profile'
+            ? 'Thiết lập mục tiêu, nhân vật & ngữ cảnh AI'
+            : 'Heatmap 30 ngày, xu hướng tập trung & chẩn đoán AI'}
+        </span>
+      </div>
+
+      {subTab === 'review' ? (
+        <WeeklyReviewDossier />
+      ) : (
+        <>
       <section className="studio-surface overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12">
           {/* Left: Goal Architect + Flat Goals Ledger */}
@@ -518,6 +567,8 @@ export const ProfileGoalsConsole: React.FC<ProfileGoalsConsoleProps> = ({
           </div>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 };

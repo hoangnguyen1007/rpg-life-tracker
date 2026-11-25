@@ -1,22 +1,33 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
   Bell,
+  BellOff,
   Bot,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock,
+  Copy,
   Cpu,
+  ExternalLink,
+  Eye,
+  EyeOff,
   Flame,
+  FolderSync,
+  HardDrive,
   Monitor,
   Plus,
   Power,
+  QrCode,
   RefreshCw,
+  RotateCw,
   ShieldCheck,
+  Smartphone,
   Sparkles,
   Sun,
   Trash2,
+  Upload,
   Wand2,
   X,
   Zap,
@@ -27,40 +38,12 @@ import type {
   AssistantOverviewPayload,
   AssistantSettings,
   AttributeKey,
-  DailyActivitySummary,
+  BackupStatusPayload,
+  LanAccessPayload,
   Quest,
+  SystemStatePayload,
 } from '../types/system';
-
-type HourlyActivitySlice = {
-  hour: number;
-  deepWorkMins: number;
-  studyMins: number;
-  commMins: number;
-  distractionMins: number;
-  otherMins: number;
-  dominantCategory: ActivityCategory | 'none';
-};
-
-type SuggestedFocusSession = {
-  minutes: number;
-  topApp: string;
-  dominantCategory: 'deep_work' | 'study_research';
-  suggestedTitle: string;
-  primaryStat: AttributeKey;
-  skillName?: string;
-};
-
-type ExtendedActivitySummary = DailyActivitySummary & {
-  hourlyBreakdown?: HourlyActivitySlice[];
-  peakFocusHour?: string | null;
-  distractionBudgetMinutes?: number;
-  suggestedFocusSession?: SuggestedFocusSession | null;
-};
-
-type ExtendedAssistantSettings = AssistantSettings & {
-  autoPauseQuestOnIdle?: boolean;
-  distractionBudgetMinutes?: number;
-};
+import { systemApi } from '../utils/api';
 
 export interface AssistantCenterViewProps {
   overview: AssistantOverviewPayload | null;
@@ -68,7 +51,7 @@ export interface AssistantCenterViewProps {
   loading?: boolean;
   onRefresh: () => Promise<void>;
   onToggleTracker: (enabled: boolean) => Promise<void>;
-  onUpdateSettings: (patch: Partial<ExtendedAssistantSettings>) => Promise<void>;
+  onUpdateSettings: (patch: Partial<AssistantSettings>) => Promise<void>;
   onInstallStartup: (opts: { createDesktopShortcut: boolean; launchTray: boolean }) => Promise<void>;
   onUninstallStartup: (opts: { removeDesktopShortcut: boolean }) => Promise<void>;
   onLaunchTray: () => Promise<void>;
@@ -86,6 +69,11 @@ export interface AssistantCenterViewProps {
     primaryStat?: AttributeKey;
   }) => Promise<void>;
   onRunOrchestrate?: () => Promise<void>;
+  onSetDnd?: (minutes: number) => Promise<void>;
+  onStateChanged?: (state: SystemStatePayload) => void;
+  hudVisible?: boolean;
+  onToggleHudVisible?: () => void;
+  onDockHudCorner?: () => void;
 }
 
 const CATEGORY_META: Record<
@@ -150,6 +138,11 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
   onReclassifyApp,
   onConvertFocusToQuest,
   onRunOrchestrate,
+  onSetDnd,
+  onStateChanged,
+  hudVisible = false,
+  onToggleHudVisible,
+  onDockHudCorner,
 }) => {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [showRulesDrawer, setShowRulesDrawer] = useState(false);
@@ -159,6 +152,37 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
   const [selectedPendingQuestId, setSelectedPendingQuestId] = useState<string>(
     () => pendingQuests[0]?.id || ''
   );
+
+  // LAN Mobile QR Pairing State
+  const [lanInfo, setLanInfo] = useState<LanAccessPayload | null>(null);
+  const [copiedLanUrl, setCopiedLanUrl] = useState(false);
+  const [lanNotice, setLanNotice] = useState<string | null>(null);
+
+  // Rotating Auto-Backup State
+  const [backupStatus, setBackupStatus] = useState<BackupStatusPayload | null>(null);
+  const [backupDirInput, setBackupDirInput] = useState('');
+  const [retentionInput, setRetentionInput] = useState(14);
+  const [confirmRestoreFile, setConfirmRestoreFile] = useState<string | null>(null);
+  const [backupNotice, setBackupNotice] = useState<string | null>(null);
+
+  const loadLanAndBackup = useCallback(async () => {
+    try {
+      const [lanRes, bakRes] = await Promise.all([
+        systemApi.getLanInfo(),
+        systemApi.getBackupStatus(),
+      ]);
+      setLanInfo(lanRes);
+      setBackupStatus(bakRes);
+      setBackupDirInput(bakRes.backupDir || '');
+      setRetentionInput(bakRes.retentionDays || 14);
+    } catch {
+      // Non-fatal if backend endpoints are warming up
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLanAndBackup();
+  }, [loadLanAndBackup]);
 
   useEffect(() => {
     if (
@@ -201,9 +225,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
     );
   }
 
-  const settings = overview.settings as ExtendedAssistantSettings;
-  const activity = overview.activity as ExtendedActivitySummary;
-  const { startup, briefing, nudges, trackerRunning } = overview;
+  const { settings, startup, activity, briefing, nudges, trackerRunning } = overview;
 
   const segTotal = Math.max(
     1,
@@ -223,10 +245,10 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
   ];
 
   // Build 18-hour timeline (06h -> 23h)
-  const hourlyMap = new Map<number, HourlyActivitySlice>(
+  const hourlyMap = new Map(
     (activity.hourlyBreakdown || []).map((h) => [h.hour, h])
   );
-  const hourlyBars: HourlyActivitySlice[] = Array.from({ length: 18 }, (_, i) => {
+  const hourlyBars = Array.from({ length: 18 }, (_, i) => {
     const hr = 6 + i;
     return (
       hourlyMap.get(hr) || {
@@ -236,7 +258,7 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
         commMins: 0,
         distractionMins: 0,
         otherMins: 0,
-        dominantCategory: 'none',
+        dominantCategory: 'none' as const,
       }
     );
   });
@@ -257,6 +279,12 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
 
   const suggestedSession = activity.suggestedFocusSession;
   const effectiveQuestId = selectedPendingQuestId || pendingQuests[0]?.id || '';
+
+  const dndRemainingMins =
+    overview.dndActive && overview.dndUntil
+      ? Math.max(1, Math.ceil((Date.parse(overview.dndUntil) - Date.now()) / 60000))
+      : 0;
+  const alertLevel = overview.distractionAlertLevel || 'none';
 
   const handleAddRule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -279,6 +307,70 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
         customRules: (settings.customRules || []).filter((r) => r.id !== id),
       })
     );
+  };
+
+  const handleSetDndAction = async (minutes: number) => {
+    await runBusy('dnd', async () => {
+      if (onSetDnd) {
+        await onSetDnd(minutes);
+      } else {
+        await systemApi.setAssistantDnd(minutes);
+        await onRefresh();
+      }
+    });
+  };
+
+  const handleToggleLan = async (enabled: boolean) => {
+    await runBusy('lan-toggle', async () => {
+      setLanNotice(null);
+      const res = await systemApi.updateLanConfig({ enabled });
+      setLanInfo(res.lan);
+      setLanNotice(res.message);
+    });
+  };
+
+  const handleRotateLanToken = async () => {
+    await runBusy('lan-rotate', async () => {
+      setLanNotice(null);
+      const res = await systemApi.updateLanConfig({ rotateToken: true });
+      setLanInfo(res.lan);
+      setLanNotice(res.message);
+    });
+  };
+
+  const handleSaveBackupConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await runBusy('bak-cfg', async () => {
+      setBackupNotice(null);
+      const res = await systemApi.updateBackupConfig({
+        enabled: true,
+        backupDir: backupDirInput.trim(),
+        retentionDays: Math.max(1, Math.min(90, retentionInput || 14)),
+      });
+      setBackupStatus(res.status);
+      setBackupNotice(res.message);
+    });
+  };
+
+  const handleRunBackupNow = async () => {
+    await runBusy('bak-run', async () => {
+      setBackupNotice(null);
+      const res = await systemApi.runBackupNow();
+      setBackupStatus(res.status);
+      setBackupNotice(res.message);
+    });
+  };
+
+  const handleRestoreBackup = async (filename: string) => {
+    await runBusy(`bak-res-${filename}`, async () => {
+      setBackupNotice(null);
+      const res = await systemApi.restoreBackup(filename);
+      setConfirmRestoreFile(null);
+      setBackupNotice(res.message);
+      if (onStateChanged) onStateChanged(res.state);
+      const freshStatus = await systemApi.getBackupStatus();
+      setBackupStatus(freshStatus);
+    });
   };
 
   return (
@@ -318,7 +410,10 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
             <button
               type="button"
               disabled={busyKey === 'refresh'}
-              onClick={() => runBusy('refresh', onRefresh)}
+              onClick={() => runBusy('refresh', async () => {
+                await onRefresh();
+                await loadLanAndBackup();
+              })}
               className="btn-secondary flex items-center gap-1.5 px-3 py-2 text-xs"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${busyKey === 'refresh' ? 'animate-spin' : ''}`} />
@@ -351,6 +446,110 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
             <div className="mt-0.5 font-mono text-sm font-extrabold text-main">
               {briefing.pendingQuestsCount} việc
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Calm Guard Status + DND Snooze + Floating Mini HUD Launcher Bar */}
+      <section className="studio-surface p-4 sm:p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-display text-xs font-extrabold uppercase tracking-wide text-main">
+              Calm Guard &amp; Mini HUD:
+            </span>
+            <span
+              className={`rounded-[2px] border px-2.5 py-1 font-mono text-[11px] font-bold ${
+                alertLevel === 'toast'
+                  ? 'border-rose-500/50 bg-rose-500/15 text-rose-400'
+                  : alertLevel === 'soft_hud'
+                    ? 'border-amber-500/50 bg-amber-500/15 text-amber-300'
+                    : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
+              }`}
+            >
+              Guard:{' '}
+              {alertLevel === 'toast'
+                ? `Cảnh báo Toast (${Math.floor((overview.distractionStreakSeconds || 0) / 60)}p)`
+                : alertLevel === 'soft_hud'
+                  ? `Nhắc nhẹ HUD (${overview.distractionStreakSeconds || 0}s)`
+                  : 'Ổn định (None)'}
+            </span>
+            <span
+              className={`rounded-[2px] border px-2.5 py-1 font-mono text-[11px] font-bold ${
+                overview.externalTrackerActive
+                  ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-300'
+                  : 'studio-divider studio-subtle text-sub'
+              }`}
+            >
+              Engine: {overview.externalTrackerActive ? 'Rust Win32 Native' : 'Windows PowerShell'}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {overview.dndActive ? (
+              <div className="flex items-center gap-2">
+                <span className="rounded-[2px] border border-amber-500/50 bg-amber-500/15 px-2.5 py-1 font-mono text-[11px] font-bold text-amber-300">
+                  Đang tạm im ({dndRemainingMins}p)
+                </span>
+                <button
+                  type="button"
+                  disabled={busyKey === 'dnd'}
+                  onClick={() => handleSetDndAction(0)}
+                  className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs"
+                >
+                  <Bell className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Tắt DND</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={busyKey === 'dnd'}
+                onClick={() => handleSetDndAction(60)}
+                className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs"
+              >
+                <BellOff className="h-3.5 w-3.5 text-amber-400" />
+                <span>Tạm im 1 giờ (DND)</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                if (onToggleHudVisible) {
+                  onToggleHudVisible();
+                } else {
+                  window.open('/#/hud', 'rpg_hud', 'width=430,height=250');
+                }
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs ${
+                hudVisible ? 'btn-secondary' : 'btn-primary'
+              }`}
+              title="Bật hoặc ẩn 2D Pixel HUD nổi trên màn hình (Ctrl+Shift+Space)"
+            >
+              {hudVisible ? (
+                <>
+                  <EyeOff className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Ẩn Mini HUD</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="h-3.5 w-3.5" />
+                  <span>Hiện Mini HUD</span>
+                </>
+              )}
+            </button>
+
+            {onDockHudCorner && (
+              <button
+                type="button"
+                onClick={onDockHudCorner}
+                className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs"
+                title="Đưa Mini HUD về lại góc phải phía trên thanh Taskbar"
+              >
+                <ExternalLink className="h-3.5 w-3.5 text-cyan-400" />
+                <span>Về góc Taskbar</span>
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -648,7 +847,10 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-18 gap-1 items-end pt-1" style={{ gridTemplateColumns: 'repeat(18, minmax(0, 1fr))' }}>
+              <div
+                className="grid items-end gap-1 pt-1"
+                style={{ gridTemplateColumns: 'repeat(18, minmax(0, 1fr))' }}
+              >
                 {hourlyBars.map((h) => {
                   const total =
                     h.deepWorkMins +
@@ -744,7 +946,10 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                               <button
                                 key={choice.category}
                                 type="button"
-                                disabled={active || busyKey === `reclass-${app.processName}-${choice.category}`}
+                                disabled={
+                                  active ||
+                                  busyKey === `reclass-${app.processName}-${choice.category}`
+                                }
                                 onClick={() =>
                                   runBusy(`reclass-${app.processName}-${choice.category}`, () =>
                                     onReclassifyApp({
@@ -869,6 +1074,40 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
             </div>
 
             <div className="divide-y-2 border-2 studio-divider">
+              <label className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 text-xs studio-subtle">
+                <span className="font-semibold text-main">
+                  Tự hiện 2D Pixel HUD khi mở app (Ctrl+Shift+Space)
+                </span>
+                <input
+                  type="checkbox"
+                  checked={settings.hudVisibleOnStart ?? true}
+                  onChange={(e) =>
+                    onUpdateSettings({ hudVisibleOnStart: e.target.checked })
+                  }
+                  className="h-4 w-4 accent-amber-500"
+                />
+              </label>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-xs studio-subtle">
+                <span className="font-semibold text-main">Mục tiêu tập trung mỗi ngày</span>
+                <div className="flex items-center gap-1 font-mono text-[11px]">
+                  <input
+                    type="number"
+                    min={30}
+                    max={720}
+                    step={15}
+                    value={settings.dailyFocusGoalMinutes ?? 180}
+                    onChange={(e) =>
+                      onUpdateSettings({
+                        dailyFocusGoalMinutes: Math.max(30, Number(e.target.value) || 180),
+                      })
+                    }
+                    className="w-16 px-1.5 py-0.5 text-center text-xs"
+                  />
+                  <span className="text-dim">phút</span>
+                </div>
+              </div>
+
               <label className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 text-xs studio-subtle">
                 <span className="font-semibold text-main">Thông báo Windows Toast</span>
                 <input
@@ -1027,6 +1266,268 @@ export const AssistantCenterView: React.FC<AssistantCenterViewProps> = ({
                         </button>
                       </div>
                     ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Sections 5 & 6: Two-Column Ledger (LAN QR Mobile Pairing | Rotating SQLite Auto-Backup) */}
+      <section className="studio-surface overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12">
+          {/* Kết nối Điện thoại qua QR Mạng LAN / Tailscale */}
+          <div className="space-y-4 p-5 lg:col-span-6">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 pb-3 studio-divider">
+              <div className="flex items-center gap-2">
+                <Smartphone className="h-4 w-4 text-cyan-400" />
+                <h3 className="font-display text-sm font-extrabold text-main">
+                  Kết nối Điện thoại qua QR Mạng LAN / Tailscale
+                </h3>
+              </div>
+              {lanInfo?.tailscaleIp && (
+                <span className="rounded-[2px] border border-cyan-500/40 bg-cyan-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-cyan-300">
+                  Tailscale: {lanInfo.tailscaleIp}
+                </span>
+              )}
+            </div>
+
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-[2px] border-2 px-3 py-2.5 text-xs studio-subtle studio-divider">
+              <span className="font-semibold text-main">
+                Cho phép truy cập từ điện thoại trong LAN
+              </span>
+              <input
+                type="checkbox"
+                checked={Boolean(lanInfo?.enabled)}
+                disabled={busyKey === 'lan-toggle'}
+                onChange={(e) => handleToggleLan(e.target.checked)}
+                className="h-4 w-4 accent-amber-500"
+              />
+            </label>
+
+            {lanNotice && (
+              <p className="rounded-[2px] border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[11px] text-emerald-400">
+                {lanNotice}
+              </p>
+            )}
+
+            {lanInfo?.enabled ? (
+              <div className="flex flex-col gap-4 rounded-[2px] border-2 p-3.5 sm:flex-row sm:items-start studio-subtle studio-divider">
+                {lanInfo.qrSvg ? (
+                  <div className="shrink-0 self-center rounded-[2px] border-2 border-slate-300 bg-white p-2 sm:self-start">
+                    {lanInfo.qrSvg.trim().startsWith('<svg') ? (
+                      <div
+                        className="h-32 w-32 [&>svg]:h-full [&>svg]:w-full"
+                        dangerouslySetInnerHTML={{ __html: lanInfo.qrSvg }}
+                      />
+                    ) : (
+                      <img
+                        src={lanInfo.qrSvg}
+                        alt="QR kết nối điện thoại LAN"
+                        className="h-32 w-32"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex h-32 w-32 shrink-0 items-center justify-center rounded-[2px] border-2 studio-divider">
+                    <QrCode className="h-8 w-8 text-dim" />
+                  </div>
+                )}
+
+                <div className="min-w-0 flex-1 space-y-2.5 text-xs">
+                  {lanInfo.mobileUrl && (
+                    <div>
+                      <div className="font-mono text-[10px] uppercase text-dim">
+                        Link mở trên Điện thoại
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <input
+                          readOnly
+                          value={lanInfo.mobileUrl}
+                          className="min-w-0 flex-1 px-2 py-1 font-mono text-[11px]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(lanInfo.mobileUrl || '');
+                            setCopiedLanUrl(true);
+                            setTimeout(() => setCopiedLanUrl(false), 2000);
+                          }}
+                          className="btn-secondary flex shrink-0 items-center gap-1 px-2.5 py-1 text-[11px]"
+                        >
+                          <Copy className="h-3 w-3" />
+                          <span>{copiedLanUrl ? 'Đã copy' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="font-mono text-[10px] uppercase text-dim">Mã PIN 6 số: </span>
+                      <span className="rounded-[2px] border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-mono text-sm font-extrabold tracking-widest text-amber-400">
+                        {lanInfo.pairPin}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busyKey === 'lan-rotate'}
+                      onClick={handleRotateLanToken}
+                      className="btn-secondary flex items-center gap-1 px-2.5 py-1 text-[11px]"
+                    >
+                      <RotateCw className="h-3 w-3" />
+                      <span>Đổi mã bảo mật mới</span>
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] leading-snug text-dim">
+                    Bảo mật: <strong className="text-main">localhost</strong> trên PC không cần PIN; các thiết bị qua LAN/Tailscale bắt buộc quét QR hoặc nhập mã PIN 6 số.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="rounded-[2px] border-2 p-3 text-xs text-dim studio-subtle studio-divider">
+                Bật công tắc trên để tạo mã QR &amp; PIN 6 số giúp check-in Quest nhanh từ điện thoại qua Wi-Fi nội bộ hoặc Tailscale.
+              </p>
+            )}
+          </div>
+
+          {/* Tự động Sao lưu SQLite Xoay Vòng (Auto-Backup) */}
+          <div className="space-y-4 border-t-2 p-5 lg:col-span-6 lg:border-l-2 lg:border-t-0 studio-divider">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 pb-3 studio-divider">
+              <div className="flex items-center gap-2">
+                <HardDrive className="h-4 w-4 text-emerald-400" />
+                <h3 className="font-display text-sm font-extrabold text-main">
+                  Tự động Sao lưu SQLite Xoay Vòng (Auto-Backup)
+                </h3>
+              </div>
+              <span className="font-mono text-[10px] text-dim">
+                {backupStatus?.lastBackupAt
+                  ? `Gần nhất: ${backupStatus.lastBackupAt.slice(0, 16).replace('T', ' ')}`
+                  : 'Chưa sao lưu'}
+              </span>
+            </div>
+
+            {backupStatus && (
+              <div className="rounded-[2px] border-2 px-3 py-2 font-mono text-[11px] text-sub studio-subtle studio-divider">
+                Thư mục đích: <strong className="break-all text-main">{backupStatus.resolvedDir}</strong>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveBackupConfig} className="space-y-2.5 text-xs">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                <div className="sm:col-span-3">
+                  <label className="mb-1 block text-[11px] font-semibold text-sub">
+                    Thư mục sao lưu (hỗ trợ dán đường dẫn OneDrive / Google Drive cục bộ)
+                  </label>
+                  <input
+                    value={backupDirInput}
+                    onChange={(e) => setBackupDirInput(e.target.value)}
+                    placeholder="Để trống = mặc định data/backups/"
+                    className="w-full px-2.5 py-1.5 font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold text-sub">
+                    Giữ (ngày)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={retentionInput}
+                    onChange={(e) => setRetentionInput(Number(e.target.value) || 14)}
+                    className="w-full px-2.5 py-1.5 font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={busyKey === 'bak-cfg'}
+                  className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs"
+                >
+                  <FolderSync className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Lưu cấu hình</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={busyKey === 'bak-run'}
+                  onClick={handleRunBackupNow}
+                  className="btn-emerald flex items-center gap-1.5 px-3 py-1.5 text-xs"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  <span>Sao lưu ngay</span>
+                </button>
+              </div>
+            </form>
+
+            {backupNotice && (
+              <p className="rounded-[2px] border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[11px] text-emerald-400">
+                {backupNotice}
+              </p>
+            )}
+
+            <div>
+              <h4 className="mb-1.5 font-display text-xs font-extrabold uppercase tracking-wide text-dim">
+                Bản Sao Lưu Gần Đây ({backupStatus?.backups.length || 0})
+              </h4>
+              {!backupStatus || backupStatus.backups.length === 0 ? (
+                <p className="rounded-[2px] border-2 p-2.5 text-xs text-dim studio-subtle studio-divider">
+                  Chưa có file sao lưu nào. Bấm &ldquo;Sao lưu ngay&rdquo; để tạo bản chụp SQLite an toàn.
+                </p>
+              ) : (
+                <div className="divide-y-2 border-2 studio-divider">
+                  {backupStatus.backups.slice(0, 5).map((b) => {
+                    const confirming = confirmRestoreFile === b.filename;
+                    return (
+                      <div key={b.filename} className="space-y-1.5 px-3 py-2 text-xs studio-subtle">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-mono font-bold text-main">{b.filename}</div>
+                            <div className="font-mono text-[10px] text-dim">
+                              {(b.sizeBytes / 1024).toFixed(1)} KB · {b.createdAt.slice(0, 19).replace('T', ' ')}
+                            </div>
+                          </div>
+                          {!confirming && (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmRestoreFile(b.filename)}
+                              className="btn-secondary shrink-0 px-2.5 py-1 text-[11px]"
+                            >
+                              Khôi phục
+                            </button>
+                          )}
+                        </div>
+
+                        {confirming && (
+                          <div className="flex flex-wrap items-center justify-between gap-2 rounded-[2px] border border-amber-500/50 bg-amber-500/10 p-2 text-[11px]">
+                            <span className="text-amber-300">
+                              Hệ thống sẽ tự động tạo bản sao lưu an toàn hiện tại trước khi khôi phục. Tiếp tục?
+                            </span>
+                            <div className="flex gap-1.5">
+                              <button
+                                type="button"
+                                disabled={busyKey === `bak-res-${b.filename}`}
+                                onClick={() => handleRestoreBackup(b.filename)}
+                                className="btn-primary px-2.5 py-1 text-[11px]"
+                              >
+                                Xác nhận Khôi phục
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmRestoreFile(null)}
+                                className="btn-secondary px-2 py-1 text-[11px]"
+                              >
+                                Hủy
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
