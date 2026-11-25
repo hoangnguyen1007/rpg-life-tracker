@@ -6,6 +6,9 @@ import type {
   AIChatMessage,
   AssistantOverviewPayload,
   ChatContextScope,
+  CloseoutMood,
+  DailyCloseoutRecord,
+  EveningCloseoutPreviewPayload,
   Quest,
   RaidChestId,
   RaidDifficultyTier,
@@ -61,6 +64,7 @@ import { ProfileGoalsConsole } from './components/ProfileGoalsConsole';
 import { ShopAndInventoryView } from './components/ShopAndInventoryView';
 import { ShadowArmyModal } from './components/ShadowArmyModal';
 import { DungeonFocusModal } from './components/DungeonFocusModal';
+import { EveningCloseoutModal } from './components/EveningCloseoutModal';
 import { SystemSettingsModal } from './components/SystemSettingsModal';
 import { AwakeningWizardModal } from './components/AwakeningWizardModal';
 import { DeathCheckpointModal } from './components/DeathCheckpointModal';
@@ -121,6 +125,10 @@ export default function App() {
   const [weeklyRaid, setWeeklyRaid] = useState<WeeklyRaidPayload | null>(null);
   const [weeklyRaidLoading, setWeeklyRaidLoading] = useState(false);
   const lastSettledPenaltyWeekRef = useRef<string | null>(null);
+  const [closeoutOpen, setCloseoutOpen] = useState(false);
+  const [closeoutPreview, setCloseoutPreview] = useState<EveningCloseoutPreviewPayload | null>(null);
+  const [closeoutLoading, setCloseoutLoading] = useState(false);
+  const [closeoutSubmitting, setCloseoutSubmitting] = useState(false);
 
   const [activeChatThreadId, setActiveChatThreadId] = useState<string | null>(() => {
     return typeof window !== 'undefined'
@@ -299,6 +307,42 @@ export default function App() {
       void loadWeeklyRaid(true);
     }
   }, [activeTab, loadWeeklyRaid]);
+
+  const loadCloseoutPreview = useCallback(async (silent = false) => {
+    if (!silent) setCloseoutLoading(true);
+    try {
+      const preview = await systemApi.fetchCloseoutPreview();
+      setCloseoutPreview(preview);
+    } catch (err) {
+      if (isLanAuthError(err)) {
+        setLanAuthRequired(true);
+      }
+    } finally {
+      if (!silent) setCloseoutLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCloseoutPreview(false);
+    const timer = window.setInterval(() => {
+      void loadCloseoutPreview(true);
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [loadCloseoutPreview]);
+
+  useEffect(() => {
+    setSoundEnabled(soundEngine.getSnapshot().enabled);
+    return soundEngine.subscribe((snap) => setSoundEnabled(snap.enabled));
+  }, []);
+
+  useEffect(() => {
+    if (!dungeonQuest) return;
+    void loadAssistantOverview();
+    const timer = window.setInterval(() => {
+      void loadAssistantOverview();
+    }, 6000);
+    return () => window.clearInterval(timer);
+  }, [dungeonQuest, loadAssistantOverview]);
 
   useEffect(() => {
     if (activeTab !== 'assistant') return;
@@ -504,6 +548,30 @@ export default function App() {
     [pushAlert]
   );
 
+  const handleQuickStartFocus = useCallback(
+    async (durationMinutes: number, title?: string) => {
+      const res = await systemApi.quickStartFocus({ durationMinutes, title });
+      setState(res.state);
+      setDungeonQuest(res.quest);
+      soundEngine.swordSlash();
+      pushAlert(
+        `Bắt đầu phiên Focus ${durationMinutes}p!`,
+        `${res.quest.title} — giữ tập trung để tung đòn vào Boss.`
+      );
+    },
+    [pushAlert]
+  );
+
+  const activeFocusQuest = useMemo(
+    () =>
+      state?.quests.find(
+        (q) =>
+          q.status === 'pending' &&
+          (Boolean(q.startedAt) || (q.pausedAccumulatedSeconds ?? 0) > 0)
+      ) ?? null,
+    [state?.quests]
+  );
+
   const handleSetDnd = useCallback(
     async (minutes: number) => {
       soundEngine.systemPing();
@@ -606,6 +674,38 @@ export default function App() {
     soundEngine.click();
     await loadWeeklyRaid(false);
   }, [loadWeeklyRaid]);
+
+  const handleSubmitCloseout = useCallback(
+    async (payload: {
+      mood: CloseoutMood;
+      bottleneckTags: string[];
+      reflectionNote: string;
+      carryOverQuestIds: string[];
+    }): Promise<DailyCloseoutRecord | null> => {
+      setCloseoutSubmitting(true);
+      try {
+        const res = await systemApi.submitDailyCloseout(payload);
+        setState(res.state);
+        setCloseoutPreview(res.preview);
+        void loadWeeklyRaid(true);
+        const parts = [
+          `Hạng ${res.closeout.grade} (${res.closeout.score}/100)`,
+          res.closeout.hpDamageTaken > 0 ? `-${res.closeout.hpDamageTaken} HP` : '0 HP mất',
+          res.closeout.carriedOverCount > 0
+            ? `Dời ${res.closeout.carriedOverCount} việc sang mai`
+            : '',
+        ].filter(Boolean);
+        pushAlert(
+          res.alreadyClosed ? 'Đã cập nhật Nhật Ký Chốt Ngày' : 'Hoàn tất Nghi Thức Chốt Ngày!',
+          parts.join(' · ')
+        );
+        return res.closeout;
+      } finally {
+        setCloseoutSubmitting(false);
+      }
+    },
+    [loadWeeklyRaid, pushAlert]
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined' || viewMode !== 'main') return;
@@ -1138,6 +1238,10 @@ export default function App() {
   const liveDungeonQuest = dungeonQuest
     ? state.quests.find((q) => q.id === dungeonQuest.id) || dungeonQuest
     : null;
+  const activeFocusStage =
+    state.chapters.flatMap((c) => c.stages).find((s) => s.unlocked && !s.completed) ||
+    state.chapters.flatMap((c) => c.stages).find((s) => s.unlocked) ||
+    null;
   const todayKey = getVnTodayKey();
   const todayReflectionNote =
     state.dailySnapshots.find((s) => s.dateKey === todayKey)?.reflectionNote || '';
@@ -1180,6 +1284,11 @@ export default function App() {
           lastSavedAt={state.storageInfo?.lastSavedAt}
           assistantSummary={state.assistantSummary}
           hudVisible={hudVisible}
+          activeFocusQuest={activeFocusQuest}
+          onOpenActiveFocus={() => {
+            if (activeFocusQuest) setDungeonQuest(activeFocusQuest);
+          }}
+          onQuickStartFocus={handleQuickStartFocus}
           onToggleHudVisible={() => void handleToggleHudVisible()}
           onOpenAssistant={() => {
             soundEngine.click();
@@ -1370,25 +1479,9 @@ export default function App() {
                   }
                 }}
                 onSettleDay={async () => {
-                  const res = await systemApi.settleDay();
-                  setState(res.state);
-                  const s = res.settlement;
-                  if (s.died) {
-                    soundEngine.alert();
-                    pushAlert('Chốt ngày: Kiệt sức!', 'Tổng sát thương khiến HP về 0 — hồi sinh tại Checkpoint.');
-                  } else if (s.protectedByGraceDay) {
-                    soundEngine.campfireHeal();
-                    pushAlert('Chốt ngày (Grace Day)', 'Chế độ Nghỉ Chủ Động đã bảo toàn 100% HP & chuỗi ngày!');
-                  } else if (s.totalHpDamage > 0) {
-                    soundEngine.monsterHit();
-                    pushAlert(
-                      'Đã chốt ngày',
-                      `Bỏ lỡ ${s.missedQuests.length} nhiệm vụ (-${s.totalHpDamage} HP).`
-                    );
-                  } else {
-                    soundEngine.questComplete();
-                    pushAlert('Chốt ngày hoàn hảo!', 'Không có nhiệm vụ nào bị bỏ lỡ — 0 sát thương!');
-                  }
+                  soundEngine.click();
+                  setCloseoutOpen(true);
+                  await loadCloseoutPreview(false);
                 }}
                 onUpdateQuest={async (questId, updates) => {
                   soundEngine.click();
@@ -1418,6 +1511,9 @@ export default function App() {
                 }}
                 assistantOverview={assistantOverview}
                 weeklyRaid={weeklyRaid}
+                eveningCloseoutBadge={Boolean(closeoutPreview?.remindEveningBadge)}
+                alreadyClosedToday={Boolean(closeoutPreview?.alreadyClosedToday)}
+                onQuickStartFocus={handleQuickStartFocus}
                 onOpenRaidArena={() => {
                   soundEngine.click();
                   setActiveTab('campaign');
@@ -1818,7 +1914,7 @@ export default function App() {
         </div>
       </div>
 
-      {state.player.lastDeathReport && (
+      {state.player.lastDeathReport && !closeoutOpen && (
         <DeathCheckpointModal
           deathReport={state.player.lastDeathReport}
           onAcknowledge={async () => {
@@ -1827,6 +1923,17 @@ export default function App() {
             setState(updated);
             pushAlert('Đã hồi sinh tại Checkpoint!', 'Tiếp tục hành trình với 75% HP!');
           }}
+        />
+      )}
+
+      {closeoutOpen && (
+        <EveningCloseoutModal
+          preview={closeoutPreview}
+          loading={closeoutLoading}
+          submitting={closeoutSubmitting}
+          initialReflectionNote={todayReflectionNote}
+          onSubmitCloseout={handleSubmitCloseout}
+          onClose={() => setCloseoutOpen(false)}
         />
       )}
 
@@ -1862,23 +1969,65 @@ export default function App() {
       {liveDungeonQuest && (
         <DungeonFocusModal
           quest={liveDungeonQuest}
+          heroRank={state.player.rank}
+          heroAvatarStyle={state.player.profile.avatarStyle}
+          weeklyRaid={weeklyRaid?.raid ?? null}
+          fallbackMonsterArchetype={activeFocusStage?.archetype ?? 'slime'}
+          fallbackMonsterName={
+            activeFocusStage?.minionName || activeFocusStage?.title || 'Quái Hầm Ngục'
+          }
+          currentActivity={
+            assistantOverview?.activity.currentApp
+              ? {
+                  category: assistantOverview.activity.currentApp.category,
+                  processName: assistantOverview.activity.currentApp.processName,
+                  windowTitle: assistantOverview.activity.currentApp.windowTitle,
+                }
+              : null
+          }
+          onStartQuest={async (questId) => {
+            soundEngine.systemPing();
+            const updated = await systemApi.startQuest(questId);
+            setState(updated);
+          }}
+          onPauseQuest={async (questId) => {
+            soundEngine.click();
+            const updated = await systemApi.pauseQuest(questId);
+            setState(updated);
+          }}
           onToggleSubtask={async (questId, subtaskId) => {
             soundEngine.click();
             const updated = await systemApi.toggleSubtask(questId, subtaskId);
             setState(updated);
           }}
-          onClearDungeon={async (questId, proofNote) => {
-            const res = await systemApi.completeQuest(questId, { proofNote, dungeonCleared: true });
+          onClearDungeon={async (questId, proofNote, meta) => {
+            const res = await systemApi.completeQuest(questId, {
+              proofNote,
+              dungeonCleared: true,
+              overtimeMinutes: meta?.overtimeMinutes,
+              focusDistractions: meta?.distractions,
+              microGapCount: meta?.microGapCount,
+            });
             setState(res.state);
             void loadWeeklyRaid(true);
             setDungeonQuest(null);
             if (res.leveledUp || res.rankPromoted) triggerLevelUpFx();
-            else soundEngine.questComplete();
+            else soundEngine.focusVictory();
+            const otParts = [
+              res.overtimeBonusXp && res.overtimeBonusXp > 0
+                ? `+${res.overtimeBonusXp} Overtime XP`
+                : '',
+              res.raidOvertimeDamage && res.raidOvertimeDamage > 0
+                ? `-${res.raidOvertimeDamage} Raid HP`
+                : '',
+            ].filter(Boolean);
             pushAlert(
               'Hoàn thành Focus!',
               `+${res.xpGain} XP (+25% Bonus) · +${res.goldGain}G · +${res.spGain ?? 2} SP${
                 res.actualDurationMinutes ? ` · ${res.actualDurationMinutes}p thực` : ''
-              }${res.contributedSkillName ? ` · +${res.skillPracticeXpGain ?? 0} Skill XP (${res.contributedSkillName})` : ''}`
+              }${res.contributedSkillName ? ` · +${res.skillPracticeXpGain ?? 0} Skill XP (${res.contributedSkillName})` : ''}${
+                otParts.length > 0 ? ` · ${otParts.join(' · ')}` : ''
+              }`
             );
           }}
           onClose={() => setDungeonQuest(null)}

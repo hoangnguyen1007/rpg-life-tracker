@@ -23,6 +23,7 @@ import type {
   BossMission,
   ChatContextScope,
   CouncilDeliberation,
+  DailyCloseoutRecord,
   DailyProgressSnapshot,
   Goal,
   HunterRank,
@@ -863,6 +864,12 @@ class SystemDatabase {
       CREATE TABLE IF NOT EXISTS weekly_raids (
         id TEXT PRIMARY KEY,
         week_key TEXT UNIQUE NOT NULL,
+        data TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS daily_closeouts (
+        date_key TEXT PRIMARY KEY,
         data TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
@@ -2018,6 +2025,7 @@ class SystemDatabase {
       DELETE FROM activity_logs;
       DELETE FROM assistant_nudges;
       DELETE FROM weekly_raids;
+      DELETE FROM daily_closeouts;
     `);
     if (prevAi) {
       this.setKV('ai_settings', prevAi);
@@ -2312,6 +2320,34 @@ class SystemDatabase {
            updated_at = excluded.updated_at`
       )
       .run(raid.id, raid.weekKey, JSON.stringify(raid), raid.updatedAt);
+    this.touchLastSaved();
+  }
+
+  getDailyCloseout(dateKey: string): DailyCloseoutRecord | null {
+    const row = this.db
+      .prepare('SELECT data FROM daily_closeouts WHERE date_key = ?')
+      .get(dateKey) as { data: string } | undefined;
+    return row ? (JSON.parse(row.data) as DailyCloseoutRecord) : null;
+  }
+
+  getRecentDailyCloseouts(limit = 30): DailyCloseoutRecord[] {
+    const safeLimit = Math.max(1, Math.min(90, Math.round(limit || 30)));
+    const rows = this.db
+      .prepare('SELECT data FROM daily_closeouts ORDER BY date_key DESC LIMIT ?')
+      .all(safeLimit) as Array<{ data: string }>;
+    return rows.map((r) => JSON.parse(r.data) as DailyCloseoutRecord);
+  }
+
+  saveDailyCloseout(record: DailyCloseoutRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO daily_closeouts (date_key, data, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(date_key) DO UPDATE SET
+           data = excluded.data,
+           updated_at = excluded.updated_at`
+      )
+      .run(record.dateKey, JSON.stringify(record), record.closedAt);
     this.touchLastSaved();
   }
 

@@ -1557,3 +1557,59 @@ export async function regenerateWeeklyRaidWithAi(opts?: {
   const payload = syncWeeklyRaidSyncOnly({ now, onPlayerDeath: opts?.onPlayerDeath });
   return { ok: true, payload, usedAi: true };
 }
+
+export function applyFocusOvertimeRaidDamage(
+  dbRef: Pick<typeof db, 'getWeeklyRaidByWeek' | 'saveWeeklyRaid' | 'runTransaction'>,
+  overtimeMinutes: number,
+  questTitle: string,
+  bossDamageBonusPct: number,
+  now: Date = new Date()
+): { raidOvertimeDamage: number } {
+  const clampedMins = Math.max(0, Math.min(120, Math.round(Number(overtimeMinutes) || 0)));
+  if (clampedMins <= 0) {
+    return { raidOvertimeDamage: 0 };
+  }
+
+  const bounds = getVnWeekBounds(now);
+  if (!dbRef.getWeeklyRaidByWeek(bounds.weekKey)) {
+    syncWeeklyRaidSyncOnly({ now });
+  }
+
+  const nowIso = now.toISOString();
+  const raidOvertimeDamage = dbRef.runTransaction(() => {
+    const raid = dbRef.getWeeklyRaidByWeek(bounds.weekKey);
+    if (!raid || raid.status === 'failed') {
+      return 0;
+    }
+
+    const dmg = Math.max(1, Math.round(clampedMins * 6 * (1 + Math.max(0, bossDamageBonusPct) / 100)));
+    applyDamageToRaid(
+      raid,
+      dmg,
+      {
+        dateKey: bounds.todayKey,
+        kind: raid.status === 'defeated' ? 'overkill' : 'deep_work',
+        label: `Overtime Flow +${clampedMins}p: ${questTitle}`,
+        multiplier: Number((1 + Math.max(0, bossDamageBonusPct) / 100).toFixed(2)),
+        detail: `Focus Arena +Flow (${clampedMins}p)`,
+      },
+      nowIso
+    );
+
+    raid.chests = buildChestsForTier(
+      raid.difficultyTier,
+      raid.archetype,
+      raid.chests,
+      raid.overkillDamage,
+      raid.status,
+      raid.currentHp,
+      raid.maxHp,
+      true
+    );
+    raid.updatedAt = nowIso;
+    dbRef.saveWeeklyRaid(raid);
+    return dmg;
+  });
+
+  return { raidOvertimeDamage };
+}

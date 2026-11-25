@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   ActivityCategory,
   AttributeKey,
+  CloseoutGrade,
+  CloseoutMood,
+  DailyCloseoutRecord,
   DailyFocusTrendPoint,
   HeatmapDayCell,
   LongTermAnalyticsPayload,
@@ -9,12 +12,14 @@ import type {
   WeeklyGrade,
   WeeklyReviewRecord,
 } from '../types/system';
-import { systemApi } from '../utils/api';
+import { fetchCloseoutHistory, systemApi } from '../utils/api';
 import {
   PixelRivets,
   PxBolt,
+  PxBook,
   PxCalendar,
   PxCheck,
+  PxChevron,
   PxClock,
   PxFlame,
   PxRefresh,
@@ -165,6 +170,24 @@ const CATEGORY_LABEL: Record<ActivityCategory, string> = {
   idle: 'Nghỉ',
 };
 
+const CLOSEOUT_GRADE_META: Record<
+  CloseoutGrade,
+  { bgHex: string; fgHex: string; label: string }
+> = {
+  S: { bgHex: '#c99330', fgHex: '#140e04', label: 'HUYỀN THOẠI' },
+  A: { bgHex: '#2e8b57', fgHex: '#ffffff', label: 'XUẤT SẮC' },
+  B: { bgHex: '#3267a8', fgHex: '#ffffff', label: 'VỮNG VÀNG' },
+  C: { bgHex: '#b88435', fgHex: '#140e04', label: 'TRUNG BÌNH' },
+  D: { bgHex: '#b83a4b', fgHex: '#ffffff', label: 'CẦN SIẾT' },
+};
+
+const CLOSEOUT_MOOD_LABEL: Record<CloseoutMood, string> = {
+  energized: 'Sung sức',
+  steady: 'Ổn định',
+  tired: 'Hơi mệt',
+  overwhelmed: 'Quá tải',
+};
+
 /**
  * 16-bit solid retro emerald steps:
  * Dark Obsidian: #182921 -> #224a34 -> #2e734c -> #38a169 -> #52c484
@@ -237,33 +260,73 @@ export const WeeklyReviewDossier: React.FC = () => {
   const [activeHeatmapDate, setActiveHeatmapDate] = useState<string | null>(null);
   const [activeTrendDate, setActiveTrendDate] = useState<string | null>(null);
 
+  const [closeouts, setCloseouts] = useState<DailyCloseoutRecord[]>([]);
+  const [closeoutError, setCloseoutError] = useState<string | null>(null);
+  const [expandedCloseoutIds, setExpandedCloseoutIds] = useState<Record<string, boolean>>({});
+
   const loadReviewData = useCallback(async (targetRange: '7d' | '30d') => {
     setLoading(true);
     setError(null);
+    setCloseoutError(null);
     try {
-      const res = await systemApi.getLongTermReview(targetRange);
-      setAnalytics(res.analytics);
-      const list = Array.isArray(res.reviews) ? res.reviews : [];
-      setReviews(list);
-      setSelectedReviewId((prev) =>
-        prev && list.some((r) => r.id === prev) ? prev : list[0]?.id ?? null
-      );
-      if (res.analytics.heatmap30d.length > 0) {
-        const lastCell = res.analytics.heatmap30d[res.analytics.heatmap30d.length - 1];
-        setActiveHeatmapDate(lastCell.dateKey);
+      const [reviewRes, closeoutRes] = await Promise.allSettled([
+        systemApi.getLongTermReview(targetRange),
+        fetchCloseoutHistory(14),
+      ]);
+
+      if (reviewRes.status === 'fulfilled') {
+        const res = reviewRes.value;
+        setAnalytics(res.analytics);
+        const list = Array.isArray(res.reviews) ? res.reviews : [];
+        setReviews(list);
+        setSelectedReviewId((prev) =>
+          prev && list.some((r) => r.id === prev) ? prev : list[0]?.id ?? null
+        );
+        if (res.analytics.heatmap30d.length > 0) {
+          const lastCell = res.analytics.heatmap30d[res.analytics.heatmap30d.length - 1];
+          setActiveHeatmapDate(lastCell.dateKey);
+        }
+        if (res.analytics.dailyTrend.length > 0) {
+          const lastPt = res.analytics.dailyTrend[res.analytics.dailyTrend.length - 1];
+          setActiveTrendDate(lastPt.dateKey);
+        }
+      } else {
+        const err = reviewRes.reason;
+        setError(
+          err instanceof Error ? err.message : 'Không thể tải dữ liệu tổng kết 7/30 ngày.'
+        );
       }
-      if (res.analytics.dailyTrend.length > 0) {
-        const lastPt = res.analytics.dailyTrend[res.analytics.dailyTrend.length - 1];
-        setActiveTrendDate(lastPt.dateKey);
+
+      if (closeoutRes.status === 'fulfilled') {
+        const records = Array.isArray(closeoutRes.value?.records)
+          ? closeoutRes.value.records
+          : [];
+        setCloseouts(records);
+        setExpandedCloseoutIds((prev) => {
+          const next: Record<string, boolean> = { ...prev };
+          records.slice(0, 2).forEach((rec) => {
+            if (typeof next[rec.id] === 'undefined') {
+              next[rec.id] = true;
+            }
+          });
+          return next;
+        });
+      } else {
+        const cErr = closeoutRes.reason;
+        setCloseoutError(
+          cErr instanceof Error
+            ? cErr.message
+            : 'Không thể tải Nhật ký Chốt Ngày gần đây.'
+        );
       }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Không thể tải dữ liệu tổng kết 7/30 ngày.'
-      );
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const toggleCloseoutExpand = (id: string) => {
+    setExpandedCloseoutIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   useEffect(() => {
     loadReviewData(range);
@@ -1575,6 +1638,222 @@ export const WeeklyReviewDossier: React.FC = () => {
                 {selectedReview.diagnosis.nextWeekTopPriority}
               </p>
             </div>
+          </div>
+        )}
+      </section>
+
+      {/* ==================== 5. DAILY CLOSEOUT JOURNAL HISTORY ==================== */}
+      <section className="rpg-window relative p-4 sm:p-5">
+        <PixelRivets />
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 pb-3.5 studio-divider">
+          <div className="flex items-center gap-2.5">
+            <PxBook size={18} color="var(--px-gold-text)" />
+            <div>
+              <h3 className="font-display text-base font-extrabold text-main">
+                Nhật Ký Chốt Ngày Gần Đây
+              </h3>
+              <p className="text-xs text-dim">
+                Lưu trữ bảng chấm điểm S–D cuối ngày, mức xao nhãng, sát thương Raid và phản tư cá nhân.
+              </p>
+            </div>
+          </div>
+
+          <span className="inline-flex items-center gap-1.5 rounded-none border-2 border-[var(--border-ink)] bg-[var(--bg-subtle)] px-2.5 py-1 font-mono text-xs font-bold text-main">
+            <PxScroll size={13} color="var(--px-gold-text)" />
+            <span>{closeouts.length} ngày</span>
+          </span>
+        </div>
+
+        {closeoutError && (
+          <div className="px-inset mt-4 flex items-center gap-2 border-2 border-[var(--px-red)] px-3.5 py-2.5 text-xs text-[var(--px-red-text)]">
+            <PxWarn size={14} danger />
+            <span>{closeoutError}</span>
+          </div>
+        )}
+
+        {closeouts.length === 0 ? (
+          <div className="px-inset mt-4 p-6 text-center">
+            <div className="mb-2 flex justify-center">
+              <PxScroll size={20} color="var(--px-gold-text)" />
+            </div>
+            <p className="mx-auto max-w-xl text-xs leading-relaxed text-sub">
+              Chưa có Nhật ký Chốt Ngày nào — bấm <strong>Chốt Ngày</strong> vào cuối ngày trên tab <strong>Hôm Nay</strong> để lưu đánh giá &amp; phản tư.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {closeouts.map((rec, idx) => {
+              const gradeStyle = CLOSEOUT_GRADE_META[rec.grade] || CLOSEOUT_GRADE_META.C;
+              const isExpanded = Boolean(expandedCloseoutIds[rec.id]);
+              const overBudget =
+                rec.distractionBudgetMinutes > 0 &&
+                rec.distractionMinutes > rec.distractionBudgetMinutes;
+
+              return (
+                <article
+                  key={rec.id || `${rec.dateKey}-${idx}`}
+                  className="px-inset rounded-none p-3.5"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                    {/* Left: Square 16-Bit Grade Stamp + Score + Date + AI/LOCAL Tag */}
+                    <div className="flex shrink-0 items-center gap-3 sm:w-44 sm:flex-col sm:items-start sm:gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="relative flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-none border-2 border-[var(--border-ink)]"
+                          style={{
+                            backgroundColor: gradeStyle.bgHex,
+                            boxShadow:
+                              'inset 2px 2px 0 rgba(255,255,255,0.24), inset -2px -2px 0 rgba(0,0,0,0.42)',
+                          }}
+                        >
+                          <span
+                            className="font-pixel text-2xl font-bold leading-none"
+                            style={{ color: gradeStyle.fgHex }}
+                          >
+                            {rec.grade}
+                          </span>
+                        </div>
+
+                        <div className="space-y-0.5 font-mono">
+                          <div className="text-sm font-extrabold text-main">
+                            {Math.round(rec.score)}/100
+                          </div>
+                          <div className="text-[11px] font-semibold text-sub">
+                            {formatDateVn(rec.dateKey)}
+                          </div>
+                          <span
+                            className="inline-block rounded-none border border-[var(--border-ink)] px-1.5 py-0.5 text-[9px] font-bold text-white"
+                            style={{
+                              backgroundColor:
+                                rec.generatedBy === 'ai' ? '#73499e' : '#3267a8',
+                            }}
+                          >
+                            {rec.generatedBy === 'ai' ? 'AI' : 'LOCAL'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Middle/Right: Headline, Compact Chips & Toggle */}
+                    <div className="min-w-0 flex-1 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-display text-sm font-extrabold leading-snug text-main sm:text-[15px]">
+                          {rec.headline}
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => toggleCloseoutExpand(rec.id)}
+                          className="btn-secondary inline-flex shrink-0 items-center gap-1 rounded-none px-2 py-1 font-mono text-[10px]"
+                          aria-expanded={isExpanded}
+                        >
+                          <span>{isExpanded ? 'Thu gọn' : 'Chi tiết'}</span>
+                          <PxChevron dir={isExpanded ? 'up' : 'down'} size={10} />
+                        </button>
+                      </div>
+
+                      {/* Stat Chips Row */}
+                      <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10px] font-bold">
+                        <span className="rounded-none border border-[var(--border-ink)] bg-[var(--bg-surface)] px-2 py-0.5 text-[var(--px-green-text)]">
+                          Focus {Math.round(rec.focusTotalMinutes)}p
+                        </span>
+                        <span
+                          className={`rounded-none border border-[var(--border-ink)] bg-[var(--bg-surface)] px-2 py-0.5 ${
+                            overBudget ? 'text-[var(--px-red-text)]' : 'text-sub'
+                          }`}
+                        >
+                          Xao nhãng {Math.round(rec.distractionMinutes)}p
+                        </span>
+                        <span className="rounded-none border border-[var(--border-ink)] bg-[var(--bg-surface)] px-2 py-0.5 text-[var(--px-gold-text)]">
+                          Raid -{Math.round(rec.raidDamageToday)} HP
+                        </span>
+                        {rec.hpDamageTaken > 0 && (
+                          <span className="rounded-none border border-[var(--border-ink)] bg-[#b83a4b] px-2 py-0.5 text-white">
+                            {rec.died
+                              ? `Gục (-${rec.hpDamageTaken} HP)`
+                              : `Phạt -${rec.hpDamageTaken} HP`}
+                          </span>
+                        )}
+                        {rec.carriedOverCount > 0 && (
+                          <span className="rounded-none border border-[var(--border-ink)] bg-[#3267a8] px-2 py-0.5 text-white">
+                            Dời {rec.carriedOverCount} việc
+                          </span>
+                        )}
+                        <span className="rounded-none border border-[var(--border-hairline)] bg-[var(--bg-surface-2)] px-2 py-0.5 text-sub">
+                          Trạng thái: {CLOSEOUT_MOOD_LABEL[rec.mood] || rec.mood}
+                        </span>
+                      </div>
+
+                      {/* Collapsible Coaching Details, Bottleneck Tags & Reflection */}
+                      {isExpanded && (
+                        <div className="space-y-2.5 border-t-2 pt-2.5 studio-divider">
+                          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                            <div className="rounded-none border-2 border-[var(--px-green)] bg-[var(--bg-surface)] p-2.5">
+                              <div className="font-pixel text-[9px] font-bold text-[var(--px-green-text)]">
+                                ĐIỂM MẠNH
+                              </div>
+                              <p className="mt-1 text-xs leading-relaxed text-main">
+                                {rec.strengthSummary}
+                              </p>
+                            </div>
+                            <div className="rounded-none border-2 border-[var(--px-red)] bg-[var(--bg-surface)] p-2.5">
+                              <div className="font-pixel text-[9px] font-bold text-[var(--px-red-text)]">
+                                ĐIỂM NGHẼN
+                              </div>
+                              <p className="mt-1 text-xs leading-relaxed text-main">
+                                {rec.bottleneckSummary}
+                              </p>
+                            </div>
+                            <div className="rounded-none border-2 border-[var(--px-gold)] bg-[var(--bg-surface)] p-2.5">
+                              <div className="font-pixel text-[9px] font-bold text-[var(--px-gold-text)]">
+                                CHIẾN THUẬT
+                              </div>
+                              <p className="mt-1 text-xs leading-relaxed text-main">
+                                {rec.tomorrowAdvice}
+                              </p>
+                            </div>
+                          </div>
+
+                          {Array.isArray(rec.bottleneckTags) && rec.bottleneckTags.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-mono text-[10px] font-bold text-dim">
+                                Nhãn nghẽn:
+                              </span>
+                              {rec.bottleneckTags.map((tag, tIdx) => (
+                                <span
+                                  key={`${tag}-${tIdx}`}
+                                  className="rounded-none border border-[var(--border-ink)] bg-[var(--bg-surface-2)] px-2 py-0.5 font-mono text-[10px] font-semibold text-sub"
+                                >
+                                  #{tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {rec.reflectionNote?.trim() && (
+                            <div className="rounded-none border-2 border-[var(--border-hairline)] border-l-4 border-l-[var(--px-plum)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-main">
+                              <span className="mr-1.5 font-mono text-[10px] font-bold uppercase text-[var(--px-plum-text)]">
+                                Phản tư:
+                              </span>
+                              <span className="italic">“{rec.reflectionNote.trim()}”</span>
+                            </div>
+                          )}
+
+                          {Array.isArray(rec.carriedOverTitles) &&
+                            rec.carriedOverTitles.length > 0 && (
+                              <div className="font-mono text-[10px] text-dim">
+                                Đã dời sang hôm sau:{' '}
+                                <span className="text-sub">
+                                  {rec.carriedOverTitles.join(' · ')}
+                                </span>
+                              </div>
+                            )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </section>

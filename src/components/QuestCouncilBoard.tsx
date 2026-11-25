@@ -124,6 +124,9 @@ interface QuestCouncilBoardProps {
   onOpenAssistant?: () => void;
   weeklyRaid?: WeeklyRaidPayload | null;
   onOpenRaidArena?: () => void;
+  onQuickStartFocus?: (durationMinutes: number, title?: string) => Promise<void>;
+  eveningCloseoutBadge?: boolean;
+  alreadyClosedToday?: boolean;
 }
 
 const TYPE_PILLS: Record<string, { label: string; cls: string }> = {
@@ -340,9 +343,15 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
   onOpenAssistant,
   weeklyRaid,
   onOpenRaidArena,
+  onQuickStartFocus,
+  eveningCloseoutBadge = false,
+  alreadyClosedToday = false,
 }) => {
   const [focusNote, setFocusNote] = useState('');
   const [showFocusNote, setShowFocusNote] = useState(false);
+  const [showQuickFocus, setShowQuickFocus] = useState(false);
+  const [quickFocusTitle, setQuickFocusTitle] = useState('');
+  const [startingQuickFocus, setStartingQuickFocus] = useState(false);
   const [orchestrating, setOrchestrating] = useState(false);
   const [settling, setSettling] = useState(false);
   const [failingId, setFailingId] = useState<string | null>(null);
@@ -617,9 +626,21 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
 
             <button
               type="button"
+              onClick={() => setShowQuickFocus((v) => !v)}
+              className={`${
+                showQuickFocus ? 'btn-primary' : 'btn-arcane'
+              } flex items-center gap-1.5 px-2.5 py-1.5 text-xs`}
+              title="Bắt đầu phiên Focus 1-click trong Hầm Ngục (25p / 45p / 60p / 90p)"
+            >
+              <PxSword size={14} />
+              <span>Focus Nhanh</span>
+            </button>
+
+            <button
+              type="button"
               disabled={orchestrating}
               onClick={() => void runOrchestrate()}
-              className="btn-primary flex items-center gap-1.5 px-4 py-1.5 text-xs"
+              className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
             >
               {orchestrating ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -634,13 +655,6 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                 type="button"
                 disabled={settling}
                 onClick={async () => {
-                  if (
-                    !window.confirm(
-                      'Chốt ngày hôm nay? Các nhiệm vụ bắt buộc chưa hoàn thành sẽ trừ HP theo mức rủi ro (hoặc 0 HP nếu bật Nghỉ Chủ Động).'
-                    )
-                  ) {
-                    return;
-                  }
                   setSettling(true);
                   try {
                     await onSettleDay();
@@ -648,19 +662,93 @@ export const QuestCouncilBoard: React.FC<QuestCouncilBoardProps> = ({
                     setSettling(false);
                   }
                 }}
-                className="btn-secondary flex items-center gap-1.5 px-2.5 py-1.5 text-xs"
-                title="Tổng kết ngày hôm nay"
+                className={`btn-secondary flex items-center gap-1.5 px-2.5 py-1.5 text-xs ${
+                  alreadyClosedToday
+                    ? 'border-[var(--px-green)] text-[var(--px-green-text)]'
+                    : eveningCloseoutBadge
+                      ? 'border-[var(--px-gold)] text-[var(--px-gold-text)]'
+                      : ''
+                }`}
+                title={
+                  alreadyClosedToday
+                    ? 'Xem lại Phiếu Chốt Ngày hôm nay'
+                    : eveningCloseoutBadge
+                      ? 'Đã đến giờ chốt ngày (21h+) — Mở Nghi thức Chốt Ngày'
+                      : 'Tổng kết ngày hôm nay'
+                }
               >
                 {settling ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : alreadyClosedToday ? (
+                  <PxCheck size={14} className="text-[var(--px-green-text)]" />
                 ) : (
                   <PxCalendar size={14} className="text-[var(--px-green-text)]" />
                 )}
-                <span>Chốt Ngày</span>
+                <span>{alreadyClosedToday ? 'Đã Chốt' : 'Chốt Ngày'}</span>
+                {eveningCloseoutBadge && !alreadyClosedToday && (
+                  <span className="rounded-none bg-[var(--px-gold)] px-1 py-0.5 font-mono text-[9px] font-extrabold leading-none text-[#140e04]">
+                    21h+
+                  </span>
+                )}
               </button>
             )}
           </div>
         </div>
+
+        {showQuickFocus && (
+          <div className="px-inset relative mt-3 space-y-2.5 rounded-none border-2 border-[var(--px-plum)] p-3">
+            <PixelRivets />
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                value={quickFocusTitle}
+                onChange={(e) => setQuickFocusTitle(e.target.value)}
+                placeholder="Tên phiên tập trung (để trống tự đặt)..."
+                className="min-w-0 flex-1 rounded-none px-3 py-1.5 text-xs"
+              />
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { mins: 25, label: '25p Pomodoro' },
+                  { mins: 45, label: '45p Deep Work' },
+                  { mins: 60, label: '60p Học Sâu' },
+                  { mins: 90, label: '90p Ultradian' },
+                ].map((preset) => (
+                  <button
+                    key={preset.mins}
+                    type="button"
+                    disabled={startingQuickFocus}
+                    onClick={async () => {
+                      if (startingQuickFocus) return;
+                      setStartingQuickFocus(true);
+                      try {
+                        await onQuickStartFocus?.(preset.mins, quickFocusTitle.trim() || undefined);
+                        setQuickFocusTitle('');
+                        setShowQuickFocus(false);
+                      } finally {
+                        setStartingQuickFocus(false);
+                      }
+                    }}
+                    className="btn-arcane inline-flex items-center gap-1 px-2.5 py-1.5 font-mono text-[11px] font-bold"
+                  >
+                    {startingQuickFocus ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <PxClock size={12} />
+                    )}
+                    <span>{preset.label}</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setShowQuickFocus(false)}
+                  className="btn-secondary p-1.5"
+                  aria-label="Đóng Focus Nhanh"
+                >
+                  <PxClose size={12} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showFocusNote && (
           <form

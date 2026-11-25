@@ -1088,3 +1088,73 @@ export interface WeeklyRaidPayload {
   canRegenerateAi: boolean;
   justSettledPenalty?: { bossName: string; weekKey: string; hpLost: number; goldLost: number; died: boolean } | null;
 }
+
+export type CloseoutMood = 'energized' | 'steady' | 'tired' | 'overwhelmed';
+export type CloseoutGrade = 'S' | 'A' | 'B' | 'C' | 'D';
+
+export interface CloseoutPendingQuestPreview {
+  id: string;
+  title: string;
+  type: QuestType;
+  rank: QuestRank;
+  durationMinutes: number;
+  hpDamage: number;
+  dateKey: string;
+}
+
+export interface DailyCloseoutRecord {
+  id: string;
+  dateKey: string;
+  closedAt: string;
+  grade: CloseoutGrade;
+  score: number;
+  generatedBy: 'ai' | 'local';
+  deepWorkMinutes: number;
+  studyMinutes: number;
+  focusTotalMinutes: number;
+  distractionMinutes: number;
+  distractionBudgetMinutes: number;
+  focusScore: number;
+  questsCompleted: number;
+  questsMissed: number;
+  raidDamageToday: number;
+  darkRegenTriggered: boolean;
+  mood: CloseoutMood;
+  bottleneckTags: string[];
+  reflectionNote: string;
+  carriedOverCount: number;
+  carriedOverTitles: string[];
+  hpDamageTaken: number;
+  died: boolean;
+  headline: string;
+  strengthSummary: string;
+  bottleneckSummary: string;
+  tomorrowAdvice: string;
+}
+
+export interface EveningCloseoutPreviewPayload {
+  dateKey: string;
+  tomorrowDateKey: string;
+  alreadyClosedToday: boolean;
+  todayCloseout: DailyCloseoutRecord | null;
+  remindEveningBadge: boolean;
+  metrics: {
+    deepWorkMinutes: number;
+    studyMinutes: number;
+    focusTotalMinutes: number;
+    distractionMinutes: number;
+    distractionBudgetMinutes: number;
+    focusScore: number;
+    questsCompleted: number;
+    questsPending: number;
+    raidDamageToday: number;
+    darkRegenTriggered: boolean;
+    playerHp: number;
+    playerMaxHp: number;
+    plannedRestMode: boolean;
+  };
+  pendingQuests: CloseoutPendingQuestPreview[];
+  projectedHpDamage: number;
+  projectedDieRisk: boolean;
+  recentCloseouts: DailyCloseoutRecord[];
+}

@@ -11,8 +11,11 @@ import type {
   BackupFileEntry,
   BackupStatusPayload,
   ChatContextScope,
+  CloseoutMood,
+  DailyCloseoutRecord,
   DaySettlementReport,
   DeathReport,
+  EveningCloseoutPreviewPayload,
   LanAccessPayload,
   LongTermAnalyticsPayload,
   PlayerProfile,
@@ -369,7 +372,16 @@ export const systemApi = {
       body: JSON.stringify(updates),
     }),
 
-  completeQuest: (questId: string, payload: { proofNote?: string; dungeonCleared?: boolean }) =>
+  completeQuest: (
+    questId: string,
+    payload: {
+      proofNote?: string;
+      dungeonCleared?: boolean;
+      overtimeMinutes?: number;
+      focusDistractions?: number;
+      microGapCount?: number;
+    }
+  ) =>
     request<{
       leveledUp: boolean;
       rankPromoted: boolean;
@@ -378,6 +390,8 @@ export const systemApi = {
       goldGain: number;
       runestoneGain: number;
       spGain?: number;
+      overtimeBonusXp?: number;
+      raidOvertimeDamage?: number;
       actualDurationMinutes?: number;
       contributedSkillName?: string;
       skillPracticeXpGain?: number;
@@ -794,7 +808,68 @@ export const systemApi = {
       usedAi: boolean;
       note?: string;
     }>('/api/raid/regenerate-ai', { method: 'POST' }),
+
+  quickStartFocus: (payload: {
+    title?: string;
+    durationMinutes: number;
+    primaryStat?: AttributeKey;
+  }) =>
+    request<{ ok: boolean; quest: Quest; state: SystemStatePayload }>('/api/quests/quick-focus', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  fetchCloseoutPreview: () =>
+    request<EveningCloseoutPreviewPayload>('/api/system/closeout/preview'),
+
+  fetchCloseoutHistory: (limit = 30) =>
+    request<{ records: DailyCloseoutRecord[] }>(`/api/system/closeout/history?limit=${limit}`),
+
+  submitDailyCloseout: (payload: {
+    mood: CloseoutMood;
+    bottleneckTags?: string[];
+    reflectionNote?: string;
+    carryOverQuestIds?: string[];
+  }) =>
+    request<{
+      alreadyClosed: boolean;
+      closeout: DailyCloseoutRecord;
+      settlement: DaySettlementReport | null;
+      carriedOverQuests: Quest[];
+      state: SystemStatePayload;
+      preview: EveningCloseoutPreviewPayload;
+    }>('/api/system/closeout', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };
+
+export const quickStartFocus = (payload: {
+  title?: string;
+  durationMinutes: number;
+  primaryStat?: AttributeKey;
+}): Promise<{ ok: boolean; quest: Quest; state: SystemStatePayload }> =>
+  systemApi.quickStartFocus(payload);
+
+export const fetchCloseoutPreview = (): Promise<EveningCloseoutPreviewPayload> =>
+  systemApi.fetchCloseoutPreview();
+
+export const fetchCloseoutHistory = (limit = 30): Promise<{ records: DailyCloseoutRecord[] }> =>
+  systemApi.fetchCloseoutHistory(limit);
+
+export const submitDailyCloseout = (payload: {
+  mood: CloseoutMood;
+  bottleneckTags?: string[];
+  reflectionNote?: string;
+  carryOverQuestIds?: string[];
+}): Promise<{
+  alreadyClosed: boolean;
+  closeout: DailyCloseoutRecord;
+  settlement: DaySettlementReport | null;
+  carriedOverQuests: Quest[];
+  state: SystemStatePayload;
+  preview: EveningCloseoutPreviewPayload;
+}> => systemApi.submitDailyCloseout(payload);
 
 export const fetchWeeklyRaid = (): Promise<WeeklyRaidPayload> => systemApi.fetchWeeklyRaid();
 

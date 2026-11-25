@@ -25,6 +25,7 @@ import {
   PxPause,
   PxPlay,
   PxPlus,
+  PxSword,
   PxTarget,
   PxWarn,
 } from './PixelIcons';
@@ -316,10 +317,13 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
   const doneToday = todayQuests.filter((q) => q.status === 'completed').length;
   const totalToday = todayQuests.length;
 
-  const activeQuest =
+  const activeFocusQuest =
     pendingQuests.find((q) => q.startedAt && !q.isPaused) ||
-    pendingQuests.find((q) => q.isPaused || (q.pausedAccumulatedSeconds ?? 0) > 0) ||
+    pendingQuests.find(
+      (q) => Boolean(q.startedAt) || q.isPaused || (q.pausedAccumulatedSeconds ?? 0) > 0
+    ) ||
     null;
+  const activeQuest = activeFocusQuest;
 
   const isRunning = Boolean(activeQuest && activeQuest.startedAt && !activeQuest.isPaused);
   const isPaused = Boolean(activeQuest && !isRunning);
@@ -561,9 +565,16 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
     }
   };
 
-  const elapsedSec = activeQuest ? getQuestElapsedSeconds(activeQuest, nowMs) : 0;
-  const activePlannedSec = Math.max(60, (activeQuest?.durationMinutes ?? 25) * 60);
-  const questProgressPct = activeQuest
+  const elapsedSec = activeFocusQuest ? getQuestElapsedSeconds(activeFocusQuest, nowMs) : 0;
+  const activePlannedSec = Math.max(60, (activeFocusQuest?.durationMinutes ?? 25) * 60);
+  const isFocusOvertime = Boolean(activeFocusQuest) && elapsedSec >= activePlannedSec;
+  const focusDisplaySec = isFocusOvertime
+    ? elapsedSec - activePlannedSec
+    : Math.max(0, activePlannedSec - elapsedSec);
+  const focusCountdownLabel = isFocusOvertime
+    ? `+${formatMmSs(focusDisplaySec)}`
+    : formatMmSs(focusDisplaySec);
+  const questProgressPct = activeFocusQuest
     ? Math.min(100, Math.round((elapsedSec / activePlannedSec) * 100))
     : 0;
   const nowVnMins = getVnNowMinutes(new Date(nowMs));
@@ -654,22 +665,32 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
 
         <div
           className="pointer-events-none flex min-w-0 items-center gap-[4px] overflow-hidden whitespace-nowrap leading-none"
-          title={activeQuest ? activeQuest.title : nextSchedule.title}
+          title={
+            activeFocusQuest
+              ? `FOCUS: ${activeFocusQuest.title} (${focusCountdownLabel}${isFocusOvertime ? ' FLOW' : ''})`
+              : nextSchedule.title
+          }
         >
           {distractionAlert ? (
             <span className="min-w-0 truncate whitespace-nowrap font-pixel text-[8px] font-bold text-[#ff6b7a]">
               ! ĐANG XAO NHÃNG
             </span>
-          ) : activeQuest ? (
+          ) : activeFocusQuest ? (
             <>
+              <PxSword
+                size={9}
+                color={isFocusOvertime ? '#52c484' : isRunning ? '#f0c46c' : '#8eb8eb'}
+              />
               <span
                 className="shrink-0 font-mono text-[10.5px] font-extrabold tabular-nums"
-                style={{ color: isRunning ? '#f0c46c' : '#8eb8eb' }}
+                style={{
+                  color: isFocusOvertime ? '#52c484' : isRunning ? '#f0c46c' : '#8eb8eb',
+                }}
               >
-                {formatMmSs(elapsedSec)}
+                {focusCountdownLabel}
               </span>
               <span className="min-w-0 truncate whitespace-nowrap font-mono text-[9px] text-[#b7adc9]">
-                {activeQuest.title}
+                {activeFocusQuest.title}
               </span>
             </>
           ) : (
@@ -1011,20 +1032,21 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
               <span className="pointer-events-none truncate font-mono text-[10px] text-[#847a99]">
                 Đang kết nối máy chủ PC...
               </span>
-            ) : activeQuest ? (
+            ) : activeFocusQuest ? (
               <>
                 <div className="pointer-events-none flex min-w-0 items-center justify-between gap-[6px] leading-none">
                   <div className="flex min-w-0 flex-1 items-center gap-[4px]">
-                    <span
-                      className="h-[6px] w-[6px] shrink-0 border border-[#09070f]"
-                      style={{ backgroundColor: isRunning ? '#38a169' : '#d99026' }}
+                    <PxSword
+                      size={10}
+                      color={isFocusOvertime ? '#52c484' : isRunning ? '#f0c46c' : '#8eb8eb'}
                     />
                     <span className="truncate font-display text-[11px] font-bold text-[#f3ead8]">
-                      {activeQuest.title}
+                      <span className="font-mono text-[9.5px] text-[#d4a24c]">FOCUS:</span>{' '}
+                      {activeFocusQuest.title}
                     </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-[4px]">
-                    {flowBonusReady && (
+                    {flowBonusReady && !isFocusOvertime && (
                       <span
                         className="border border-[#09070f] bg-[#c99330] px-[3px] py-[1px] font-mono text-[8px] font-extrabold text-[#140e04]"
                         title="Đủ điều kiện Flow Bonus +15% XP khi hoàn thành!"
@@ -1032,20 +1054,26 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
                         ★+15%
                       </span>
                     )}
-                    {hasPurityBadge && !flowBonusReady && (
+                    {hasPurityBadge && !flowBonusReady && !isFocusOvertime && (
                       <span className="font-mono text-[8.5px] font-bold text-[#6ee7a8] tabular-nums">
                         {purityPct}%
                       </span>
                     )}
                     <span
                       className="font-mono text-[11px] font-extrabold tabular-nums"
-                      style={{ color: isRunning ? '#f0c46c' : '#8eb8eb' }}
+                      style={{
+                        color: isFocusOvertime ? '#52c484' : isRunning ? '#f0c46c' : '#8eb8eb',
+                      }}
                     >
-                      {formatMmSs(elapsedSec)}
+                      {focusCountdownLabel}
                     </span>
-                    <span className="font-mono text-[8.5px] text-[#847a99] tabular-nums">
-                      /{activeQuest.durationMinutes}p
-                    </span>
+                    {isFocusOvertime ? (
+                      <span className="border border-[#09070f] bg-[#2e8b57] px-[3px] py-[1px] font-pixel text-[7px] font-bold text-white">
+                        FLOW
+                      </span>
+                    ) : isPaused ? (
+                      <span className="font-pixel text-[7px] text-[#8eb8eb]">PAUSE</span>
+                    ) : null}
                   </div>
                 </div>
                 <div className="px-hud-bar-track pointer-events-none h-[6px] w-full">
@@ -1053,7 +1081,11 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
                     className="h-full transition-none"
                     style={{
                       width: `${questProgressPct}%`,
-                      backgroundColor: isRunning ? '#c99330' : '#4a7ab5',
+                      backgroundColor: isFocusOvertime
+                        ? '#38a169'
+                        : isRunning
+                          ? '#c99330'
+                          : '#4a7ab5',
                     }}
                   />
                 </div>

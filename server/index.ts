@@ -28,12 +28,18 @@ import {
   generateWeeklyBlueprint,
 } from './ai-analytics.ts';
 import {
+  applyFocusOvertimeRaidDamage,
   claimWeeklyRaidChest,
   getOrCreateCurrentWeeklyRaid,
   regenerateWeeklyRaidWithAi,
   setWeeklyRaidDifficulty,
   syncWeeklyRaidSyncOnly,
 } from './weekly-raid.ts';
+import {
+  buildCloseoutPreview,
+  evaluateDailyCloseout,
+  shiftVnDateKey,
+} from './evening-closeout.ts';
 import {
   installWindowsStartup,
   launchSystemTray,
@@ -85,6 +91,7 @@ import type {
   BossMission,
   ChapterStageNode,
   ChatContextScope,
+  CloseoutMood,
   DaySettlementReport,
   DeathReport,
   PlayerProfile,
@@ -827,6 +834,203 @@ app.post('/api/system/settle-day', (_req, res) => {
   });
 });
 
+// ==================== 16-BIT EVENING CLOSEOUT RITUAL ====================
+const closeoutQueueByDate = new Map<string, Promise<unknown>>();
+
+app.get('/api/system/closeout/preview', (_req, res) => {
+  try {
+    const preview = buildCloseoutPreview(db, computeQuestMissDamage);
+    res.json(preview);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Closeout preview failed' });
+  }
+});
+
+app.get('/api/system/closeout/history', (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(90, Number(req.query.limit) || 30));
+    res.json({ records: db.getRecentDailyCloseouts(limit) });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Closeout history failed' });
+  }
+});
+
+app.post('/api/system/closeout', async (req, res) => {
+  const todayKey = getTodayKey();
+  const prevLock = closeoutQueueByDate.get(todayKey) || Promise.resolve();
+
+  const runCloseout = prevLock.then(async () => {
+    const body = (req.body || {}) as {
+      mood?: CloseoutMood;
+      bottleneckTags?: string[];
+      reflectionNote?: string;
+      carryOverQuestIds?: string[];
+    };
+
+    const validMoods = new Set<CloseoutMood>(['energized', 'steady', 'tired', 'overwhelmed']);
+    const mood: CloseoutMood = body.mood && validMoods.has(body.mood) ? body.mood : 'steady';
+    const bottleneckTags = Array.isArray(body.bottleneckTags)
+      ? body.bottleneckTags
+          .map((t) => String(t).trim())
+          .filter(Boolean)
+          .slice(0, 8)
+      : [];
+    const reflectionNote = typeof body.reflectionNote === 'string' ? body.reflectionNote.trim() : '';
+    const carryOverSet = new Set(
+      Array.isArray(body.carryOverQuestIds) ? body.carryOverQuestIds.map(String) : []
+    );
+
+    const existing = db.getDailyCloseout(todayKey);
+    if (existing) {
+      let updated = false;
+      if (body.mood && validMoods.has(body.mood) && existing.mood !== body.mood) {
+        existing.mood = body.mood;
+        updated = true;
+      }
+      if (Array.isArray(body.bottleneckTags)) {
+        existing.bottleneckTags = bottleneckTags;
+        updated = true;
+      }
+      if (typeof body.reflectionNote === 'string') {
+        existing.reflectionNote = reflectionNote;
+        updated = true;
+      }
+      if (updated) {
+        db.saveDailyCloseout(existing);
+        if (reflectionNote) {
+          const p = db.getPlayer();
+          db.recordDailyProgress({
+            dateKey: todayKey,
+            energyLevel: p.energyLevel,
+            reflectionNote,
+            isRestDay: p.plannedRestMode,
+          });
+        }
+        db.checkpointWal();
+      }
+      const preview = buildCloseoutPreview(db, computeQuestMissDamage);
+      return {
+        alreadyClosed: true,
+        closeout: existing,
+        settlement: null,
+        carriedOverQuests: [] as Quest[],
+        state: buildStatePayload(),
+        preview,
+      };
+    }
+
+    const prePreview = buildCloseoutPreview(db, computeQuestMissDamage);
+    const tomorrowDateKey = shiftVnDateKey(todayKey, 1);
+    const pendingToday = db
+      .getQuests()
+      .filter((q) => q.status === 'pending' && q.dateKey <= todayKey);
+
+    const { settlement, carriedOverQuests } = db.runTransaction(() => {
+      const dateKeys =
+        pendingToday.length > 0
+          ? Array.from(new Set(pendingToday.map((q) => q.dateKey))).sort()
+          : [todayKey];
+      const settleOut = settlePendingQuestsInTx(pendingToday, dateKeys, 'Nghi thức Chốt Ngày');
+
+      const clonedList: Quest[] = [];
+      for (const q of pendingToday) {
+        if (!carryOverSet.has(q.id)) continue;
+        const cleanDesc = q.description || '';
+        const cloned: Quest = {
+          ...q,
+          id: uid('q'),
+          dateKey: tomorrowDateKey,
+          status: 'pending',
+          startedAt: undefined,
+          isPaused: false,
+          pausedAccumulatedSeconds: 0,
+          actualDurationMinutes: undefined,
+          actualStartTime: undefined,
+          actualEndTime: undefined,
+          completedAt: undefined,
+          proofNote: undefined,
+          learningMethod: q.learningMethod || 'Dời từ hôm qua',
+          description: cleanDesc.startsWith('[Dời từ hôm qua]')
+            ? cleanDesc
+            : `[Dời từ hôm qua] ${cleanDesc}`,
+          subtasks: (q.subtasks || []).map((s) => ({ ...s, done: false })),
+          createdAt: new Date().toISOString(),
+        };
+        db.saveQuest(cloned);
+        clonedList.push(cloned);
+      }
+
+      if (reflectionNote) {
+        const playerNow = db.getPlayer();
+        db.recordDailyProgress({
+          dateKey: todayKey,
+          energyLevel: playerNow.energyLevel,
+          reflectionNote,
+          isRestDay: playerNow.plannedRestMode,
+        });
+        db.addMemoryLog({
+          id: uid('log'),
+          timestamp: new Date().toISOString(),
+          agent: 'SCHOLAR',
+          eventType: 'QUEST_COMPLETED',
+          summary: `Chốt ngày ${todayKey} (${mood})`,
+          insight: `Reflection Chốt Ngày: "${reflectionNote.slice(0, 140)}"`,
+        });
+      }
+
+      return { settlement: settleOut, carriedOverQuests: clonedList };
+    });
+
+    const record = await evaluateDailyCloseout({
+      dateKey: todayKey,
+      deepWorkMinutes: prePreview.metrics.deepWorkMinutes,
+      studyMinutes: prePreview.metrics.studyMinutes,
+      focusTotalMinutes: prePreview.metrics.focusTotalMinutes,
+      distractionMinutes: prePreview.metrics.distractionMinutes,
+      distractionBudgetMinutes: prePreview.metrics.distractionBudgetMinutes,
+      focusScore: prePreview.metrics.focusScore,
+      questsCompleted: prePreview.metrics.questsCompleted,
+      questsMissed: pendingToday.length,
+      raidDamageToday: prePreview.metrics.raidDamageToday,
+      darkRegenTriggered: prePreview.metrics.darkRegenTriggered,
+      mood,
+      bottleneckTags,
+      reflectionNote,
+      carriedOverCount: carriedOverQuests.length,
+      carriedOverTitles: carriedOverQuests.map((q) => q.title),
+      hpDamageTaken: settlement.totalHpDamage,
+      died: settlement.died,
+    });
+
+    db.saveDailyCloseout(record);
+    db.checkpointWal();
+
+    const preview = buildCloseoutPreview(db, computeQuestMissDamage);
+    return {
+      alreadyClosed: false,
+      closeout: record,
+      settlement,
+      carriedOverQuests,
+      state: buildStatePayload(),
+      preview,
+    };
+  });
+
+  const lockTail = runCloseout.catch(() => undefined);
+  closeoutQueueByDate.set(todayKey, lockTail);
+
+  try {
+    const payload = await runCloseout;
+    res.json(payload);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Chốt ngày thất bại.' });
+  } finally {
+    if (closeoutQueueByDate.get(todayKey) === lockTail) {
+      closeoutQueueByDate.delete(todayKey);
+    }
+  }
+});
+
 // Manual Proof-of-Work verification for Minion Wave Stage
 app.post('/api/chapters/:chapterId/stages/:stageId/verify-minion', (req, res) => {
   const chapters = db.getChapters();
@@ -1565,6 +1769,20 @@ app.post('/api/quests/analyze-draft', async (req, res) => {
   }
 });
 
+function pauseOtherActiveQuestsInTx(excludeQuestId?: string): void {
+  const nowMs = Date.now();
+  for (const other of db.getQuests()) {
+    if (other.id === excludeQuestId) continue;
+    if (other.status === 'pending' && other.startedAt && !other.isPaused) {
+      const elapsedSec = Math.max(0, Math.round((nowMs - Date.parse(other.startedAt)) / 1000));
+      other.pausedAccumulatedSeconds = (other.pausedAccumulatedSeconds || 0) + elapsedSec;
+      other.startedAt = undefined;
+      other.isPaused = true;
+      db.saveQuest(other);
+    }
+  }
+}
+
 // Live Flexible Task Session Stopwatch: Start & Pause
 app.post('/api/quests/:id/start', (req, res) => {
   const quest = db.getQuestById(req.params.id);
@@ -1578,6 +1796,7 @@ app.post('/api/quests/:id/start', (req, res) => {
   }
 
   db.runTransaction(() => {
+    pauseOtherActiveQuestsInTx(quest.id);
     if (!quest.startedAt || quest.isPaused) {
       quest.startedAt = new Date().toISOString();
     }
@@ -1589,6 +1808,66 @@ app.post('/api/quests/:id/start', (req, res) => {
   });
   db.checkpointWal();
   res.json(buildStatePayload());
+});
+
+app.post('/api/quests/quick-focus', (req, res) => {
+  const body = (req.body || {}) as {
+    title?: string;
+    durationMinutes?: number;
+    primaryStat?: AttributeKey;
+  };
+  const validStats: AttributeKey[] = ['INT', 'PER', 'STR', 'VIT', 'AGI', 'CHA'];
+  const durationMinutes = Math.max(5, Math.min(180, Math.round(Number(body.durationMinutes) || 25)));
+  const primaryStat: AttributeKey =
+    body.primaryStat && validStats.includes(body.primaryStat) ? body.primaryStat : 'INT';
+  const title = body.title?.trim() || `Phiên Tập Trung Sâu (${durationMinutes}p)`;
+  const qRank: QuestRank = durationMinutes >= 60 ? 'B' : durationMinutes >= 45 ? 'C' : 'D';
+  const skills = db.getSkills();
+  const resolvedSkillId = inferSkillIdForTask(title, 'Deep Work Focus Session', primaryStat, skills);
+
+  const balanced = computeBalancedQuestRewards({
+    durationMinutes,
+    rank: qRank,
+    type: 'side',
+    requiresProof: false,
+    primaryStat,
+  });
+
+  const nowIso = new Date().toISOString();
+  const nowHHmm = getVnTimeHHmm();
+  const quest: Quest = {
+    id: uid('q-focus'),
+    dateKey: getTodayKey(),
+    type: 'side',
+    rank: qRank,
+    title,
+    description: `Phiên tập trung tức thì ${durationMinutes} phút (Focus Arena).`,
+    learningMethod: 'Deep Work Focus Session',
+    reasoning: 'Khởi tạo nhanh từ Focus Arena.',
+    agentSource: 'CHRONOS',
+    skillId: resolvedSkillId,
+    scheduledSlot: `${nowHHmm} - Focus (${durationMinutes}p)`,
+    durationMinutes,
+    startedAt: nowIso,
+    actualStartTime: nowHHmm,
+    isPaused: false,
+    pausedAccumulatedSeconds: 0,
+    xpReward: balanced.xpReward,
+    masteryReward: balanced.masteryReward,
+    goldReward: balanced.goldReward,
+    statRewards: balanced.statRewards,
+    subtasks: [],
+    status: 'pending',
+    requiresProof: false,
+    createdAt: nowIso,
+  };
+
+  db.runTransaction(() => {
+    pauseOtherActiveQuestsInTx();
+    db.saveQuest(quest);
+  });
+  db.checkpointWal();
+  res.json({ ok: true, quest, state: buildStatePayload() });
 });
 
 app.post('/api/quests/:id/pause', (req, res) => {
@@ -1792,9 +2071,12 @@ app.post('/api/quests/:id/complete', (req, res) => {
     return;
   }
 
-  const { proofNote, dungeonCleared } = req.body as {
+  const { proofNote, dungeonCleared, overtimeMinutes, focusDistractions, microGapCount } = req.body as {
     proofNote?: string;
     dungeonCleared?: boolean;
+    overtimeMinutes?: number;
+    focusDistractions?: number;
+    microGapCount?: number;
   };
 
   const result = db.runTransaction(() => {
@@ -1858,7 +2140,15 @@ app.post('/api/quests/:id/complete', (req, res) => {
     let goldMult = 1.0 + growthBonuses.goldBonusPct / 100;
     if (hasOverdrive) goldMult *= 1.5;
 
-    const xpGain = Math.max(10, Math.round(quest.xpReward * effortRatio * xpMult));
+    const baseXpAfterDungeon = Math.max(10, Math.round(quest.xpReward * effortRatio * xpMult));
+    const clampedOvertime = dungeonCleared
+      ? Math.max(0, Math.min(120, Math.round(Number(overtimeMinutes) || 0)))
+      : 0;
+    const overtimeBonusXp =
+      clampedOvertime > 0
+        ? Math.round(baseXpAfterDungeon * Math.min(0.4, clampedOvertime * 0.02))
+        : 0;
+    const xpGain = baseXpAfterDungeon + overtimeBonusXp;
     const goldGain = Math.max(8, Math.round(quest.goldReward * effortRatio * goldMult));
     let spGain =
       quest.type === 'main' || quest.type === 'hidden' || Boolean(dungeonCleared) ? 2 : 1;
@@ -2027,6 +2317,10 @@ app.post('/api/quests/:id/complete', (req, res) => {
         actualDurationMinutes: quest.actualDurationMinutes,
         contributedSkillName,
         skillPracticeXpGain,
+        overtimeBonusXp,
+        clampedOvertime,
+        focusDistractions: Math.max(0, Math.round(Number(focusDistractions) || 0)),
+        microGapCount: Math.max(0, Math.round(Number(microGapCount) || 0)),
       }
     );
 
@@ -2034,6 +2328,9 @@ app.post('/api/quests/:id/complete', (req, res) => {
       leveledUp,
       rankPromoted,
       xpGain,
+      overtimeBonusXp,
+      clampedOvertime,
+      bossDamageBonusPct: growthBonuses.bossDamageBonusPct,
       masteryGain,
       goldGain,
       runestoneGain,
@@ -2045,10 +2342,22 @@ app.post('/api/quests/:id/complete', (req, res) => {
   });
 
   syncWeeklyRaidSyncOnly({ onPlayerDeath: triggerPlayerDeathAndCheckpointRollback });
+  let raidOvertimeDamage = 0;
+  if (result.clampedOvertime > 0) {
+    const ot = applyFocusOvertimeRaidDamage(
+      db,
+      result.clampedOvertime,
+      quest.title,
+      result.bossDamageBonusPct
+    );
+    raidOvertimeDamage = ot.raidOvertimeDamage;
+  }
   db.checkpointWal();
 
+  const { clampedOvertime: _ignoredOt, bossDamageBonusPct: _ignoredBonus, ...publicResult } = result;
   res.json({
-    ...result,
+    ...publicResult,
+    raidOvertimeDamage,
     state: buildStatePayload(),
   });
 });
