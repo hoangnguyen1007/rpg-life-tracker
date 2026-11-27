@@ -512,7 +512,14 @@ ${completedReviewCandidates.map((c) => `  • [${c.dateKey}] "${c.title}"${c.pro
 ${recentProofs || '  (Chưa có)'}
 - Tiến trình 7 ngày gần nhất (bao gồm Rest Days & Reflections):
 ${recentSnapshotsText || '  (Chưa có)'}
-- Ghi chú thích nghi gần nhất: ${memoryLogs.slice(0, 4).map((l) => l.insight).join(' | ') || 'Không có'}`;
+- Ghi chú thích nghi gần nhất: ${memoryLogs.slice(0, 4).map((l) => l.insight).join(' | ') || 'Không có'}
+
+=== CHẾ ĐỘ KỶ LUẬT, THÓI QUEN CỐT LÕI & TRÍ TUỆ CỤC BỘ ===
+- Chế độ kỷ luật: ${state.disciplineSettings?.mode || 'balanced'} | Mục tiêu Focus: ${state.disciplineSettings?.dailyFocusGoalMinutes ?? 180}p/ngày | Ngân sách xao nhãng: ${state.disciplineSettings?.distractionBudgetMinutes ?? 45}p | Ngày tối thiểu (MVD): ${state.disciplineSettings?.minimumViableDayActive ? 'ĐANG BẬT' : 'Tắt'}
+- Thói quen cốt lõi hôm nay: ${(state.habits || []).filter((h) => h.dueToday).map((h) => `${h.title} [${h.completedToday ? `Xong:${h.completedToday}` : 'Chưa'}, chuỗi ${h.currentStreak ?? 0}d]`).join(' ; ') || 'Chưa thiết lập'}
+- Giờ vàng thực tế học từ PC Tracker: ${(state.localIntelligence?.goldenHours || []).map((w) => `${w.label} (${w.focusScore}% Focus)`).join(', ') || 'Chưa đủ dữ liệu'}
+- Điểm nghẽn lặp lại 14 ngày: ${(state.localIntelligence?.topBottlenecks14d || []).map((b) => `${b.tag} (${b.count}x)`).join(', ') || 'Chưa có'}
+- Điều chỉnh đề xuất tuần tới: ${state.localIntelligence?.weeklyAdjustment || 'Duy trì nhịp hiện tại'}`;
 
   return {
     systemInstruction,

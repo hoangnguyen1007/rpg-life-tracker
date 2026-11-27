@@ -3,65 +3,65 @@
 @tailwind utilities;
 
 @layer base {
-  /* Default: Authentic 16-Bit Obsidian-Iron Pixel RPG Theme */
+  /* Default: Polished 16-Bit Obsidian Pixel RPG Theme */
   :root,
   [data-theme='dark'] {
-    --bg-canvas: #12101a;
-    --bg-surface: #181523;
-    --bg-surface-2: #211c30;
-    --bg-subtle: #100e18;
-    --bg-muted: #2b263d;
+    --bg-canvas: #0f0d17;
+    --bg-surface: #171422;
+    --bg-surface-2: #1f1b2e;
+    --bg-subtle: #120f1c;
+    --bg-muted: #28233a;
     --border-ink: #09070f;
-    --border-bevel-hi: #3f3859;
-    --border-bevel-lo: #0e0c16;
-    --border-hairline: #2e2942;
-    --border-strong: #4a4266;
+    --border-bevel-hi: #373150;
+    --border-bevel-lo: #0c0a14;
+    --border-hairline: #28233b;
+    --border-strong: #463e63;
     --px-rivet: #d4a24c;
-    --border-highlight: rgba(201, 147, 48, 0.42);
-    --text-primary: #f3ead8;
-    --text-secondary: #c5bcd6;
-    --text-muted: #847a99;
+    --border-highlight: rgba(201, 147, 48, 0.36);
+    --text-primary: #f4ecdc;
+    --text-secondary: #bfb6d1;
+    --text-muted: #7f7696;
     --px-gold: #c99330;
     --px-gold-text: #f0c46c;
     --px-green: #2e8b57;
-    --px-green-text: #52c484;
+    --px-green-text: #56c989;
     --px-blue: #3267a8;
-    --px-blue-text: #74ace8;
+    --px-blue-text: #78b0ee;
     --px-red: #b83a4b;
-    --px-red-text: #e86b7a;
+    --px-red-text: #eb7382;
     --px-plum: #73499e;
-    --px-plum-text: #b792e0;
+    --px-plum-text: #bc99e6;
     --accent-primary: var(--px-gold);
     --accent-arcane: var(--px-plum);
     --accent-crimson: var(--px-red);
     --accent-emerald: var(--px-green);
-    --accent-soft: rgba(201, 147, 48, 0.14);
-    --panel-shadow: inset 2px 2px 0 #3f3859, inset -2px -2px 0 #0e0c16, 4px 4px 0 rgba(0, 0, 0, 0.72);
-    --tile-dot: rgba(197, 188, 214, 0.045);
-    --cal-grid-line: #2e2942;
-    --cal-half-line: rgba(46, 41, 66, 0.55);
-    --cal-today-bg: rgba(201, 147, 48, 0.08);
+    --accent-soft: rgba(201, 147, 48, 0.12);
+    --panel-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.05), 3px 3px 0 rgba(0, 0, 0, 0.55);
+    --tile-dot: rgba(197, 188, 214, 0.028);
+    --cal-grid-line: #28233b;
+    --cal-half-line: rgba(46, 41, 66, 0.45);
+    --cal-today-bg: rgba(201, 147, 48, 0.07);
     --cal-now-line: #c99330;
     color-scheme: dark;
   }
 
-  /* Light Theme: Warm 16-Bit Wood & Parchment Guild Tavern */
+  /* Light Theme: Warm Polished 16-Bit Parchment Guild Tavern */
   [data-theme='light'] {
-    --bg-canvas: #dfd2b8;
-    --bg-surface: #f5ecd8;
-    --bg-surface-2: #eadcc0;
-    --bg-subtle: #e2d1b0;
-    --bg-muted: #d5bf98;
+    --bg-canvas: #e5dac4;
+    --bg-surface: #f7f0e0;
+    --bg-surface-2: #ede1c8;
+    --bg-subtle: #e7d9bc;
+    --bg-muted: #dac7a4;
     --border-ink: #3a2b1c;
-    --border-bevel-hi: #fff9ec;
-    --border-bevel-lo: #bfa882;
-    --border-hairline: #aa926a;
-    --border-strong: #6e5536;
+    --border-bevel-hi: #fffaf0;
+    --border-bevel-lo: #c4ae89;
+    --border-hairline: #c2ae89;
+    --border-strong: #7a603f;
     --px-rivet: #b88435;
-    --border-highlight: rgba(184, 126, 30, 0.35);
-    --text-primary: #231a11;
-    --text-secondary: #4f3f2e;
-    --text-muted: #75614a;
+    --border-highlight: rgba(184, 126, 30, 0.3);
+    --text-primary: #221910;
+    --text-secondary: #524231;
+    --text-muted: #78644e;
     --px-gold: #b87e1e;
     --px-gold-text: #7a4f0c;
     --px-green: #277348;
@@ -76,11 +76,11 @@
     --accent-arcane: var(--px-plum);
     --accent-crimson: var(--px-red);
     --accent-emerald: var(--px-green);
-    --accent-soft: rgba(184, 126, 30, 0.14);
-    --panel-shadow: inset 2px 2px 0 #fff9ec, inset -2px -2px 0 #bfa882, 4px 4px 0 rgba(42, 30, 18, 0.35);
-    --tile-dot: rgba(58, 43, 28, 0.075);
-    --cal-grid-line: #aa926a;
-    --cal-half-line: rgba(170, 146, 106, 0.45);
+    --accent-soft: rgba(184, 126, 30, 0.12);
+    --panel-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.55), 3px 3px 0 rgba(42, 30, 18, 0.22);
+    --tile-dot: rgba(58, 43, 28, 0.045);
+    --cal-grid-line: #bfa982;
+    --cal-half-line: rgba(170, 146, 106, 0.35);
     --cal-today-bg: rgba(184, 126, 30, 0.08);
     --cal-now-line: #b87e1e;
     color-scheme: light;
@@ -200,22 +200,80 @@
 .studio-surface {
   position: relative;
   background-color: var(--bg-surface);
-  border: 2px solid var(--border-ink);
+  border: 1px solid var(--border-hairline);
   border-radius: 0;
-  box-shadow:
-    inset 2px 2px 0 var(--border-bevel-hi),
-    inset -2px -2px 0 var(--border-bevel-lo),
-    3px 3px 0 rgba(0, 0, 0, 0.28);
-  image-rendering: pixelated;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.22);
+}
+
+.px-card {
+  position: relative;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.22);
+}
+
+.px-card-hero {
+  position: relative;
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-ink);
+  border-top: 3px solid var(--px-gold);
+  border-radius: 0;
+  box-shadow: var(--panel-shadow);
+}
+
+.px-shell-sidebar {
+  background-color: var(--bg-surface);
+  border-right: 2px solid var(--border-ink);
+  box-shadow: inset -1px 0 0 var(--border-hairline);
+}
+
+.px-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.575rem 0.75rem;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 13px;
+  text-align: left;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.px-nav-item:hover {
+  background-color: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+
+.px-nav-item-active {
+  background-color: var(--bg-surface-2);
+  border-color: var(--border-hairline);
+  border-left: 3px solid var(--px-gold);
+  color: var(--px-gold-text);
+  font-weight: 800;
+}
+
+.px-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--border-hairline);
+  background-color: var(--bg-subtle);
+  padding: 0.125rem 0.45rem;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .px-inset {
   background-color: var(--bg-subtle);
-  border: 2px solid var(--border-ink);
+  border: 1px solid var(--border-hairline);
   border-radius: 0;
-  box-shadow:
-    inset 2px 2px 0 var(--border-bevel-lo),
-    inset -1px -1px 0 var(--border-bevel-hi);
+  box-shadow: inset 1px 1px 0 rgba(0, 0, 0, 0.22);
 }
 
 .rpg-divider,

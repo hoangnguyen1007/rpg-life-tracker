@@ -22,12 +22,17 @@ import type {
   AuditLogEntry,
   BossMission,
   ChatContextScope,
+  CoreHabit,
   CouncilDeliberation,
   DailyCloseoutRecord,
   DailyProgressSnapshot,
+  DisciplineMode,
+  DisciplineSettings,
   Goal,
+  HabitLogEntry,
   HunterRank,
   InventoryItem,
+  KnowledgeNote,
   PlayerState,
   Quest,
   ShadowSoldier,
@@ -874,6 +879,31 @@ class SystemDatabase {
         updated_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS core_habits (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS habit_logs (
+        id TEXT PRIMARY KEY,
+        habit_id TEXT NOT NULL,
+        date_key TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        note TEXT,
+        completed_at TEXT NOT NULL,
+        UNIQUE(habit_id, date_key)
+      );
+
+      CREATE TABLE IF NOT EXISTS knowledge_notes (
+        id TEXT PRIMARY KEY,
+        next_review_date TEXT,
+        recall_enabled INTEGER NOT NULL DEFAULT 0,
+        data TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_quests_date_status ON quests(date_key, status);
       CREATE INDEX IF NOT EXISTS idx_timetable_day_start ON timetable_blocks(day_of_week, start_time);
       CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_logs(timestamp DESC);
@@ -883,6 +913,9 @@ class SystemDatabase {
       CREATE INDEX IF NOT EXISTS idx_nudges_date ON assistant_nudges(date_key, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_weekly_reviews_created ON weekly_reviews(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_weekly_raids_week ON weekly_raids(week_key DESC);
+      CREATE INDEX IF NOT EXISTS idx_habit_logs_date ON habit_logs(date_key DESC);
+      CREATE INDEX IF NOT EXISTS idx_habit_logs_habit ON habit_logs(habit_id, date_key DESC);
+      CREATE INDEX IF NOT EXISTS idx_knowledge_review ON knowledge_notes(recall_enabled, next_review_date);
     `);
   }
 
@@ -1903,7 +1936,7 @@ class SystemDatabase {
 
   exportSnapshot(): Record<string, unknown> {
     return {
-      version: 4,
+      version: 5,
       exportedAt: new Date().toISOString(),
       player: this.getPlayer(),
       goals: this.getGoals(),
@@ -1919,6 +1952,10 @@ class SystemDatabase {
       dailySnapshots: this.getDailySnapshots(1100),
       auditLogs: this.getAuditLogs(200),
       chatThreads: this.getChatThreads(),
+      disciplineSettings: this.getDisciplineSettings(),
+      habits: this.getHabits(true),
+      habitLogs: this.getHabitLogsRange('2000-01-01', '2099-12-31'),
+      knowledgeNotes: this.getKnowledgeNotes(500),
     };
   }
 
@@ -2001,6 +2038,24 @@ class SystemDatabase {
           }
         }
       }
+      if (snapshot.disciplineSettings && typeof snapshot.disciplineSettings === 'object') {
+        this.saveDisciplineSettings(snapshot.disciplineSettings as Partial<DisciplineSettings>);
+      }
+      if (Array.isArray(snapshot.habits)) {
+        for (const h of snapshot.habits as CoreHabit[]) {
+          if (h?.id) this.saveHabit(h);
+        }
+      }
+      if (Array.isArray(snapshot.habitLogs)) {
+        for (const hl of snapshot.habitLogs as HabitLogEntry[]) {
+          if (hl?.habitId && hl?.dateKey) this.upsertHabitLog(hl);
+        }
+      }
+      if (Array.isArray(snapshot.knowledgeNotes)) {
+        for (const kn of snapshot.knowledgeNotes as KnowledgeNote[]) {
+          if (kn?.id) this.saveKnowledgeNote(kn);
+        }
+      }
     });
   }
 
@@ -2026,6 +2081,9 @@ class SystemDatabase {
       DELETE FROM assistant_nudges;
       DELETE FROM weekly_raids;
       DELETE FROM daily_closeouts;
+      DELETE FROM core_habits;
+      DELETE FROM habit_logs;
+      DELETE FROM knowledge_notes;
     `);
     if (prevAi) {
       this.setKV('ai_settings', prevAi);
@@ -2351,6 +2409,323 @@ class SystemDatabase {
     this.touchLastSaved();
   }
 
+  // ==================== DISCIPLINE SETTINGS, CORE HABITS & KNOWLEDGE VAULT ====================
+
+  private computeCurrentVnWeekKey(): string {
+    const todayKey = getTodayKey();
+    const [y, m, d] = todayKey.split('-').map(Number);
+    const dt = new Date(Date.UTC(y || 2026, (m || 1) - 1, d || 1));
+    const dayNum = dt.getUTCDay() || 7;
+    dt.setUTCDate(dt.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((dt.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return `${dt.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+  }
+
+  getDisciplineSettings(): DisciplineSettings {
+    const saved = this.getKV<Partial<DisciplineSettings>>('discipline_settings');
+    const assist = this.getAssistantSettings();
+    const todayKey = getTodayKey();
+    const weekKey = this.computeCurrentVnWeekKey();
+    const mode: DisciplineMode =
+      saved?.mode === 'iron' || saved?.mode === 'balanced' || saved?.mode === 'sustainable'
+        ? saved.mode
+        : 'balanced';
+    const defaultShields = mode === 'iron' ? 0 : mode === 'balanced' ? 1 : 2;
+    const shieldsPerWeek =
+      typeof saved?.streakShieldsPerWeek === 'number'
+        ? Math.max(0, Math.min(7, Math.round(saved.streakShieldsPerWeek)))
+        : defaultShields;
+    const sameWeek = saved?.streakShieldWeekKey === weekKey;
+    const sameMvdDay = saved?.minimumViableDayDateKey === todayKey;
+
+    return {
+      mode,
+      dailyFocusGoalMinutes: Math.max(
+        30,
+        Math.min(720, Math.round(saved?.dailyFocusGoalMinutes ?? assist.dailyFocusGoalMinutes ?? 180))
+      ),
+      distractionBudgetMinutes: Math.max(
+        5,
+        Math.min(300, Math.round(saved?.distractionBudgetMinutes ?? assist.distractionBudgetMinutes ?? 45))
+      ),
+      streakShieldsPerWeek: shieldsPerWeek,
+      streakShieldsUsedThisWeek: sameWeek ? Math.max(0, Math.round(saved?.streakShieldsUsedThisWeek ?? 0)) : 0,
+      streakShieldWeekKey: weekKey,
+      mvdAutoSuggestEnergy: Math.max(
+        20,
+        Math.min(75, Math.round(saved?.mvdAutoSuggestEnergy ?? 45))
+      ),
+      minimumViableDayActive: sameMvdDay ? Boolean(saved?.minimumViableDayActive) : false,
+      minimumViableDayDateKey: todayKey,
+      eveningCloseoutHour: Math.max(
+        18,
+        Math.min(23, Math.round(saved?.eveningCloseoutHour ?? 21))
+      ),
+    };
+  }
+
+  saveDisciplineSettings(patch: Partial<DisciplineSettings>): DisciplineSettings {
+    const cur = this.getDisciplineSettings();
+    const nextMode: DisciplineMode =
+      patch.mode === 'iron' || patch.mode === 'balanced' || patch.mode === 'sustainable'
+        ? patch.mode
+        : cur.mode;
+    const modeChanged = patch.mode !== undefined && patch.mode !== cur.mode;
+    const defaultShieldsForNext = nextMode === 'iron' ? 0 : nextMode === 'balanced' ? 1 : 2;
+
+    const next: DisciplineSettings = {
+      ...cur,
+      ...patch,
+      mode: nextMode,
+      dailyFocusGoalMinutes: Math.max(
+        30,
+        Math.min(720, Math.round(patch.dailyFocusGoalMinutes ?? cur.dailyFocusGoalMinutes))
+      ),
+      distractionBudgetMinutes: Math.max(
+        5,
+        Math.min(300, Math.round(patch.distractionBudgetMinutes ?? cur.distractionBudgetMinutes))
+      ),
+      streakShieldsPerWeek:
+        typeof patch.streakShieldsPerWeek === 'number'
+          ? Math.max(0, Math.min(7, Math.round(patch.streakShieldsPerWeek)))
+          : modeChanged
+            ? defaultShieldsForNext
+            : cur.streakShieldsPerWeek,
+      streakShieldsUsedThisWeek:
+        typeof patch.streakShieldsUsedThisWeek === 'number'
+          ? Math.max(0, Math.round(patch.streakShieldsUsedThisWeek))
+          : cur.streakShieldsUsedThisWeek,
+      streakShieldWeekKey: patch.streakShieldWeekKey || cur.streakShieldWeekKey,
+      mvdAutoSuggestEnergy: Math.max(
+        20,
+        Math.min(75, Math.round(patch.mvdAutoSuggestEnergy ?? cur.mvdAutoSuggestEnergy))
+      ),
+      minimumViableDayActive:
+        typeof patch.minimumViableDayActive === 'boolean'
+          ? patch.minimumViableDayActive
+          : cur.minimumViableDayActive,
+      minimumViableDayDateKey: patch.minimumViableDayDateKey || getTodayKey(),
+      eveningCloseoutHour: Math.max(
+        18,
+        Math.min(23, Math.round(patch.eveningCloseoutHour ?? cur.eveningCloseoutHour))
+      ),
+    };
+
+    this.setKV('discipline_settings', next);
+
+    // Keep AssistantSettings in sync on shared focus/distraction targets
+    const assist = this.getAssistantSettings();
+    if (
+      assist.dailyFocusGoalMinutes !== next.dailyFocusGoalMinutes ||
+      assist.distractionBudgetMinutes !== next.distractionBudgetMinutes
+    ) {
+      this.saveAssistantSettings({
+        ...assist,
+        dailyFocusGoalMinutes: next.dailyFocusGoalMinutes,
+        distractionBudgetMinutes: next.distractionBudgetMinutes,
+      });
+    }
+
+    return next;
+  }
+
+  getHabits(includeArchived = false): CoreHabit[] {
+    const rows = this.db
+      .prepare('SELECT data FROM core_habits ORDER BY created_at ASC')
+      .all() as Array<{ data: string }>;
+    const all = rows.map((r) => JSON.parse(r.data) as CoreHabit);
+    return includeArchived ? all : all.filter((h) => !h.archived);
+  }
+
+  getHabitById(id: string): CoreHabit | null {
+    const row = this.db
+      .prepare('SELECT data FROM core_habits WHERE id = ?')
+      .get(id) as { data: string } | undefined;
+    return row ? (JSON.parse(row.data) as CoreHabit) : null;
+  }
+
+  saveHabit(habit: CoreHabit): void {
+    const clean: CoreHabit = {
+      id: habit.id,
+      title: habit.title,
+      timeOfDay: habit.timeOfDay,
+      frequency: habit.frequency,
+      customDays: habit.customDays,
+      targetPerWeek: habit.targetPerWeek,
+      standardSpec: habit.standardSpec,
+      minimumSpec: habit.minimumSpec,
+      durationMinutes: habit.durationMinutes,
+      primaryStat: habit.primaryStat,
+      goalId: habit.goalId,
+      skillId: habit.skillId,
+      archived: Boolean(habit.archived),
+      createdAt: habit.createdAt || new Date().toISOString(),
+    };
+    this.db
+      .prepare(
+        `INSERT INTO core_habits (id, data, created_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET data = excluded.data`
+      )
+      .run(clean.id, JSON.stringify(clean), clean.createdAt);
+    this.touchLastSaved();
+  }
+
+  deleteHabit(id: string): void {
+    this.db.prepare('DELETE FROM habit_logs WHERE habit_id = ?').run(id);
+    this.db.prepare('DELETE FROM core_habits WHERE id = ?').run(id);
+    this.touchLastSaved();
+  }
+
+  getHabitLogsRange(startDateKey: string, endDateKey: string): HabitLogEntry[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, habit_id, date_key, kind, note, completed_at
+         FROM habit_logs
+         WHERE date_key >= ? AND date_key <= ?
+         ORDER BY date_key DESC, completed_at DESC`
+      )
+      .all(startDateKey, endDateKey) as Array<{
+      id: string;
+      habit_id: string;
+      date_key: string;
+      kind: 'full' | 'minimum';
+      note: string | null;
+      completed_at: string;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      habitId: r.habit_id,
+      dateKey: r.date_key,
+      kind: r.kind === 'minimum' ? 'minimum' : 'full',
+      note: r.note || undefined,
+      completedAt: r.completed_at,
+    }));
+  }
+
+  getHabitLogForDate(habitId: string, dateKey: string): HabitLogEntry | null {
+    const r = this.db
+      .prepare(
+        `SELECT id, habit_id, date_key, kind, note, completed_at
+         FROM habit_logs
+         WHERE habit_id = ? AND date_key = ?`
+      )
+      .get(habitId, dateKey) as
+      | {
+          id: string;
+          habit_id: string;
+          date_key: string;
+          kind: 'full' | 'minimum';
+          note: string | null;
+          completed_at: string;
+        }
+      | undefined;
+    if (!r) return null;
+    return {
+      id: r.id,
+      habitId: r.habit_id,
+      dateKey: r.date_key,
+      kind: r.kind === 'minimum' ? 'minimum' : 'full',
+      note: r.note || undefined,
+      completedAt: r.completed_at,
+    };
+  }
+
+  upsertHabitLog(entry: HabitLogEntry): void {
+    this.db
+      .prepare(
+        `INSERT INTO habit_logs (id, habit_id, date_key, kind, note, completed_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(habit_id, date_key) DO UPDATE SET
+           kind = excluded.kind,
+           note = excluded.note,
+           completed_at = excluded.completed_at`
+      )
+      .run(
+        entry.id,
+        entry.habitId,
+        entry.dateKey,
+        entry.kind,
+        entry.note || null,
+        entry.completedAt
+      );
+    this.touchLastSaved();
+  }
+
+  deleteHabitLog(habitId: string, dateKey: string): void {
+    this.db
+      .prepare('DELETE FROM habit_logs WHERE habit_id = ? AND date_key = ?')
+      .run(habitId, dateKey);
+    this.touchLastSaved();
+  }
+
+  getKnowledgeNotes(limit = 120): KnowledgeNote[] {
+    const safeLimit = Math.max(1, Math.min(500, Math.round(limit || 120)));
+    const rows = this.db
+      .prepare('SELECT data FROM knowledge_notes ORDER BY updated_at DESC LIMIT ?')
+      .all(safeLimit) as Array<{ data: string }>;
+    return rows.map((r) => JSON.parse(r.data) as KnowledgeNote);
+  }
+
+  getKnowledgeNoteById(id: string): KnowledgeNote | null {
+    const row = this.db
+      .prepare('SELECT data FROM knowledge_notes WHERE id = ?')
+      .get(id) as { data: string } | undefined;
+    return row ? (JSON.parse(row.data) as KnowledgeNote) : null;
+  }
+
+  getDueRecallNotes(todayKey: string = getTodayKey()): KnowledgeNote[] {
+    const rows = this.db
+      .prepare(
+        `SELECT data FROM knowledge_notes
+         WHERE recall_enabled = 1 AND next_review_date IS NOT NULL AND next_review_date <= ?
+         ORDER BY next_review_date ASC, updated_at ASC
+         LIMIT 50`
+      )
+      .all(todayKey) as Array<{ data: string }>;
+    return rows.map((r) => JSON.parse(r.data) as KnowledgeNote);
+  }
+
+  saveKnowledgeNote(note: KnowledgeNote): void {
+    const nowIso = new Date().toISOString();
+    const clean: KnowledgeNote = {
+      ...note,
+      tags: Array.isArray(note.tags) ? note.tags.filter(Boolean).slice(0, 8) : [],
+      recallEnabled: Boolean(note.recallEnabled),
+      recallIntervalDays: Math.max(0, Math.round(note.recallIntervalDays || 0)),
+      recallEase: Number.isFinite(note.recallEase) ? Math.max(1.3, Math.min(3.5, note.recallEase)) : 2.5,
+      recallCount: Math.max(0, Math.round(note.recallCount || 0)),
+      nextReviewDate: note.recallEnabled ? note.nextReviewDate || getTodayKey() : null,
+      createdAt: note.createdAt || nowIso,
+      updatedAt: note.updatedAt || nowIso,
+    };
+    this.db
+      .prepare(
+        `INSERT INTO knowledge_notes (id, next_review_date, recall_enabled, data, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           next_review_date = excluded.next_review_date,
+           recall_enabled = excluded.recall_enabled,
+           data = excluded.data,
+           updated_at = excluded.updated_at`
+      )
+      .run(
+        clean.id,
+        clean.nextReviewDate,
+        clean.recallEnabled ? 1 : 0,
+        JSON.stringify(clean),
+        clean.createdAt,
+        clean.updatedAt
+      );
+    this.touchLastSaved();
+  }
+
+  deleteKnowledgeNote(id: string): void {
+    this.db.prepare('DELETE FROM knowledge_notes WHERE id = ?').run(id);
+    this.touchLastSaved();
+  }
+
   getActivityMinutesRange(
     startDateKey: string,
     endDateKey: string
@@ -2443,6 +2818,9 @@ class SystemDatabase {
         const prevPlayer = this.getKV<PlayerState>('player_state');
         const prevAi = this.getKV<AISettings>('ai_settings');
         const prevAssistantSettings = this.getKV<AssistantSettings>('assistant_settings');
+        const prevDiscipline = this.getDisciplineSettings();
+        const keptHabits = this.getHabits(true);
+        const keptKnowledge = this.getKnowledgeNotes(500);
         const keptBlocks = this.getTimetableBlocks().filter(
           (b) => !b.id.startsWith('tt-task-') && !b.id.startsWith('tt-ai-')
         );
@@ -2500,6 +2878,13 @@ class SystemDatabase {
         for (const cb of keptCustomBosses) this.saveBoss(cb);
         for (const cs of keptCustomShop) this.saveShopItem(cs);
         for (const sk of keptCustomSkills) this.saveSkill(sk);
+        this.saveDisciplineSettings({
+          ...prevDiscipline,
+          streakShieldsUsedThisWeek: 0,
+          minimumViableDayActive: false,
+        });
+        for (const h of keptHabits) this.saveHabit(h);
+        for (const kn of keptKnowledge) this.saveKnowledgeNote(kn);
 
         for (const thread of keptChats) {
           this.createChatThread({

@@ -254,7 +254,11 @@ export type AuditActionType =
   | 'SHOP_PURCHASE'
   | 'ITEM_USED'
   | 'SYSTEM_BACKUP'
-  | 'SYSTEM_RESET';
+  | 'SYSTEM_RESET'
+  | 'HABIT_COMPLETED'
+  | 'DISCIPLINE_SETTINGS_UPDATED'
+  | 'KNOWLEDGE_REVIEWED'
+  | 'STREAK_SHIELD_USED';
 
 export interface AuditLogEntry {
   id: string;
@@ -663,6 +667,152 @@ export interface CouncilDeliberation {
   systemDirective: string;
 }
 
+export type DisciplineMode = 'iron' | 'balanced' | 'sustainable';
+
+export interface DisciplineSettings {
+  mode: DisciplineMode;
+  dailyFocusGoalMinutes: number;
+  distractionBudgetMinutes: number;
+  streakShieldsPerWeek: number;
+  streakShieldsUsedThisWeek: number;
+  streakShieldWeekKey: string;
+  mvdAutoSuggestEnergy: number;
+  minimumViableDayActive: boolean;
+  minimumViableDayDateKey: string;
+  eveningCloseoutHour: number;
+}
+
+export type HabitTimeOfDay = 'morning' | 'anytime' | 'evening';
+export type HabitFrequency = 'daily' | 'weekdays' | 'weekends' | 'custom_days' | 'times_per_week';
+export type HabitCompletionKind = 'full' | 'minimum';
+
+export interface CoreHabit {
+  id: string;
+  title: string;
+  timeOfDay: HabitTimeOfDay;
+  frequency: HabitFrequency;
+  customDays?: number[];
+  targetPerWeek?: number;
+  standardSpec: string;
+  minimumSpec: string;
+  durationMinutes: number;
+  primaryStat: AttributeKey;
+  goalId?: string;
+  skillId?: string;
+  archived?: boolean;
+  createdAt: string;
+  currentStreak?: number;
+  bestStreak?: number;
+  completedToday?: HabitCompletionKind | null;
+  completedThisWeekCount?: number;
+  dueToday?: boolean;
+}
+
+export interface HabitLogEntry {
+  id: string;
+  habitId: string;
+  dateKey: string;
+  kind: HabitCompletionKind;
+  note?: string;
+  completedAt: string;
+}
+
+export type KnowledgeSource = 'manual' | 'quest_proof' | 'boss_proof' | 'closeout';
+export type RecallRating = 'again' | 'hard' | 'good' | 'easy';
+
+export interface KnowledgeNote {
+  id: string;
+  title: string;
+  content: string;
+  recallPrompt?: string;
+  source: KnowledgeSource;
+  sourceId?: string;
+  goalId?: string;
+  skillId?: string;
+  primaryStat?: AttributeKey;
+  tags: string[];
+  recallEnabled: boolean;
+  recallIntervalDays: number;
+  recallEase: number;
+  recallCount: number;
+  nextReviewDate: string | null;
+  lastReviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LocalGoldenWindow {
+  startHour: number;
+  endHour: number;
+  label: string;
+  focusMinutes: number;
+  focusScore: number;
+}
+
+export interface LocalHabitInsight {
+  habitId: string;
+  title: string;
+  consistency14dPct: number;
+  currentStreak: number;
+  weakestDayLabel: string | null;
+  mvdSavesCount: number;
+}
+
+export interface LocalGoalAlignmentItem {
+  goalId: string;
+  title: string;
+  progress: number;
+  linkedHabitsCount: number;
+  linkedQuests7dCompleted: number;
+  linkedFocusMinutes7d: number;
+  linkedNotesCount: number;
+  status: 'on_track' | 'slow' | 'neglected';
+}
+
+export interface LocalIntelligencePayload {
+  generatedAt: string;
+  dateKey: string;
+  goldenHours: LocalGoldenWindow[];
+  distractionPeakHours: Array<{ hour: number; label: string; distractionMinutes: number }>;
+  todayLoad: {
+    pendingQuestMinutes: number;
+    remainingFreeMinutes: number;
+    isOverloaded: boolean;
+    overloadRatio: number;
+    recommendedAction: string | null;
+  };
+  estimationCalibration: {
+    sampleCount: number;
+    avgRatio: number;
+    note: string | null;
+  };
+  habitAnalytics: {
+    activeCount: number;
+    completedTodayCount: number;
+    dueTodayCount: number;
+    avgConsistency14dPct: number;
+    weakestHabit: LocalHabitInsight | null;
+    strongestHabit: LocalHabitInsight | null;
+    items: LocalHabitInsight[];
+  };
+  topBottlenecks14d: Array<{ tag: string; count: number }>;
+  goalAlignment: LocalGoalAlignmentItem[];
+  dueRecallCount: number;
+  nextBestAction: {
+    kind: 'active_quest' | 'habit_now' | 'recall_due' | 'top_quest' | 'add_first';
+    title: string;
+    subtitle: string;
+    reason: string;
+    targetId?: string;
+  };
+  topInsightBanner: {
+    tone: 'gold' | 'green' | 'red' | 'blue';
+    headline: string;
+    detail: string;
+  } | null;
+  weeklyAdjustment: string;
+}
+
 export interface SystemStatePayload {
   player: PlayerState;
   goals: Goal[];
@@ -684,6 +834,11 @@ export interface SystemStatePayload {
   lastDeliberation: CouncilDeliberation | null;
   growthBonuses: PlayerGrowthBonuses;
   chatThreads: AIChatThread[];
+  disciplineSettings?: DisciplineSettings;
+  habits?: CoreHabit[];
+  habitLogsRecent?: HabitLogEntry[];
+  knowledgeNotes?: KnowledgeNote[];
+  localIntelligence?: LocalIntelligencePayload;
   assistantSummary?: {
     trackerRunning: boolean;
     focusScore: number;

@@ -7,11 +7,18 @@ import type {
   AssistantOverviewPayload,
   ChatContextScope,
   CloseoutMood,
+  CoreHabit,
   DailyCloseoutRecord,
+  DisciplineSettings,
   EveningCloseoutPreviewPayload,
+  HabitCompletionKind,
+  HabitFrequency,
+  HabitTimeOfDay,
+  KnowledgeNote,
   Quest,
   RaidChestId,
   RaidDifficultyTier,
+  RecallRating,
   RejectionReason,
   SystemResetMode,
   SystemStatePayload,
@@ -26,11 +33,16 @@ import {
   regenerateWeeklyRaidAi,
   setLanToken,
   setWeeklyRaidDifficulty,
+  subscribeSystemStateSync,
   systemApi,
 } from './utils/api';
 import { soundEngine } from './utils/soundEngine';
 import { getVnTodayKey } from './utils/timeVn';
-import { TopSystemHud } from './components/TopSystemHud';
+import { SidebarNav, type MainNavKey } from './components/SidebarNav';
+import { TodayFocusCockpit } from './components/TodayFocusCockpit';
+import { AiCoachDrawer } from './components/AiCoachDrawer';
+import { GrowthReviewHub } from './components/GrowthReviewHub';
+import { PixelDungeonDiorama } from './components/DungeonSprites';
 import {
   PixelRivets,
   PxAutomaton,
@@ -57,10 +69,7 @@ import {
 } from './components/PixelIcons';
 import { SkillTreeView } from './components/SkillTreeView';
 import { BossAndSkillsView } from './components/BossAndSkillsView';
-import { QuestCouncilBoard } from './components/QuestCouncilBoard';
-import { StatusWindow } from './components/StatusWindow';
 import { TimetablePlanner } from './components/TimetablePlanner';
-import { ProfileGoalsConsole } from './components/ProfileGoalsConsole';
 import { ShopAndInventoryView } from './components/ShopAndInventoryView';
 import { ShadowArmyModal } from './components/ShadowArmyModal';
 import { DungeonFocusModal } from './components/DungeonFocusModal';
@@ -70,11 +79,15 @@ import { AwakeningWizardModal } from './components/AwakeningWizardModal';
 import { DeathCheckpointModal } from './components/DeathCheckpointModal';
 import { ResetProgressModal } from './components/ResetProgressModal';
 import { AssistantCenterView } from './components/AssistantCenterView';
-import { FloatingHudPage } from './components/FloatingHudPage';
+import {
+  FloatingHudPage,
+  QUEST_COMPOSER_DRAFT_KEY,
+  type HudQuickAddOptions,
+} from './components/FloatingHudPage';
 import { MobileQuickView } from './components/MobileQuickView';
 
-type TabKey = 'quests' | 'skills' | 'campaign' | 'timetable' | 'hero' | 'assistant';
-type HeroSubTab = 'status' | 'profile' | 'shop' | 'shadows';
+type TabKey = MainNavKey;
+type RpgSubTab = 'campaign' | 'skills' | 'shop' | 'shadows';
 type AppViewMode = 'main' | 'hud' | 'mobile';
 
 function getViewModeFromLocation(): AppViewMode {
@@ -93,11 +106,10 @@ interface SystemAlert {
 }
 
 const NAV_TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: 'quests', label: 'Hôm Nay', icon: <PxScroll size={15} /> },
-  { key: 'timetable', label: 'Thời Khóa Biểu', icon: <PxCalendar size={15} /> },
-  { key: 'skills', label: 'Cây Kĩ Năng', icon: <PxSkillTree size={15} /> },
-  { key: 'hero', label: 'Tiến Độ & Mục Tiêu', icon: <PxShield size={15} /> },
-  { key: 'campaign', label: 'Hành Trình', icon: <PxSkull size={15} /> },
+  { key: 'today', label: 'Hôm Nay', icon: <PxScroll size={15} /> },
+  { key: 'timetable', label: 'Lịch & Nhịp', icon: <PxCalendar size={15} /> },
+  { key: 'growth', label: 'Mục Tiêu & Review', icon: <PxTarget size={15} /> },
+  { key: 'rpg', label: 'Kĩ Năng & RPG', icon: <PxSkillTree size={15} /> },
   { key: 'assistant', label: 'Trợ Lý PC', icon: <PxAutomaton size={15} /> },
 ];
 
@@ -107,19 +119,22 @@ export default function App() {
   const [state, setState] = useState<SystemStatePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>('quests');
-  const [heroSubTab, setHeroSubTab] = useState<HeroSubTab>('status');
+  const [activeTab, setActiveTab] = useState<TabKey>('today');
+  const [rpgSubTab, setRpgSubTab] = useState<RpgSubTab>('campaign');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('sys_sidebar_collapsed') === '1';
+  });
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
 
   // Default to Dark Obsidian Pixel Dungeon Theme
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem('sys_theme') : null;
     return saved === 'light' ? 'light' : 'dark';
   });
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const [dungeonQuest, setDungeonQuest] = useState<Quest | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
-  const [questUtilityTab, setQuestUtilityTab] = useState<'advisor' | 'rhythm' | 'reflect'>('advisor');
   const [assistantOverview, setAssistantOverview] = useState<AssistantOverviewPayload | null>(null);
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [weeklyRaid, setWeeklyRaid] = useState<WeeklyRaidPayload | null>(null);
@@ -303,7 +318,7 @@ export default function App() {
   }, [loadWeeklyRaid]);
 
   useEffect(() => {
-    if (activeTab === 'campaign') {
+    if (activeTab === 'rpg') {
       void loadWeeklyRaid(true);
     }
   }, [activeTab, loadWeeklyRaid]);
@@ -331,9 +346,43 @@ export default function App() {
   }, [loadCloseoutPreview]);
 
   useEffect(() => {
-    setSoundEnabled(soundEngine.getSnapshot().enabled);
-    return soundEngine.subscribe((snap) => setSoundEnabled(snap.enabled));
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => {
+          const next = !prev;
+          if (next) {
+            setCommandQuery('');
+            setSelectedCommandIdx(0);
+          }
+          return next;
+        });
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setAiDrawerOpen((prev) => !prev);
+      } else if (e.key === 'Escape') {
+        setCommandPaletteOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  const handleToggleSidebarCollapsed = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('sys_sidebar_collapsed', next ? '1' : '0');
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (commandPaletteOpen) {
+      setTimeout(() => commandInputRef.current?.focus(), 20);
+    }
+  }, [commandPaletteOpen]);
 
   useEffect(() => {
     if (!dungeonQuest) return;
@@ -354,16 +403,92 @@ export default function App() {
   }, [activeTab, loadAssistantOverview]);
 
   useEffect(() => {
-    const isStartupBootRetry = !state && (viewMode === 'hud' || isTauriDesktop());
-    if (viewMode !== 'hud' && viewMode !== 'mobile' && !isStartupBootRetry) return;
     if (lanAuthRequired) return;
-    const intervalMs = !state ? 1200 : viewMode === 'hud' ? 4000 : 10000;
+    const isStartupBootRetry = !state && (viewMode === 'hud' || isTauriDesktop());
+    const intervalMs = !state
+      ? 1200
+      : viewMode === 'hud'
+        ? 3500
+        : viewMode === 'mobile'
+          ? 8000
+          : 7000;
     const timer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden && !isStartupBootRetry && viewMode === 'main') {
+        return;
+      }
       void loadState(true);
       void loadAssistantOverview();
     }, intervalMs);
     return () => clearInterval(timer);
   }, [viewMode, lanAuthRequired, state, loadState, loadAssistantOverview]);
+
+  // Real-time Cross-Window State Sync (Mini HUD <-> Main App <-> Popup <-> Focus/Visibility)
+  useEffect(() => {
+    if (lanAuthRequired) return;
+    let debounceTimer: number | undefined;
+    const triggerInstantSync = () => {
+      if (debounceTimer) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        void loadState(true);
+        void loadAssistantOverview();
+        if (viewMode === 'main') {
+          void loadWeeklyRaid(true);
+          void loadCloseoutPreview(true);
+        }
+      }, 60);
+    };
+
+    const unsubBus = subscribeSystemStateSync(() => {
+      triggerInstantSync();
+    });
+
+    const handleWindowFocus = () => {
+      triggerInstantSync();
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) triggerInstantSync();
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    let unlistenTauriRefresh: (() => void) | null = null;
+    let disposed = false;
+    type TauriEventBridge = {
+      __TAURI__?: {
+        event?: {
+          listen?: (event: string, handler: () => void) => Promise<() => void>;
+        };
+      };
+    };
+    const tauriListen = (window as unknown as TauriEventBridge).__TAURI__?.event?.listen;
+    if (isTauriDesktop() && typeof tauriListen === 'function') {
+      tauriListen('tauri-state-refresh', () => {
+        triggerInstantSync();
+      })
+        .then((fn) => {
+          if (disposed) fn();
+          else unlistenTauriRefresh = fn;
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      disposed = true;
+      if (debounceTimer) window.clearTimeout(debounceTimer);
+      unsubBus();
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      unlistenTauriRefresh?.();
+    };
+  }, [
+    lanAuthRequired,
+    viewMode,
+    loadState,
+    loadAssistantOverview,
+    loadWeeklyRaid,
+    loadCloseoutPreview,
+  ]);
 
   const openCommandPalette = useCallback(() => {
     soundEngine.click();
@@ -371,32 +496,6 @@ export default function App() {
     setSelectedCommandIdx(0);
     setCommandPaletteOpen(true);
   }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setCommandPaletteOpen((prev) => {
-          const next = !prev;
-          if (next) {
-            setCommandQuery('');
-            setSelectedCommandIdx(0);
-          }
-          return next;
-        });
-      } else if (e.key === 'Escape') {
-        setCommandPaletteOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    if (commandPaletteOpen) {
-      setTimeout(() => commandInputRef.current?.focus(), 20);
-    }
-  }, [commandPaletteOpen]);
 
   const handleTogglePlannedRest = useCallback(
     async (nextMode: boolean) => {
@@ -414,12 +513,165 @@ export default function App() {
     [pushAlert]
   );
 
-  const handleToggleSound = useCallback(() => {
-    const next = !soundEnabled;
-    soundEngine.enabled = next;
-    setSoundEnabled(next);
-    if (next) soundEngine.click();
-  }, [soundEnabled]);
+  const triggerLevelUpFx = useCallback(() => {
+    soundEngine.levelUp();
+    confetti({
+      particleCount: 85,
+      spread: 75,
+      origin: { y: 0.6 },
+      colors: ['#f59e0b', '#ef4444', '#8b5cf6', '#10b981'],
+    });
+  }, []);
+
+  const handleCheckinHabit = useCallback(
+    async (habitId: string, kind: HabitCompletionKind | 'undo') => {
+      const res = await systemApi.checkinHabit(habitId, { kind });
+      setState(res.state);
+      if (res.undone) {
+        soundEngine.click();
+        pushAlert('Đã hoàn tác thói quen', 'Trạng thái check-in hôm nay đã được gỡ.');
+      } else if (res.leveledUp) {
+        triggerLevelUpFx();
+        pushAlert('THĂNG CẤP!', `Check-in thói quen giúp bạn lên Level ${res.state.player.level}!`);
+      } else {
+        soundEngine.questComplete();
+        pushAlert(
+          kind === 'minimum' ? 'Đã giữ chuỗi (Bản tối thiểu)' : 'Hoàn thành Thói quen!',
+          res.xpGain > 0 ? `+${res.xpGain} XP · +${res.goldGain}G` : 'Đã cập nhật trạng thái hôm nay.'
+        );
+      }
+    },
+    [pushAlert, triggerLevelUpFx]
+  );
+
+  const handleCreateHabit = useCallback(
+    async (payload: {
+      title: string;
+      timeOfDay: HabitTimeOfDay;
+      frequency: HabitFrequency;
+      customDays?: number[];
+      targetPerWeek?: number;
+      standardSpec: string;
+      minimumSpec: string;
+      durationMinutes?: number;
+      primaryStat?: import('./types/system').AttributeKey;
+      goalId?: string;
+      skillId?: string;
+    }) => {
+      soundEngine.systemPing();
+      const res = await systemApi.createHabit(payload);
+      setState(res.state);
+      pushAlert('Đã thêm Thói quen cốt lõi', `"${payload.title}" đã sẵn sàng giữ chuỗi mỗi ngày.`);
+    },
+    [pushAlert]
+  );
+
+  const handleUpdateHabit = useCallback(
+    async (habitId: string, patch: Partial<CoreHabit>) => {
+      soundEngine.systemPing();
+      const res = await systemApi.updateHabit(habitId, patch);
+      setState(res.state);
+      pushAlert('Đã cập nhật Thói quen', `"${res.habit.title}" đã được lưu.`);
+    },
+    [pushAlert]
+  );
+
+  const handleSeedStarterHabits = useCallback(async () => {
+    soundEngine.arise();
+    const res = await systemApi.seedStarterHabits();
+    setState(res.state);
+    pushAlert('Đã nạp Thói quen mẫu', `Đã thêm ${res.addedCount} thói quen cốt lõi kèm bản tối thiểu 2 phút.`);
+  }, [pushAlert]);
+
+  const handleDeleteHabit = useCallback(
+    async (habitId: string) => {
+      soundEngine.click();
+      const updated = await systemApi.deleteHabit(habitId);
+      setState(updated);
+      pushAlert('Đã xóa Thói quen', 'Thói quen đã được gỡ khỏi danh sách.');
+    },
+    [pushAlert]
+  );
+
+  const handleUpdateDisciplineSettings = useCallback(
+    async (patch: Partial<DisciplineSettings>) => {
+      soundEngine.systemPing();
+      const res = await systemApi.updateDisciplineSettings(patch);
+      setState(res.state);
+      void loadAssistantOverview();
+      void loadCloseoutPreview(true);
+      const msg =
+        typeof patch.minimumViableDayActive === 'boolean'
+          ? patch.minimumViableDayActive
+            ? 'Ngày Tối Thiểu (MVD) đang bật — ưu tiên bản 2–5 phút để bảo toàn chuỗi.'
+            : 'Đã quay lại nhịp tiêu chuẩn hôm nay.'
+          : 'Đã lưu cấu hình Phong cách Kỷ luật cá nhân.';
+      pushAlert('Cập nhật Kỷ luật', msg);
+    },
+    [loadAssistantOverview, loadCloseoutPreview, pushAlert]
+  );
+
+  const handleCreateKnowledgeNote = useCallback(
+    async (payload: {
+      title: string;
+      content: string;
+      recallPrompt?: string;
+      goalId?: string;
+      primaryStat?: import('./types/system').AttributeKey;
+      tags?: string[];
+      recallEnabled?: boolean;
+    }) => {
+      soundEngine.systemPing();
+      const res = await systemApi.createKnowledgeNote(payload);
+      setState(res.state);
+      pushAlert('Đã lưu vào Sổ Tri Thức', `"${payload.title}" đã được ghi nhận.`);
+    },
+    [pushAlert]
+  );
+
+  const handleToggleKnowledgeRecall = useCallback(
+    async (note: KnowledgeNote) => {
+      soundEngine.click();
+      const res = await systemApi.updateKnowledgeNote(note.id, {
+        recallEnabled: !note.recallEnabled,
+      });
+      setState(res.state);
+      pushAlert(
+        res.note.recallEnabled ? 'Đã bật Ôn tập ngắt quãng' : 'Đã tắt Ôn tập',
+        res.note.recallEnabled
+          ? `Thẻ "${note.title}" sẽ nhắc ôn lại vào ${res.note.nextReviewDate}.`
+          : `Đã tắt lịch nhắc ôn cho "${note.title}".`
+      );
+    },
+    [pushAlert]
+  );
+
+  const handleDeleteKnowledgeNote = useCallback(
+    async (id: string) => {
+      soundEngine.click();
+      const updated = await systemApi.deleteKnowledgeNote(id);
+      setState(updated);
+      pushAlert('Đã xóa ghi chú', 'Bản ghi đã được gỡ khỏi Sổ Bằng Chứng.');
+    },
+    [pushAlert]
+  );
+
+  const handleReviewKnowledgeNote = useCallback(
+    async (id: string, rating: RecallRating) => {
+      const res = await systemApi.reviewKnowledgeNote(id, rating);
+      setState(res.state);
+      if (res.leveledUp) {
+        triggerLevelUpFx();
+      } else {
+        soundEngine.questComplete();
+      }
+      pushAlert(
+        'Đã hoàn thành ôn tập!',
+        `+${res.xpGain} XP · Hẹn ôn lại sau ${res.nextIntervalDays} ngày.`
+      );
+    },
+    [pushAlert, triggerLevelUpFx]
+  );
 
   const handleReclassifyApp = useCallback(
     async (payload: { keyword: string; category: Exclude<ActivityCategory, 'idle'> }) => {
@@ -447,16 +699,6 @@ export default function App() {
     },
     [loadWeeklyRaid, pushAlert]
   );
-
-  const triggerLevelUpFx = useCallback(() => {
-    soundEngine.levelUp();
-    confetti({
-      particleCount: 85,
-      spread: 75,
-      origin: { y: 0.6 },
-      colors: ['#f59e0b', '#ef4444', '#8b5cf6', '#10b981'],
-    });
-  }, []);
 
   const handlePairWithPin = useCallback(
     async (pin: string) => {
@@ -534,16 +776,59 @@ export default function App() {
   );
 
   const handleQuickAddQuest = useCallback(
-    async (title: string, durationMinutes: number) => {
+    async (title: string, durationMinutes: number, options?: HudQuickAddOptions) => {
       soundEngine.systemPing();
       const updated = await systemApi.createCustomQuest({
         title,
         durationMinutes,
-        primaryStat: 'PER',
-        type: 'daily',
+        type: options?.type || 'daily',
+        primaryStat: options?.primaryStat,
+        syncToTimetable: options?.syncToTimetable,
+        goalId: options?.goalId,
       });
       setState(updated);
-      pushAlert('Đã thêm nhiệm vụ nhanh', `"${title}" (${durationMinutes}p) đã vào bảng hôm nay.`);
+      pushAlert(
+        'Đã thêm nhiệm vụ',
+        `"${title}" (${durationMinutes}p${options?.syncToTimetable ? ' · Đã gắn lịch' : ''}) đã đồng bộ vào Hôm Nay.`
+      );
+    },
+    [pushAlert]
+  );
+
+  const handleReopenQuest = useCallback(
+    async (questId: string) => {
+      soundEngine.click();
+      const updated = await systemApi.reopenQuest(questId);
+      setState(updated);
+      pushAlert('Đã mở lại nhiệm vụ', 'Nhiệm vụ đã được đưa trở lại danh sách Cần làm.');
+    },
+    [pushAlert]
+  );
+
+  const handleSpawnGoalQuest = useCallback(
+    (goalId: string, goalTitle: string) => {
+      soundEngine.systemPing();
+      try {
+        window.localStorage.setItem(
+          QUEST_COMPOSER_DRAFT_KEY,
+          JSON.stringify({
+            title: `Thực thi: ${goalTitle.slice(0, 56)}`,
+            durationMinutes: 45,
+            type: 'main',
+            goalId,
+            syncToTimetable: true,
+            openAdvanced: true,
+            ts: Date.now(),
+          })
+        );
+      } catch {
+        // Ignore storage error
+      }
+      setActiveTab('today');
+      pushAlert(
+        'Sẵn sàng tạo Quest cho Mục tiêu',
+        `Đã nạp mục tiêu "${goalTitle}" vào trình tạo nhiệm vụ Hôm Nay.`
+      );
     },
     [pushAlert]
   );
@@ -974,9 +1259,9 @@ export default function App() {
         if (targetKey === '__new__' && res.threadId && !activeThreadIdRef.current) {
           setActiveChatThreadId(res.threadId);
         }
-        if (activeTabRef.current !== 'quests') {
+        if (!aiDrawerOpen) {
           soundEngine.systemPing();
-          pushAlert('Cố vấn AI đã trả lời', 'Quay lại tab Hôm Nay để xem câu trả lời.');
+          pushAlert('Cố vấn AI đã trả lời', 'Mở ngăn kéo Cố vấn AI (Ctrl+J) để xem câu trả lời.');
         }
       } catch (err) {
         setChatErrorByKey((prev) => ({
@@ -988,7 +1273,7 @@ export default function App() {
         setOptimisticMessagesByKey((prev) => ({ ...prev, [targetKey]: undefined }));
       }
     },
-    [pendingChatKeys, pushAlert]
+    [aiDrawerOpen, pendingChatKeys, pushAlert]
   );
 
   const handleResetSystem = useCallback(
@@ -1029,6 +1314,19 @@ export default function App() {
 
     const quickActions = [
       {
+        id: 'action-ai-drawer',
+        group: 'Hệ thống AI',
+        label: aiDrawerOpen ? 'Đóng ngăn kéo Cố vấn AI' : 'Mở ngăn kéo Cố vấn AI (Ctrl+J)',
+        hint: 'Ctrl+J',
+        keywords: 'ai chat co van advisor drawer',
+        icon: <PxAutomaton size={14} color="var(--px-gold-text)" />,
+        run: async () => {
+          soundEngine.click();
+          setAiDrawerOpen((v) => !v);
+          setCommandPaletteOpen(false);
+        },
+      },
+      {
         id: 'action-orchestrate',
         group: 'Hệ thống AI',
         label: 'AI Lập Kế Hoạch hôm nay',
@@ -1039,7 +1337,7 @@ export default function App() {
           setPaletteBusy(true);
           try {
             soundEngine.systemPing();
-            setActiveTab('quests');
+            setActiveTab('today');
             const updated = await systemApi.orchestrate({});
             setState(updated);
             pushAlert('Kế hoạch đã sẵn sàng', 'AI đã sắp xếp các nhiệm vụ phù hợp thời khóa biểu hôm nay.');
@@ -1143,7 +1441,7 @@ export default function App() {
     ];
 
     return [...quickActions, ...tabItems];
-  }, [handleToggleHudVisible, handleTogglePlannedRest, hudVisible, pushAlert, state?.player.plannedRestMode, theme]);
+  }, [aiDrawerOpen, handleToggleHudVisible, handleTogglePlannedRest, hudVisible, pushAlert, state?.player.plannedRestMode, theme]);
 
   const filteredCommands = useMemo(() => {
     const q = commandQuery.trim().toLowerCase();
@@ -1205,6 +1503,7 @@ export default function App() {
         onCompleteQuest={(id) => handleCompleteQuest(id)}
         onQuickAddQuest={handleQuickAddQuest}
         onToggleDnd={handleSetDnd}
+        onCheckinHabit={handleCheckinHabit}
         onConvertFocusToQuest={handleConvertFocusToQuest}
         onHideHud={isTauriDesktop() ? handleHideHudFromSelf : undefined}
         onOpenMainApp={handleOpenMainApp}
@@ -1247,10 +1546,6 @@ export default function App() {
     state.dailySnapshots.find((s) => s.dateKey === todayKey)?.reflectionNote || '';
 
   const spAvailable = state.player.skillPoints ?? 0;
-  const anyChatPending = Object.values(pendingChatKeys).some(Boolean);
-  const trackerRunning = Boolean(
-    assistantOverview?.trackerRunning ?? state.assistantSummary?.trackerRunning
-  );
   const unreadNudges =
     assistantOverview?.nudges.filter((n) => !n.dismissed).length ??
     state.assistantSummary?.unreadNudges ??
@@ -1258,13 +1553,44 @@ export default function App() {
   const unclaimedRaidChests =
     weeklyRaid?.raid.chests.filter((c) => c.unlocked && !c.claimed).length ?? 0;
 
+  const disciplineSettings: DisciplineSettings = state.disciplineSettings ?? {
+    mode: 'balanced',
+    dailyFocusGoalMinutes: 180,
+    distractionBudgetMinutes: 45,
+    streakShieldsPerWeek: 1,
+    streakShieldsUsedThisWeek: 0,
+    streakShieldWeekKey: '',
+    mvdAutoSuggestEnergy: 45,
+    minimumViableDayActive: false,
+    minimumViableDayDateKey: todayKey,
+    eveningCloseoutHour: 21,
+  };
+  const habits = state.habits ?? [];
+  const knowledgeNotes = state.knowledgeNotes ?? [];
+  const localIntelligence = state.localIntelligence ?? null;
+
+  const todayPendingQuestsCount = state.quests.filter(
+    (q) => q.status === 'pending' && q.dateKey <= todayKey
+  ).length;
+  const todayPendingHabitsCount = habits.filter(
+    (h) => h.dueToday !== false && !h.completedToday
+  ).length;
+  const dueRecallCount = knowledgeNotes.filter(
+    (n) => n.recallEnabled && n.nextReviewDate && n.nextReviewDate <= todayKey
+  ).length;
+
+  const activeChapter =
+    state.chapters.find((c) => c.unlocked && !c.completed) || state.chapters[0];
+  const activeBoss =
+    state.bosses.find((b) => b.unlocked && !b.defeated) || state.bosses[0];
+
   return (
-    <div className="min-h-screen pb-10">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col lg:flex-row">
       {/* RPG Toast Alert */}
       {alert && (
         <div className="fixed bottom-5 right-5 z-50 max-w-sm">
           <div className="rpg-window relative rounded-none border-l-4 border-l-[var(--px-gold)] p-3.5">
-            <PixelRivets />
+            <PixelRivets visible />
             <div className="flex items-center gap-2 text-xs font-extrabold text-[var(--px-gold-text)]">
               <PxSparkle size={14} color="var(--px-gold-text)" />
               <span>{alert.title}</span>
@@ -1274,309 +1600,349 @@ export default function App() {
         </div>
       )}
 
-      <div className="mx-auto max-w-[1380px] space-y-4 px-3 pt-3 sm:px-5">
-        {/* TOP-LEFT CORNER HEARTS/HP/EXP HUD + TOP-RIGHT COUNTERS */}
-        <TopSystemHud
-          player={state.player}
-          aiSettings={state.aiSettings}
-          theme={theme}
-          soundEnabled={soundEnabled}
-          lastSavedAt={state.storageInfo?.lastSavedAt}
-          assistantSummary={state.assistantSummary}
-          hudVisible={hudVisible}
-          activeFocusQuest={activeFocusQuest}
-          onOpenActiveFocus={() => {
-            if (activeFocusQuest) setDungeonQuest(activeFocusQuest);
-          }}
-          onQuickStartFocus={handleQuickStartFocus}
-          onToggleHudVisible={() => void handleToggleHudVisible()}
-          onOpenAssistant={() => {
-            soundEngine.click();
-            setActiveTab('assistant');
-          }}
-          onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-          onToggleSound={handleToggleSound}
-          onOpenSettings={() => {
-            soundEngine.click();
-            setSettingsOpen(true);
-          }}
-          onOpenReset={() => {
-            soundEngine.click();
-            setResetModalOpen(true);
-          }}
-          onOpenCommandPalette={openCommandPalette}
-          onOpenSkillTree={() => {
-            soundEngine.click();
-            setActiveTab('skills');
-          }}
-          onQuickRename={async (name, hunterClass) => {
-            soundEngine.systemPing();
-            const updated = await systemApi.updateProfile({ name, hunterClass });
-            setState(updated);
-            pushAlert('Đã cập nhật Hồ sơ', `Xin chào ${name} (${hunterClass}).`);
-          }}
-        />
+      {/* COLLAPSIBLE LEFT SIDEBAR SHELL */}
+      <SidebarNav
+        player={state.player}
+        activeTab={activeTab}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={handleToggleSidebarCollapsed}
+        onSelectTab={setActiveTab}
+        theme={theme}
+        onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+        hudVisible={hudVisible}
+        onToggleHudVisible={() => void handleToggleHudVisible()}
+        activeFocusQuest={activeFocusQuest}
+        onOpenActiveFocus={() => {
+          if (activeFocusQuest) setDungeonQuest(activeFocusQuest);
+        }}
+        onQuickStartFocus={handleQuickStartFocus}
+        onOpenAiDrawer={() => setAiDrawerOpen((v) => !v)}
+        aiDrawerOpen={aiDrawerOpen}
+        onOpenCommandPalette={openCommandPalette}
+        onOpenSettings={() => {
+          soundEngine.click();
+          setSettingsOpen(true);
+        }}
+        onQuickRename={async (name, hunterClass) => {
+          soundEngine.systemPing();
+          const updated = await systemApi.updateProfile({ name, hunterClass });
+          setState(updated);
+          pushAlert('Đã cập nhật Hồ sơ', `Xin chào ${name} (${hunterClass}).`);
+        }}
+        assistantSummary={state.assistantSummary}
+        badges={{
+          todayPendingCount: todayPendingQuestsCount + todayPendingHabitsCount,
+          dueRecallCount,
+          rpgActionCount: spAvailable + unclaimedRaidChests,
+          unreadNudges,
+        }}
+      />
 
-        {/* UNIFIED 5-TAB RPG MENU BOOK SHELL (Zero-Gap Flush Tabs + .rpg-window) */}
-        <div>
-          <nav
-            className="relative z-10 -mb-[2px] flex flex-row items-end gap-1 overflow-x-auto overflow-y-hidden px-0.5"
-            aria-label="Điều hướng chính"
-          >
-            {NAV_TABS.map((tab) => {
-              const active = activeTab === tab.key;
-              const showSpDot = tab.key === 'skills' && spAvailable > 0;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => {
-                    soundEngine.click();
-                    setActiveTab(tab.key);
-                  }}
-                  className={`flex shrink-0 items-center gap-2 px-4 py-2.5 text-xs ${
-                    active ? 'rpg-tab-active !mb-0' : 'rpg-tab mb-[2px]'
-                  }`}
-                >
-                  {tab.icon}
-                  <span className="whitespace-nowrap">{tab.label}</span>
-                  {tab.key === 'quests' && !active && anyChatPending && (
-                    <Loader2
-                      className="h-3.5 w-3.5 animate-spin text-amber-400"
-                      aria-label="AI đang xử lý"
-                    />
-                  )}
-                  {tab.key === 'assistant' && trackerRunning && (
-                    <span
-                      className="h-2 w-2 bg-[var(--px-green-text)]"
-                      title="PC Activity Tracker đang chạy"
-                    />
-                  )}
-                  {tab.key === 'assistant' && unreadNudges > 0 && (
-                    <span className="font-pixel rounded-none border border-[var(--border-ink)] bg-[var(--px-gold)] px-1 py-0.5 text-[9px] font-bold leading-none text-[#140e04]">
-                      {unreadNudges}
-                    </span>
-                  )}
-                  {tab.key === 'campaign' && unclaimedRaidChests > 0 && (
-                    <span
-                      className="font-pixel rounded-none border border-[var(--border-ink)] bg-[var(--px-gold)] px-1 py-0.5 text-[9px] font-bold leading-none text-[#140e04]"
-                      title="Rương Raid Boss tuần chưa mở"
-                    >
-                      {unclaimedRaidChests} Rương
-                    </span>
-                  )}
-                  {showSpDot && (
-                    <span
-                      className="font-pixel rounded-none border border-[var(--border-ink)] bg-[var(--px-gold)] px-1.5 py-0.5 text-[9px] font-bold leading-none text-[#140e04]"
-                    >
-                      +{spAvailable} SP
-                    </span>
-                  )}
-                </button>
+      {/* FULL-HEIGHT MAIN WORKSPACE CANVAS */}
+      <main className="min-w-0 flex-1 lg:h-screen lg:overflow-y-auto pb-12">
+        {activeTab === 'today' && (
+          <TodayFocusCockpit
+            player={state.player}
+            todayAnalysis={state.todayAnalysis}
+            quests={state.quests}
+            goals={state.goals}
+            skills={state.skills}
+            habits={habits}
+            knowledgeNotes={knowledgeNotes}
+            disciplineSettings={disciplineSettings}
+            localIntelligence={localIntelligence}
+            assistantOverview={assistantOverview}
+            weeklyRaid={weeklyRaid}
+            eveningCloseoutBadge={Boolean(closeoutPreview?.remindEveningBadge)}
+            alreadyClosedToday={Boolean(closeoutPreview?.alreadyClosedToday)}
+            onCheckinEnergy={handleCheckinEnergy}
+            onToggleMvd={(active) =>
+              handleUpdateDisciplineSettings({
+                minimumViableDayActive: active,
+                minimumViableDayDateKey: todayKey,
+              })
+            }
+            onTogglePlannedRest={handleTogglePlannedRest}
+            onOrchestrate={async (focusNote) => {
+              soundEngine.systemPing();
+              const updated = await systemApi.orchestrate({ focusNote });
+              setState(updated);
+              pushAlert('Kế hoạch mới đã sẵn sàng', 'Đã sắp xếp nhiệm vụ vừa khung giờ rảnh hôm nay.');
+            }}
+            onOpenCloseout={async () => {
+              soundEngine.click();
+              setCloseoutOpen(true);
+              await loadCloseoutPreview(false);
+            }}
+            onCreateCustomQuest={async (payload) => {
+              soundEngine.systemPing();
+              const updated = await systemApi.createCustomQuest(payload);
+              setState(updated);
+              pushAlert(
+                'Đã thêm nhiệm vụ',
+                `"${payload.title}"${payload.syncToTimetable ? ' (Đã gắn lên Lịch)' : ''} đã vào bảng hôm nay.`
               );
-            })}
-          </nav>
+            }}
+            onStartQuest={handleStartQuest}
+            onPauseQuest={handlePauseQuest}
+            onCompleteQuest={handleCompleteQuest}
+            onReopenQuest={handleReopenQuest}
+            onDeleteQuest={async (questId) => {
+              soundEngine.click();
+              const updated = await systemApi.deleteQuest(questId);
+              setState(updated);
+              pushAlert('Đã xóa nhiệm vụ', 'Nhiệm vụ và khối lịch liên kết (nếu có) đã được gỡ.');
+            }}
+            onToggleSubtask={async (questId, subtaskId) => {
+              soundEngine.click();
+              const updated = await systemApi.toggleSubtask(questId, subtaskId);
+              setState(updated);
+            }}
+            onUpdateQuest={async (questId, updates) => {
+              soundEngine.click();
+              const updated = await systemApi.updateQuest(questId, updates);
+              setState(updated);
+              pushAlert('Đã cập nhật nhiệm vụ', 'Thông tin nhiệm vụ và lịch trình đã được đồng bộ.');
+            }}
+            onRejectQuest={async (questId, reason) => {
+              soundEngine.alert();
+              const updated = await systemApi.rejectQuest(questId, reason);
+              setState(updated);
+              pushAlert('Đã đổi nhiệm vụ', 'Đã tạo nhiệm vụ thay thế phù hợp hơn.');
+            }}
+            onFailQuest={async (questId) => {
+              const res = await systemApi.failQuest(questId);
+              setState(res.state);
+              if (res.died) {
+                soundEngine.alert();
+                pushAlert('Kiệt sức!', 'HP đã cạn — quay về Checkpoint gần nhất!');
+              } else if (res.hpDamage === 0) {
+                soundEngine.systemPing();
+                pushAlert('Được bảo vệ', 'Nhiệm vụ này không trừ HP theo chế độ kỷ luật hiện tại.');
+              } else {
+                soundEngine.monsterHit();
+                pushAlert('Bỏ lỡ nhiệm vụ', `Bị trừ -${res.hpDamage} HP.`);
+              }
+            }}
+            onMicroStartQuest={async (id) => {
+              soundEngine.questComplete();
+              const updated = await systemApi.microStartQuest(id);
+              setState(updated);
+              pushAlert('Khởi động 2 phút!', '+10 XP & +10G.');
+              return updated;
+            }}
+            onEnterDungeon={(quest) => {
+              soundEngine.arise();
+              setDungeonQuest(quest);
+            }}
+            onQuickStartFocus={handleQuickStartFocus}
+            onConvertFocusToQuest={handleConvertFocusToQuest}
+            onCreateHabit={handleCreateHabit}
+            onUpdateHabit={handleUpdateHabit}
+            onSeedStarterHabits={handleSeedStarterHabits}
+            onCheckinHabit={handleCheckinHabit}
+            onDeleteHabit={handleDeleteHabit}
+            onReviewKnowledge={handleReviewKnowledgeNote}
+            onOpenGrowthTab={() => {
+              soundEngine.click();
+              setActiveTab('growth');
+            }}
+            onOpenTimetableTab={() => {
+              soundEngine.click();
+              setActiveTab('timetable');
+            }}
+            onOpenRaidArena={() => {
+              soundEngine.click();
+              setActiveTab('rpg');
+              setRpgSubTab('campaign');
+            }}
+          />
+        )}
 
-          {/* MAIN UNIFIED RPG WINDOW FRAME */}
-          <main className="rpg-window relative min-w-0 rounded-none">
-            <PixelRivets />
-            {activeTab === 'quests' && (
-              <QuestCouncilBoard
-                player={state.player}
-                aiSettings={state.aiSettings}
-                todayAnalysis={state.todayAnalysis}
-                quests={state.quests}
-                skills={state.skills}
-                chapters={state.chapters}
-                bosses={state.bosses}
-                shadowsCount={state.shadows.length}
-                deliberation={state.lastDeliberation}
-                memoryLogs={state.memoryLogs}
-                initialReflectionNote={todayReflectionNote}
-                chatThreads={state.chatThreads || []}
-                activeChatThreadId={activeChatThreadId}
-                chatDraftsByKey={chatDraftsByKey}
-                pendingChatKeys={pendingChatKeys}
-                optimisticMessagesByKey={optimisticMessagesByKey}
-                chatErrorByKey={chatErrorByKey}
-                utilityTab={questUtilityTab}
-                onChangeUtilityTab={setQuestUtilityTab}
-                onSelectChatThread={(threadId) => setActiveChatThreadId(threadId)}
-                onCreateChatThread={handleCreateChatThread}
-                onDeleteChatThread={handleDeleteChatThread}
-                onChangeChatDraft={(key, value) =>
-                  setChatDraftsByKey((prev) => ({ ...prev, [key]: value }))
-                }
-                onSendChatPrompt={handleSendChatPrompt}
-                onOpenSettings={() => setSettingsOpen(true)}
-                onNavigateBosses={() => {
-                  soundEngine.click();
-                  setActiveTab('campaign');
-                }}
-                onCheckinEnergy={async (energy) => {
-                  soundEngine.systemPing();
-                  const updated = await systemApi.checkin({ energyLevel: energy });
-                  setState(updated);
-                  pushAlert(
-                    'Đã cập nhật thể trạng',
-                    `Năng lượng hôm nay: ${energy}% — AI sẽ cân chỉnh độ nặng bài phù hợp (HP giữ nguyên).`
-                  );
-                }}
-                onOrchestrate={async (focusNote) => {
-                  soundEngine.systemPing();
-                  const updated = await systemApi.orchestrate({ focusNote });
-                  setState(updated);
-                  pushAlert('Kế hoạch mới đã sẵn sàng', 'AI đã sắp xếp nhiệm vụ vừa khung giờ rảnh hôm nay.');
-                }}
-                onCreateCustomQuest={async (payload) => {
-                  soundEngine.systemPing();
-                  const updated = await systemApi.createCustomQuest(payload);
-                  setState(updated);
-                  pushAlert('Đã thêm nhiệm vụ', `"${payload.title}" đã vào bảng hôm nay.`);
-                }}
-                onDeleteQuest={async (questId) => {
-                  soundEngine.click();
-                  const updated = await systemApi.deleteQuest(questId);
-                  setState(updated);
-                  pushAlert('Đã xóa nhiệm vụ', 'Nhiệm vụ và khung lịch liên kết (nếu có) đã được gỡ.');
-                }}
-                onToggleSubtask={async (questId, subtaskId) => {
-                  soundEngine.click();
-                  const updated = await systemApi.toggleSubtask(questId, subtaskId);
-                  setState(updated);
-                }}
-                onCompleteQuest={handleCompleteQuest}
-                onStartQuest={async (questId) => {
-                  soundEngine.systemPing();
-                  const updated = await systemApi.startQuest(questId);
-                  setState(updated);
-                  pushAlert('Đã bắt đầu', 'Đang ghi nhận tiến độ phiên làm việc.');
-                }}
-                onPauseQuest={async (questId) => {
-                  soundEngine.click();
-                  const updated = await systemApi.pauseQuest(questId);
-                  setState(updated);
-                  pushAlert('Đã tạm dừng phiên', 'Thời gian tích lũy đã được lưu tự động.');
-                }}
-                onRejectQuest={async (questId, reason: RejectionReason) => {
-                  soundEngine.alert();
-                  const updated = await systemApi.rejectQuest(questId, reason);
-                  setState(updated);
-                  pushAlert('Đã đổi nhiệm vụ', 'AI đã tạo nhiệm vụ thay thế phù hợp hơn.');
-                }}
-                onFailQuest={async (questId) => {
-                  const res = await systemApi.failQuest(questId);
-                  setState(res.state);
-                  if (res.died) {
-                    soundEngine.alert();
-                    pushAlert('Kiệt sức!', 'HP đã cạn — quay về Checkpoint gần nhất!');
-                  } else if (res.hpDamage === 0) {
-                    soundEngine.systemPing();
-                    pushAlert('Được bảo vệ', 'Nhiệm vụ này không trừ HP (Nghỉ Chủ Động / Hidden / Recovery).');
-                  } else {
-                    soundEngine.monsterHit();
-                    pushAlert('Bỏ lỡ nhiệm vụ', `Bị trừ -${res.hpDamage} HP! Giữ vững nhịp độ nhé.`);
-                  }
-                }}
-                onSettleDay={async () => {
-                  soundEngine.click();
-                  setCloseoutOpen(true);
-                  await loadCloseoutPreview(false);
-                }}
-                onUpdateQuest={async (questId, updates) => {
-                  soundEngine.click();
-                  const updated = await systemApi.updateQuest(questId, updates);
-                  setState(updated);
-                }}
-                onMicroStartQuest={async (id) => {
-                  soundEngine.questComplete();
-                  const updated = await systemApi.microStartQuest(id);
-                  setState(updated);
-                  pushAlert('Khởi động 2 phút!', '+10 XP & +10G.');
-                  return updated;
-                }}
-                onReflect={async (payload) => {
-                  if (typeof payload.plannedRestMode === 'boolean' && payload.reflectionNote === undefined) {
-                    return handleTogglePlannedRest(payload.plannedRestMode);
-                  }
-                  soundEngine.systemPing();
-                  const updated = await systemApi.reflect(payload);
-                  setState(updated);
-                  pushAlert('Đã lưu Nhật ký', 'Phản hồi hôm nay đã đồng bộ với AI.');
-                  return updated;
-                }}
-                onEnterDungeon={(quest) => {
-                  soundEngine.arise();
-                  setDungeonQuest(quest);
-                }}
-                assistantOverview={assistantOverview}
-                weeklyRaid={weeklyRaid}
-                eveningCloseoutBadge={Boolean(closeoutPreview?.remindEveningBadge)}
-                alreadyClosedToday={Boolean(closeoutPreview?.alreadyClosedToday)}
-                onQuickStartFocus={handleQuickStartFocus}
-                onOpenRaidArena={() => {
-                  soundEngine.click();
-                  setActiveTab('campaign');
-                }}
-                onConvertFocusToQuest={handleConvertFocusToQuest}
-                onOpenAssistant={() => {
-                  soundEngine.click();
-                  setActiveTab('assistant');
-                }}
-              />
-            )}
+        {activeTab === 'timetable' && (
+          <div className="mx-auto max-w-[1480px] p-4 sm:p-6">
+            <TimetablePlanner
+              weeklyAnalysis={state.weeklyAnalysis}
+              quests={state.quests}
+              onApplyWeeklyBlueprint={handleApplyWeeklyBlueprint}
+              onAiPlanDaySchedule={async (p) => {
+                soundEngine.arise();
+                const res = await systemApi.aiPlanDaySchedule(p);
+                setState(res.state);
+                pushAlert('AI Đã Xếp Lịch', res.summary);
+                return res;
+              }}
+              onSaveBatch={async (blocks, replaceExisting) => {
+                soundEngine.systemPing();
+                const updated = await systemApi.saveTimetableBatch(blocks, replaceExisting);
+                setState(updated);
+                pushAlert('Đã cập nhật lịch', `Đã thêm ${blocks.length} khung giờ.`);
+              }}
+              onUpdateBlock={async (id, updates) => {
+                soundEngine.click();
+                const updated = await systemApi.updateTimetableBlock(id, updates);
+                setState(updated);
+                pushAlert('Đã cập nhật khung lịch', 'Khung giờ và nhiệm vụ liên kết đã được đồng bộ.');
+              }}
+              onDeleteBlock={async (id) => {
+                soundEngine.click();
+                const updated = await systemApi.deleteTimetableBlock(id);
+                setState(updated);
+                pushAlert('Đã xóa khung lịch', 'Khối thời gian và nhiệm vụ chờ liên kết đã được xóa.');
+              }}
+              onDeleteQuest={async (questId) => {
+                soundEngine.click();
+                const updated = await systemApi.deleteQuest(questId);
+                setState(updated);
+                pushAlert('Đã xóa nhiệm vụ', 'Nhiệm vụ và khung lịch liên kết (nếu có) đã được gỡ.');
+              }}
+              onCompleteQuest={(questId) => handleCompleteQuest(questId)}
+              onCreateCustomQuest={async (payload) => {
+                soundEngine.systemPing();
+                const updated = await systemApi.createCustomQuest(payload);
+                setState(updated);
+                pushAlert('Đã thêm nhiệm vụ từ Lịch', `"${payload.title}" đã được gắn vào khung giờ ${payload.scheduledSlot}.`);
+              }}
+              onClearTimetable={async (dayOfWeek) => {
+                soundEngine.alert();
+                const updated = await systemApi.clearTimetable(dayOfWeek);
+                setState(updated);
+                pushAlert('Đã dọn lịch', 'Các khung giờ đã chọn được xóa.');
+              }}
+              onImportText={async (rawText, replaceAll) => {
+                soundEngine.arise();
+                const res = await systemApi.importTimetableText(rawText, replaceAll);
+                setState(res.state);
+                pushAlert('Import thành công', `Đã nhập ${res.importedCount} khung giờ cố định.`);
+              }}
+            />
+          </div>
+        )}
 
-            {activeTab === 'skills' && (
-              <div className="p-4 sm:p-5">
-                <SkillTreeView
-                  player={state.player}
-                  skills={state.skills}
-                  growthBonuses={state.growthBonuses}
-                  onUnlockSkill={async (skillId) => {
-                    const prev = state.skills.find((s) => s.id === skillId);
-                    const updated = await systemApi.unlockSkill(skillId);
-                    setState(updated);
-                    soundEngine.skillUnlock();
-                    if (prev?.unlocked) {
-                      triggerLevelUpFx();
-                      pushAlert(
-                        'Phá Giới Hạn +5 Cấp!',
-                        `${prev.name} đã đột phá Ascension mới — tiếp tục nâng cấp vô hạn bằng Gold & Runestones!`
-                      );
-                    } else {
-                      pushAlert(
-                        'Đã Mở Khóa Kĩ Năng!',
-                        'Bạn có thể dùng Gold / Runestones để nâng cấp kỹ năng này ngay bây giờ!'
-                      );
-                    }
-                  }}
-                  onUpgradeSkill={async (skillId) => {
-                    const updated = await systemApi.upgradeSkill(skillId);
-                    setState(updated);
-                    soundEngine.questComplete();
-                    pushAlert(
-                      'Nâng Cấp Kĩ Năng Thành Công!',
-                      'Chỉ số & hiệu ứng bị động phát triển bản thân đã tăng ngay lập tức!'
-                    );
-                  }}
-                  onRespecSkills={async () => {
-                    const updated = await systemApi.respecSkills();
-                    setState(updated);
-                    soundEngine.systemPing();
-                    pushAlert('Đã Tẩy Cây Kĩ Năng', 'Hoàn trả 100% Điểm Kĩ Năng (SP), Gold & Runestones!');
-                  }}
-                  onVerifyCustomSkill={async (skillId, proofNote) => {
-                    const updated = await systemApi.verifySkill(skillId, proofNote);
-                    setState(updated);
-                    soundEngine.questComplete();
-                    pushAlert('Đã nâng Tier kỹ năng', 'Nhận +8 💎, +100G và +3 Stat.');
-                  }}
-                />
+        {activeTab === 'growth' && (
+          <GrowthReviewHub
+            player={state.player}
+            goals={state.goals}
+            quests={state.quests}
+            habits={habits}
+            knowledgeNotes={knowledgeNotes}
+            disciplineSettings={disciplineSettings}
+            localIntelligence={localIntelligence}
+            dailySnapshots={state.dailySnapshots}
+            storageInfo={state.storageInfo}
+            auditLogs={state.auditLogs}
+            growthBonuses={state.growthBonuses}
+            onSaveProfile={async (profile) => {
+              soundEngine.systemPing();
+              const updated = await systemApi.updateProfile(profile);
+              setState(updated);
+              pushAlert('Đã lưu hồ sơ', 'Thông tin & ngữ cảnh cá nhân đã được cập nhật.');
+            }}
+            onAnalyzeGoal={async (rawInput) => {
+              soundEngine.arise();
+              const res = await systemApi.analyzeGoal(rawInput);
+              setState(res.state);
+              pushAlert(
+                'Đã phân tích & lên lịch mục tiêu',
+                `"${res.analysis.goal.title}" đã chia cột mốc và gắn lên lịch!`
+              );
+            }}
+            onUpdateGoal={async (id, patch) => {
+              soundEngine.systemPing();
+              const updated = await systemApi.updateGoal(id, patch);
+              setState(updated);
+              pushAlert('Đã cập nhật Mục tiêu', 'Thông tin mục tiêu đã được lưu.');
+            }}
+            onDeleteGoal={async (id) => {
+              soundEngine.click();
+              const updated = await systemApi.deleteGoal(id);
+              setState(updated);
+              pushAlert('Đã xóa Mục tiêu', 'Mục tiêu và các khối chờ liên kết đã được gỡ.');
+            }}
+            onSpawnGoalQuest={handleSpawnGoalQuest}
+            onSelectTitle={async (title) => {
+              soundEngine.systemPing();
+              const updated = await systemApi.checkin({ activeTitle: title });
+              setState(updated);
+              pushAlert('Đã đổi danh hiệu', `Đang mang danh hiệu "${title}".`);
+            }}
+            onUpdateDisciplineSettings={handleUpdateDisciplineSettings}
+            onCreateKnowledgeNote={handleCreateKnowledgeNote}
+            onToggleKnowledgeRecall={handleToggleKnowledgeRecall}
+            onDeleteKnowledgeNote={handleDeleteKnowledgeNote}
+            onReviewKnowledgeNote={handleReviewKnowledgeNote}
+          />
+        )}
+
+        {activeTab === 'rpg' && (
+          <div className="mx-auto max-w-[1480px] space-y-5 p-4 sm:p-6">
+            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-hairline)] pb-3">
+              <div>
+                <h1 className="font-display text-xl font-extrabold text-main">Kĩ Năng & RPG</h1>
+                <p className="mt-0.5 font-mono text-xs text-sub">
+                  {spAvailable} SP · {state.player.gold} Gold · {state.player.runestones} Runestones ·{' '}
+                  {state.shadows.length} Shadow
+                </p>
               </div>
-            )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(
+                  [
+                    {
+                      key: 'campaign' as const,
+                      label: unclaimedRaidChests > 0 ? `Hành Trình & Raid (${unclaimedRaidChests} Rương)` : 'Hành Trình & Raid',
+                      icon: <PxSkull size={13} />,
+                    },
+                    {
+                      key: 'skills' as const,
+                      label: spAvailable > 0 ? `Cây Kĩ Năng (+${spAvailable} SP)` : 'Cây Kĩ Năng',
+                      icon: <PxSkillTree size={13} />,
+                    },
+                    {
+                      key: 'shop' as const,
+                      label: `Cửa Hàng & Kho (${state.inventory.length})`,
+                      icon: <PxChest size={13} />,
+                    },
+                    {
+                      key: 'shadows' as const,
+                      label: `Shadow Army (${state.shadows.length})`,
+                      icon: <PxGhost size={13} />,
+                    },
+                  ]
+                ).map((st) => {
+                  const active = rpgSubTab === st.key;
+                  return (
+                    <button
+                      key={st.key}
+                      type="button"
+                      onClick={() => {
+                        soundEngine.click();
+                        setRpgSubTab(st.key);
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold ${
+                        active
+                          ? 'border border-[var(--border-ink)] bg-[var(--px-gold)] text-[#140e04]'
+                          : 'border border-[var(--border-hairline)] bg-[var(--bg-surface)] text-sub hover:text-main'
+                      }`}
+                    >
+                      {st.icon}
+                      <span>{st.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </header>
 
-            {activeTab === 'campaign' && (
-              <div className="p-4 sm:p-5">
+            {rpgSubTab === 'campaign' && (
+              <div className="space-y-4">
+                <PixelDungeonDiorama
+                  rank={state.player.rank}
+                  avatarStyle={state.player.profile.avatarStyle}
+                  hp={state.player.hp ?? 100}
+                  maxHp={state.player.maxHp ?? 100}
+                  shadowsCount={state.shadows.length}
+                  chapter={activeChapter}
+                  activeBoss={activeBoss}
+                />
                 <BossAndSkillsView
                   chapters={state.chapters}
                   bosses={state.bosses}
@@ -1642,277 +2008,225 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'timetable' && (
-              <div className="p-4 sm:p-5">
-                <TimetablePlanner
-                  weeklyAnalysis={state.weeklyAnalysis}
-                  quests={state.quests}
-                  onApplyWeeklyBlueprint={handleApplyWeeklyBlueprint}
-                  onAiPlanDaySchedule={async (p) => {
-                    soundEngine.arise();
-                    const res = await systemApi.aiPlanDaySchedule(p);
-                    setState(res.state);
-                    pushAlert('AI Đã Xếp Lịch', res.summary);
-                    return res;
-                  }}
-                  onSaveBatch={async (blocks, replaceExisting) => {
-                    soundEngine.systemPing();
-                    const updated = await systemApi.saveTimetableBatch(blocks, replaceExisting);
-                    setState(updated);
-                    pushAlert('Đã cập nhật lịch', `Đã thêm ${blocks.length} khung giờ.`);
-                  }}
-                  onUpdateBlock={async (id, updates) => {
-                    soundEngine.click();
-                    const updated = await systemApi.updateTimetableBlock(id, updates);
-                    setState(updated);
-                  }}
-                  onDeleteBlock={async (id) => {
-                    soundEngine.click();
-                    const updated = await systemApi.deleteTimetableBlock(id);
-                    setState(updated);
-                    pushAlert('Đã xóa khung lịch', 'Khối thời gian và nhiệm vụ chờ liên kết đã được xóa.');
-                  }}
-                  onDeleteQuest={async (questId) => {
-                    soundEngine.click();
-                    const updated = await systemApi.deleteQuest(questId);
-                    setState(updated);
-                    pushAlert('Đã xóa nhiệm vụ', 'Nhiệm vụ và khung lịch liên kết (nếu có) đã được gỡ.');
-                  }}
-                  onClearTimetable={async (dayOfWeek) => {
-                    soundEngine.alert();
-                    const updated = await systemApi.clearTimetable(dayOfWeek);
-                    setState(updated);
-                    pushAlert('Đã dọn lịch', 'Các khung giờ đã chọn được xóa.');
-                  }}
-                  onImportText={async (rawText, replaceAll) => {
-                    soundEngine.arise();
-                    const res = await systemApi.importTimetableText(rawText, replaceAll);
-                    setState(res.state);
-                    pushAlert('Import thành công', `Đã nhập ${res.importedCount} khung giờ cố định.`);
-                  }}
-                />
-              </div>
-            )}
-
-            {activeTab === 'hero' && (
-              <div>
-                {/* Flush Sub-Tabs Ledger Bar */}
-                <div className="flex flex-wrap items-center gap-1 border-b-2 px-4 pt-3 rpg-divider studio-subtle">
-                  {[
-                    { key: 'status' as const, label: 'Biểu Đồ & Cấp Độ', icon: <PxShield size={14} /> },
-                    { key: 'profile' as const, label: 'Mục Tiêu & Hồ Sơ', icon: <PxTarget size={14} /> },
-                    {
-                      key: 'shop' as const,
-                      label: `Cửa Hàng & Kho (${state.inventory.length})`,
-                      icon: <PxChest size={14} />,
-                    },
-                    {
-                      key: 'shadows' as const,
-                      label: `Shadow Army (${state.shadows.length})`,
-                      icon: <PxGhost size={14} />,
-                    },
-                  ].map((st) => {
-                    const active = heroSubTab === st.key;
-                    return (
-                      <button
-                        key={st.key}
-                        type="button"
-                        onClick={() => {
-                          soundEngine.click();
-                          setHeroSubTab(st.key);
-                        }}
-                        className={`flex items-center gap-1.5 px-3.5 py-2 text-xs ${
-                          active ? 'rpg-tab-active' : 'rpg-tab'
-                        }`}
-                      >
-                        {st.icon}
-                        <span>{st.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="p-4 sm:p-5">
-                  {heroSubTab === 'status' && (
-                    <StatusWindow
-                      player={state.player}
-                      dailySnapshots={state.dailySnapshots}
-                      storageInfo={state.storageInfo}
-                      auditLogs={state.auditLogs}
-                      growthBonuses={state.growthBonuses}
-                      quests={state.quests}
-                      onSelectTitle={async (title) => {
-                        soundEngine.systemPing();
-                        const updated = await systemApi.checkin({ activeTitle: title });
-                        setState(updated);
-                        pushAlert('Đã đổi danh hiệu', `Đang mang danh hiệu "${title}".`);
-                      }}
-                    />
-                  )}
-
-                  {heroSubTab === 'profile' && (
-                    <ProfileGoalsConsole
-                      player={state.player}
-                      goals={state.goals}
-                      onSaveProfile={async (profile) => {
-                        soundEngine.systemPing();
-                        const updated = await systemApi.updateProfile(profile);
-                        setState(updated);
-                        pushAlert('Đã lưu hồ sơ', 'Thông tin & System Prompt đã đồng bộ với AI.');
-                      }}
-                      onAnalyzeGoal={async (rawInput) => {
-                        soundEngine.arise();
-                        const res = await systemApi.analyzeGoal(rawInput);
-                        setState(res.state);
-                        pushAlert(
-                          'Đã phân tích & lên lịch mục tiêu',
-                          `"${res.analysis.goal.title}" đã chia cột mốc, tự động gắn lên Thời Khóa Biểu và tạo Quest hôm nay!`
-                        );
-                      }}
-                      onDeleteGoal={async (id) => {
-                        soundEngine.click();
-                        const updated = await systemApi.deleteGoal(id);
-                        setState(updated);
-                      }}
-                    />
-                  )}
-
-                  {heroSubTab === 'shop' && (
-                    <ShopAndInventoryView
-                      player={state.player}
-                      shopItems={state.shopItems}
-                      inventory={state.inventory}
-                      onBuyItem={async (itemId) => {
-                        soundEngine.coinLoot();
-                        const updated = await systemApi.buyShopItem(itemId);
-                        setState(updated);
-                        pushAlert('Mua thành công!', 'Vật phẩm đã vào Túi Đồ.');
-                      }}
-                      onUseItem={async (inventoryId) => {
-                        soundEngine.campfireHeal();
-                        const res = await systemApi.useInventoryItem(inventoryId);
-                        setState(res.state);
-                        pushAlert('Đã sử dụng vật phẩm', res.message);
-                      }}
-                      onCreateCustomReward={async (payload) => {
-                        soundEngine.systemPing();
-                        const updated = await systemApi.createCustomReward(payload);
-                        setState(updated);
-                        pushAlert('Đã tạo phần thưởng', `"${payload.name}" đã thêm vào Cửa Hàng.`);
-                      }}
-                      onDeleteCustomReward={async (itemId) => {
-                        soundEngine.click();
-                        const updated = await systemApi.deleteCustomReward(itemId);
-                        setState(updated);
-                        pushAlert('Đã xóa phần thưởng', 'Phần thưởng tự tạo đã được gỡ khỏi Cửa Hàng.');
-                      }}
-                    />
-                  )}
-
-                  {heroSubTab === 'shadows' && (
-                    <ShadowArmyModal
-                      shadows={state.shadows}
-                      onSummonShadow={async (shadowId) => {
-                        soundEngine.arise();
-                        const updated = await systemApi.summonShadow(shadowId);
-                        setState(updated);
-                        setActiveTab('quests');
-                        pushAlert('Triệu hồi Shadow!', 'Nhiệm vụ tự động từ Shadow đã thêm vào hôm nay.');
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'assistant' && (
-              <div className="p-4 sm:p-5">
-                <AssistantCenterView
-                  overview={assistantOverview}
-                  pendingQuests={state.quests.filter(
-                    (q) => q.dateKey === todayKey && q.status === 'pending'
-                  )}
-                  loading={assistantLoading}
-                  onRefresh={async () => {
-                    await Promise.all([loadAssistantOverview(), loadWeeklyRaid(true)]);
-                  }}
-                  onSetDnd={handleSetDnd}
-                  onStateChanged={(nextState) => setState(nextState)}
-                  hudVisible={hudVisible}
-                  onToggleHudVisible={() => void handleToggleHudVisible()}
-                  onDockHudCorner={handleDockHudCorner}
-                  onToggleTracker={async (enabled) => {
-                    soundEngine.systemPing();
-                    const ov = await systemApi.toggleDesktopTracker(enabled);
-                    setAssistantOverview(ov);
+            {rpgSubTab === 'skills' && (
+              <SkillTreeView
+                player={state.player}
+                skills={state.skills}
+                growthBonuses={state.growthBonuses}
+                onUnlockSkill={async (skillId) => {
+                  const prev = state.skills.find((s) => s.id === skillId);
+                  const updated = await systemApi.unlockSkill(skillId);
+                  setState(updated);
+                  soundEngine.skillUnlock();
+                  if (prev?.unlocked) {
+                    triggerLevelUpFx();
                     pushAlert(
-                      enabled ? 'Đã bật Tracker PC' : 'Đã tắt Tracker PC',
-                      enabled
-                        ? 'Hệ thống bắt đầu ghi nhận thời gian tập trung trên Windows.'
-                        : 'Đã tạm dừng theo dõi cửa sổ.'
+                      'Phá Giới Hạn +5 Cấp!',
+                      `${prev.name} đã đột phá Ascension mới — tiếp tục nâng cấp bằng Gold & Runestones!`
                     );
-                  }}
-                  onUpdateSettings={async (patch) => {
-                    soundEngine.click();
-                    const ov = await systemApi.updateAssistantSettings(patch);
-                    setAssistantOverview(ov);
-                    pushAlert('Đã lưu quy tắc Trợ Lý PC', 'Cấu hình thông báo & phân loại đã được cập nhật.');
-                  }}
-                  onInstallStartup={async (opts) => {
-                    const res = await systemApi.installWindowsStartup(opts);
-                    setAssistantOverview(res.overview);
-                    soundEngine.skillUnlock();
-                    pushAlert('Đã cài Khởi động cùng Windows', res.message);
-                  }}
-                  onUninstallStartup={async (opts) => {
-                    const res = await systemApi.uninstallWindowsStartup(opts);
-                    setAssistantOverview(res.overview);
-                    soundEngine.alert();
-                    pushAlert('Đã gỡ Khởi động cùng Windows', res.message);
-                  }}
-                  onLaunchTray={async () => {
-                    soundEngine.systemPing();
-                    const res = await systemApi.launchSystemTray();
-                    pushAlert('System Tray', res.message);
-                  }}
-                  onTestNotification={async () => {
-                    soundEngine.systemPing();
-                    const res = await systemApi.testAssistantNotification();
-                    setAssistantOverview(res.overview);
-                    pushAlert('Thử thông báo Windows', res.message);
-                  }}
-                  onDismissNudge={async (id) => {
-                    soundEngine.click();
-                    const ov = await systemApi.dismissAssistantNudge(id);
-                    setAssistantOverview(ov);
-                  }}
-                  onSyncFocusToSkill={async () => {
-                    const res = await systemApi.syncActivityToSkill();
-                    setAssistantOverview(res.overview);
-                    setState(res.state);
-                    void loadWeeklyRaid(true);
-                    if (res.bonusSp > 0) {
-                      triggerLevelUpFx();
-                    } else {
-                      soundEngine.questComplete();
-                    }
-                    pushAlert('Quy đổi Focus -> Skill XP!', res.message);
-                  }}
-                  onReclassifyApp={handleReclassifyApp}
-                  onConvertFocusToQuest={handleConvertFocusToQuest}
-                  onRunOrchestrate={async () => {
-                    soundEngine.systemPing();
-                    const updated = await systemApi.orchestrate({});
-                    setState(updated);
-                    setActiveTab('quests');
-                    pushAlert('Kế hoạch mới đã sẵn sàng', 'AI đã sắp xếp nhiệm vụ vừa khung giờ rảnh hôm nay.');
-                  }}
-                />
-              </div>
+                  } else {
+                    pushAlert(
+                      'Đã Mở Khóa Kĩ Năng!',
+                      'Bạn có thể dùng Gold / Runestones để nâng cấp kỹ năng này ngay bây giờ!'
+                    );
+                  }
+                }}
+                onUpgradeSkill={async (skillId) => {
+                  const updated = await systemApi.upgradeSkill(skillId);
+                  setState(updated);
+                  soundEngine.questComplete();
+                  pushAlert(
+                    'Nâng Cấp Kĩ Năng Thành Công!',
+                    'Chỉ số & hiệu ứng bị động đã tăng ngay lập tức!'
+                  );
+                }}
+                onRespecSkills={async () => {
+                  const updated = await systemApi.respecSkills();
+                  setState(updated);
+                  soundEngine.systemPing();
+                  pushAlert('Đã Tẩy Cây Kĩ Năng', 'Hoàn trả 100% SP, Gold & Runestones!');
+                }}
+                onVerifyCustomSkill={async (skillId, proofNote) => {
+                  const updated = await systemApi.verifySkill(skillId, proofNote);
+                  setState(updated);
+                  soundEngine.questComplete();
+                  pushAlert('Đã nâng Tier kỹ năng', 'Nhận +8 💎, +100G và +3 Stat.');
+                }}
+              />
             )}
-          </main>
-        </div>
-      </div>
+
+            {rpgSubTab === 'shop' && (
+              <ShopAndInventoryView
+                player={state.player}
+                shopItems={state.shopItems}
+                inventory={state.inventory}
+                onBuyItem={async (itemId) => {
+                  soundEngine.coinLoot();
+                  const updated = await systemApi.buyShopItem(itemId);
+                  setState(updated);
+                  pushAlert('Mua thành công!', 'Vật phẩm đã vào Túi Đồ.');
+                }}
+                onUseItem={async (inventoryId) => {
+                  soundEngine.campfireHeal();
+                  const res = await systemApi.useInventoryItem(inventoryId);
+                  setState(res.state);
+                  pushAlert('Đã sử dụng vật phẩm', res.message);
+                }}
+                onCreateCustomReward={async (payload) => {
+                  soundEngine.systemPing();
+                  const updated = await systemApi.createCustomReward(payload);
+                  setState(updated);
+                  pushAlert('Đã tạo phần thưởng', `"${payload.name}" đã thêm vào Cửa Hàng.`);
+                }}
+                onDeleteCustomReward={async (itemId) => {
+                  soundEngine.click();
+                  const updated = await systemApi.deleteCustomReward(itemId);
+                  setState(updated);
+                  pushAlert('Đã xóa phần thưởng', 'Phần thưởng tự tạo đã được gỡ khỏi Cửa Hàng.');
+                }}
+              />
+            )}
+
+            {rpgSubTab === 'shadows' && (
+              <ShadowArmyModal
+                shadows={state.shadows}
+                onSummonShadow={async (shadowId) => {
+                  soundEngine.arise();
+                  const updated = await systemApi.summonShadow(shadowId);
+                  setState(updated);
+                  setActiveTab('today');
+                  pushAlert('Triệu hồi Shadow!', 'Nhiệm vụ tự động từ Shadow đã thêm vào hôm nay.');
+                }}
+              />
+            )}
+          </div>
+        )}
+
+        {activeTab === 'assistant' && (
+          <div className="mx-auto max-w-[1480px] p-4 sm:p-6">
+            <AssistantCenterView
+              overview={assistantOverview}
+              pendingQuests={state.quests.filter(
+                (q) => q.dateKey === todayKey && q.status === 'pending'
+              )}
+              loading={assistantLoading}
+              onRefresh={async () => {
+                await Promise.all([loadAssistantOverview(), loadWeeklyRaid(true)]);
+              }}
+              onSetDnd={handleSetDnd}
+              onStateChanged={(nextState) => setState(nextState)}
+              hudVisible={hudVisible}
+              onToggleHudVisible={() => void handleToggleHudVisible()}
+              onDockHudCorner={handleDockHudCorner}
+              onToggleTracker={async (enabled) => {
+                soundEngine.systemPing();
+                const ov = await systemApi.toggleDesktopTracker(enabled);
+                setAssistantOverview(ov);
+                pushAlert(
+                  enabled ? 'Đã bật Tracker PC' : 'Đã tắt Tracker PC',
+                  enabled
+                    ? 'Hệ thống bắt đầu ghi nhận thời gian tập trung trên Windows.'
+                    : 'Đã tạm dừng theo dõi cửa sổ.'
+                );
+              }}
+              onUpdateSettings={async (patch) => {
+                soundEngine.click();
+                const ov = await systemApi.updateAssistantSettings(patch);
+                setAssistantOverview(ov);
+                pushAlert('Đã lưu quy tắc Trợ Lý PC', 'Cấu hình thông báo & phân loại đã được cập nhật.');
+              }}
+              onInstallStartup={async (opts) => {
+                const res = await systemApi.installWindowsStartup(opts);
+                setAssistantOverview(res.overview);
+                soundEngine.skillUnlock();
+                pushAlert('Đã cài Khởi động cùng Windows', res.message);
+              }}
+              onUninstallStartup={async (opts) => {
+                const res = await systemApi.uninstallWindowsStartup(opts);
+                setAssistantOverview(res.overview);
+                soundEngine.alert();
+                pushAlert('Đã gỡ Khởi động cùng Windows', res.message);
+              }}
+              onLaunchTray={async () => {
+                soundEngine.systemPing();
+                const res = await systemApi.launchSystemTray();
+                pushAlert('System Tray', res.message);
+              }}
+              onTestNotification={async () => {
+                soundEngine.systemPing();
+                const res = await systemApi.testAssistantNotification();
+                setAssistantOverview(res.overview);
+                pushAlert('Thử thông báo Windows', res.message);
+              }}
+              onDismissNudge={async (id) => {
+                soundEngine.click();
+                const ov = await systemApi.dismissAssistantNudge(id);
+                setAssistantOverview(ov);
+              }}
+              onSyncFocusToSkill={async () => {
+                const res = await systemApi.syncActivityToSkill();
+                setAssistantOverview(res.overview);
+                setState(res.state);
+                void loadWeeklyRaid(true);
+                if (res.bonusSp > 0) {
+                  triggerLevelUpFx();
+                } else {
+                  soundEngine.questComplete();
+                }
+                pushAlert('Quy đổi Focus -> Skill XP!', res.message);
+              }}
+              onReclassifyApp={handleReclassifyApp}
+              onConvertFocusToQuest={handleConvertFocusToQuest}
+              onRunOrchestrate={async () => {
+                soundEngine.systemPing();
+                const updated = await systemApi.orchestrate({});
+                setState(updated);
+                setActiveTab('today');
+                pushAlert('Kế hoạch mới đã sẵn sàng', 'Đã sắp xếp nhiệm vụ vừa khung giờ rảnh hôm nay.');
+              }}
+            />
+          </div>
+        )}
+      </main>
+
+      {/* SLIDE-OVER AI COACH & RHYTHM DRAWER */}
+      <AiCoachDrawer
+        open={aiDrawerOpen}
+        onClose={() => setAiDrawerOpen(false)}
+        player={state.player}
+        aiSettings={state.aiSettings}
+        todayAnalysis={state.todayAnalysis}
+        chatThreads={state.chatThreads || []}
+        activeChatThreadId={activeChatThreadId}
+        chatDraftsByKey={chatDraftsByKey}
+        pendingChatKeys={pendingChatKeys}
+        optimisticMessagesByKey={optimisticMessagesByKey}
+        chatErrorByKey={chatErrorByKey}
+        initialReflectionNote={todayReflectionNote}
+        onSelectChatThread={(id) => setActiveChatThreadId(id)}
+        onCreateChatThread={handleCreateChatThread}
+        onDeleteChatThread={handleDeleteChatThread}
+        onChangeChatDraft={(key, value) =>
+          setChatDraftsByKey((prev) => ({ ...prev, [key]: value }))
+        }
+        onSendChatPrompt={handleSendChatPrompt}
+        onCreateCustomQuest={async (payload) => {
+          soundEngine.systemPing();
+          const updated = await systemApi.createCustomQuest(payload);
+          setState(updated);
+          pushAlert('Đã thêm từ Cố vấn AI', `"${payload.title}" đã vào bảng hôm nay.`);
+        }}
+        onReflect={async (payload) => {
+          if (typeof payload.plannedRestMode === 'boolean' && payload.reflectionNote === undefined) {
+            return handleTogglePlannedRest(payload.plannedRestMode);
+          }
+          soundEngine.systemPing();
+          const updated = await systemApi.reflect(payload);
+          setState(updated);
+          pushAlert('Đã lưu Phản tư', 'Ghi nhận hôm nay đã đồng bộ.');
+          return updated;
+        }}
+      />
 
       {state.player.lastDeathReport && !closeoutOpen && (
         <DeathCheckpointModal

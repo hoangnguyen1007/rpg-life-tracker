@@ -17,8 +17,10 @@ import {
 } from './PixelIcons';
 import type {
   AIDayPlanResult,
+  AttributeKey,
   DayScheduleAnalysis,
   Quest,
+  QuestType,
   TimetableBlock,
   TimetableBlockType,
   WeeklyBlueprintBlockDraft,
@@ -39,6 +41,15 @@ interface TimetablePlannerProps {
   onUpdateBlock: (id: string, updates: Partial<TimetableBlock>) => Promise<void>;
   onDeleteBlock: (id: string) => Promise<void>;
   onDeleteQuest?: (questId: string) => Promise<void>;
+  onCompleteQuest?: (questId: string) => Promise<void>;
+  onCreateCustomQuest?: (payload: {
+    title: string;
+    durationMinutes?: number;
+    scheduledSlot?: string;
+    type?: QuestType;
+    primaryStat?: AttributeKey;
+    syncToTimetable?: boolean;
+  }) => Promise<void>;
   onClearTimetable: (dayOfWeek?: number) => Promise<void>;
   onImportText: (rawText: string, replaceAll?: boolean) => Promise<void>;
   onAiPlanDaySchedule?: (payload: { prompt: string; dayOfWeek: number }) => Promise<AIDayPlanResult>;
@@ -394,6 +405,8 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
   onUpdateBlock,
   onDeleteBlock,
   onDeleteQuest,
+  onCompleteQuest,
+  onCreateCustomQuest,
   onClearTimetable,
   onImportText,
   onAiPlanDaySchedule,
@@ -458,6 +471,10 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
   const [editTitle, setEditTitle] = useState('');
   const [editStart, setEditStart] = useState('');
   const [editEnd, setEditEnd] = useState('');
+  const [slotQuestDraftWindow, setSlotQuestDraftWindow] = useState<string | null>(null);
+  const [slotQuestTitle, setSlotQuestTitle] = useState('');
+  const [slotQuestType, setSlotQuestType] = useState<QuestType>('daily');
+  const [creatingSlotQuest, setCreatingSlotQuest] = useState(false);
   const dayDetailRef = useRef<HTMLDivElement>(null);
 
   const visibleStartHour = fullDayRange ? 0 : 6;
@@ -1531,6 +1548,64 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                   })
                 )}
               </div>
+
+              {/* Scheduled Quests on Today's Ledger */}
+              {activeDay.dayOfWeek === todayDow && todayQuestsWithSlots.length > 0 && (
+                <div className="border-t-2 studio-divider">
+                  <div className="bg-[var(--bg-subtle)] px-5 py-2.5 font-display text-xs font-extrabold text-[var(--px-gold-text)]">
+                    Nhiệm vụ hôm nay đã gắn khung giờ ({todayQuestsWithSlots.length})
+                  </div>
+                  <div className="divide-y studio-divider">
+                    {todayQuestsWithSlots.map((q) => {
+                      const isDone = q.status === 'completed';
+                      return (
+                        <div
+                          key={q.id}
+                          className="flex items-center justify-between gap-3 px-5 py-2.5 text-xs"
+                        >
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <span className="font-mono font-bold text-[var(--px-gold-text)]">
+                              {q.scheduledSlot}
+                            </span>
+                            <span
+                              className={`truncate font-semibold ${
+                                isDone ? 'line-through text-sub' : 'text-main'
+                              }`}
+                            >
+                              {q.title}
+                            </span>
+                            <span className="px-pill font-mono text-[10px] text-[var(--px-green-text)]">
+                              +{q.xpReward} XP
+                            </span>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {!isDone && onCompleteQuest && (
+                              <button
+                                type="button"
+                                onClick={() => void onCompleteQuest(q.id)}
+                                className="btn-emerald px-2 py-1 text-[10px]"
+                                title="Hoàn thành nhiệm vụ"
+                              >
+                                <PxCheck size={11} />
+                              </button>
+                            )}
+                            {onDeleteQuest && (
+                              <button
+                                type="button"
+                                onClick={() => void onDeleteQuest(q.id)}
+                                className="p-1 text-dim hover:text-[var(--px-red-text)]"
+                                title="Xóa nhiệm vụ & gỡ khỏi lịch"
+                              >
+                                <PxTrash size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="border-t-2 p-5 lg:col-span-5 lg:border-l-2 lg:border-t-0 studio-divider">
@@ -1538,20 +1613,89 @@ export const TimetablePlanner: React.FC<TimetablePlannerProps> = ({
                 Các khoảng rảnh AI phát hiện ({activeDay.freeWindows.length})
               </h3>
               <div className="divide-y-2 studio-divider">
-                {activeDay.freeWindows.map((w, i) => (
-                  <div key={i} className="flex items-center justify-between py-2.5 text-xs">
-                    <span className="font-mono font-semibold text-main">
-                      {w.startTime} – {w.endTime} ({w.durationMinutes}p)
-                    </span>
-                    <span className="rounded-none border border-[var(--px-green)] bg-[var(--bg-subtle)] px-2 py-0.5 font-medium text-[var(--px-green-text)]">
-                      {w.windowQuality === 'DEEP_WORK_PRIME'
-                        ? 'Deep Work Tốt'
-                        : w.windowQuality === 'STANDARD_FOCUS'
-                          ? 'Focus Chuẩn'
-                          : 'Sprint Ngắn'}
-                    </span>
-                  </div>
-                ))}
+                {activeDay.freeWindows.map((w, i) => {
+                  const slotKey = `${w.startTime} - ${w.endTime}`;
+                  const isCreatingHere = slotQuestDraftWindow === slotKey;
+                  return (
+                    <div key={i} className="space-y-2 py-2.5 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-mono font-semibold text-main">
+                          {w.startTime} – {w.endTime} ({w.durationMinutes}p)
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="rounded-none border border-[var(--px-green)] bg-[var(--bg-subtle)] px-2 py-0.5 font-medium text-[var(--px-green-text)]">
+                            {w.windowQuality === 'DEEP_WORK_PRIME'
+                              ? 'Deep Work Tốt'
+                              : w.windowQuality === 'STANDARD_FOCUS'
+                                ? 'Focus Chuẩn'
+                                : 'Sprint Ngắn'}
+                          </span>
+                          {onCreateCustomQuest && activeDay.dayOfWeek === todayDow && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSlotQuestDraftWindow(isCreatingHere ? null : slotKey);
+                                setSlotQuestTitle('');
+                              }}
+                              className="btn-secondary px-2 py-0.5 font-mono text-[10.5px] font-bold text-[var(--px-gold-text)]"
+                            >
+                              {isCreatingHere ? 'Đóng' : '+ Tạo Quest'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {isCreatingHere && onCreateCustomQuest && (
+                        <form
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            if (!slotQuestTitle.trim() || creatingSlotQuest) return;
+                            setCreatingSlotQuest(true);
+                            try {
+                              await onCreateCustomQuest({
+                                title: slotQuestTitle.trim(),
+                                durationMinutes: Math.min(60, Math.max(15, w.durationMinutes)),
+                                scheduledSlot: slotKey,
+                                type: slotQuestType,
+                                syncToTimetable: true,
+                              });
+                              setSlotQuestTitle('');
+                              setSlotQuestDraftWindow(null);
+                            } finally {
+                              setCreatingSlotQuest(false);
+                            }
+                          }}
+                          className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-subtle)] p-2"
+                        >
+                          <input
+                            value={slotQuestTitle}
+                            onChange={(e) => setSlotQuestTitle(e.target.value)}
+                            placeholder={`Tên nhiệm vụ cho khung ${slotKey}...`}
+                            className="min-w-[160px] flex-1 px-2.5 py-1 text-xs"
+                            autoFocus
+                          />
+                          <select
+                            value={slotQuestType}
+                            onChange={(e) => setSlotQuestType(e.target.value as QuestType)}
+                            className="px-2 py-1 text-xs"
+                          >
+                            <option value="daily">Daily</option>
+                            <option value="main">Main ★</option>
+                            <option value="side">Side</option>
+                            <option value="recovery">Hồi phục</option>
+                          </select>
+                          <button
+                            type="submit"
+                            disabled={creatingSlotQuest || !slotQuestTitle.trim()}
+                            className="btn-primary px-3 py-1 text-xs"
+                          >
+                            {creatingSlotQuest ? '...' : 'Thêm & Gắn lịch'}
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

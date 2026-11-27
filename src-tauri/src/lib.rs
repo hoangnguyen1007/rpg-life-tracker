@@ -51,8 +51,8 @@ fn is_autostart_launch() -> bool {
     std::env::args().any(|arg| arg == "--autostart")
 }
 
-fn wants_dashboard_on_launch() -> bool {
-    std::env::args().any(|arg| arg == "--show-dashboard")
+fn wants_hud_only_on_launch() -> bool {
+    std::env::args().any(|arg| arg == "--hud-only")
 }
 
 fn hud_dimensions_for_mode(mode: &str) -> (f64, f64) {
@@ -161,6 +161,7 @@ fn show_main_window_inner(app: &AppHandle) -> Result<(), String> {
     let _ = window.unminimize();
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
+    let _ = app.emit("tauri-state-refresh", true);
     Ok(())
 }
 
@@ -209,11 +210,13 @@ fn set_hud_visible_inner(app: &AppHandle, visible: bool) -> Result<bool, String>
         force_win32_topmost_refresh(&window, true);
         let _ = window.set_focus();
         let _ = app.emit("tauri-hud-visibility", true);
+        let _ = app.emit("tauri-state-refresh", true);
         sync_hud_visible_to_backend_async(true);
         Ok(true)
     } else {
         window.hide().map_err(|e| e.to_string())?;
         let _ = app.emit("tauri-hud-visibility", false);
+        let _ = app.emit("tauri-state-refresh", false);
         sync_hud_visible_to_backend_async(false);
         Ok(false)
     }
@@ -251,6 +254,9 @@ fn start_hud_bridge_listener(app_handle: AppHandle) {
                                     }
                                     "dock" => {
                                         let _ = dock_and_save_hud(&handle);
+                                    }
+                                    "open_dashboard" => {
+                                        let _ = show_main_window_inner(&handle);
                                     }
                                     _ => {}
                                 }
@@ -737,8 +743,8 @@ pub fn run() {
             start_hud_bridge_listener(app.handle().clone());
             sync_hud_visible_to_backend_async(show_hud_now);
 
-            // 7. Show Dashboard when explicitly requested, or when user disabled HUD-on-start and launched manually.
-            if (wants_dashboard_on_launch() || !show_hud_now) && !is_autostart_launch() {
+            // 7. Always show the Main Dashboard on manual launch (stay silent to Tray+HUD only on --autostart or --hud-only).
+            if !is_autostart_launch() && !wants_hud_only_on_launch() {
                 let _ = show_main_window_inner(app.handle());
                 startup_log::log("dashboard_shown_on_start");
             }

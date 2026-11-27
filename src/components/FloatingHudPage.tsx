@@ -1,22 +1,20 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
-  ActivityCategory,
   AssistantOverviewPayload,
   AttributeKey,
+  HabitCompletionKind,
   Quest,
+  QuestType,
   SystemStatePayload,
-  TimetableBlock,
 } from '../types/system';
 import { isTauriDesktop } from '../utils/api';
-import { getVnNowMinutes, getVnTodayKey } from '../utils/timeVn';
-import { PixelHeart, PixelHeroSprite } from './DungeonSprites';
+import { getVnTodayKey } from '../utils/timeVn';
+import { PixelHeroSprite } from './DungeonSprites';
 import {
-  PixelRivets,
   PxBell,
-  PxBolt,
+  PxCalendar,
   PxCheck,
   PxChevron,
-  PxClock,
   PxClose,
   PxDashboard,
   PxFlame,
@@ -26,9 +24,15 @@ import {
   PxPlay,
   PxPlus,
   PxSword,
-  PxTarget,
   PxWarn,
 } from './PixelIcons';
+
+export interface HudQuickAddOptions {
+  type?: QuestType;
+  primaryStat?: AttributeKey;
+  syncToTimetable?: boolean;
+  goalId?: string;
+}
 
 export interface FloatingHudPageProps {
   state: SystemStatePayload | null;
@@ -36,8 +40,13 @@ export interface FloatingHudPageProps {
   onStartQuest: (id: string) => Promise<void>;
   onPauseQuest: (id: string) => Promise<void>;
   onCompleteQuest: (id: string) => Promise<void>;
-  onQuickAddQuest: (title: string, durationMinutes: number) => Promise<void>;
+  onQuickAddQuest: (
+    title: string,
+    durationMinutes: number,
+    options?: HudQuickAddOptions
+  ) => Promise<void>;
   onToggleDnd: (minutes: number) => Promise<void>;
+  onCheckinHabit?: (habitId: string, kind: HabitCompletionKind | 'undo') => Promise<void>;
   onConvertFocusToQuest?: (payload: {
     mode: 'complete_new' | 'credit_pending';
     title?: string;
@@ -49,7 +58,6 @@ export interface FloatingHudPageProps {
 }
 
 type HudMode = 'mini' | 'normal' | 'expanded';
-type PreviewBg = 'dark' | 'light' | 'transparent';
 
 interface TauriWindowBridge {
   __TAURI__?: {
@@ -57,24 +65,29 @@ interface TauriWindowBridge {
       invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
     };
     event?: {
-      listen?: (
-        event: string,
-        handler: (event: unknown) => void
-      ) => Promise<() => void>;
+      listen?: (event: string, handler: (event: unknown) => void) => Promise<() => void>;
     };
   };
   __TAURI_INTERNALS__?: unknown;
 }
 
 const HUD_MODE_STORAGE_KEY = 'rpg_hud_mode';
-const QUICK_DURATIONS = [25, 45, 60] as const;
+export const QUEST_COMPOSER_DRAFT_KEY = 'rpg_quest_composer_draft';
+const QUICK_DURATIONS = [15, 25, 45, 60] as const;
+
+const TYPE_SHORT_LABELS: Record<QuestType, string> = {
+  daily: 'Daily',
+  main: 'Main ★',
+  side: 'Side',
+  recovery: 'Hồi phục',
+  emergency: 'Khẩn',
+  hidden: 'Hidden',
+};
 
 function readPersistedHudMode(): 'mini' | 'normal' {
   try {
     const saved =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem(HUD_MODE_STORAGE_KEY)
-        : null;
+      typeof window !== 'undefined' ? window.localStorage.getItem(HUD_MODE_STORAGE_KEY) : null;
     return saved === 'mini' ? 'mini' : 'normal';
   } catch {
     return 'normal';
@@ -87,18 +100,9 @@ function savePersistedHudMode(mode: 'mini' | 'normal'): void {
       window.localStorage.setItem(HUD_MODE_STORAGE_KEY, mode);
     }
   } catch {
-    // Safe no-op if storage is unavailable
+    // No-op
   }
 }
-
-const CATEGORY_INFO: Record<ActivityCategory, { label: string; color: string }> = {
-  deep_work: { label: 'Làm sâu', color: '#38a169' },
-  study_research: { label: 'Học tập', color: '#3b82c4' },
-  communication: { label: 'Giao tiếp', color: '#8f6ec9' },
-  distraction: { label: 'Xao nhãng', color: '#c93b4b' },
-  other: { label: 'Khác', color: '#7a7090' },
-  idle: { label: 'Nghỉ', color: '#5c5470' },
-};
 
 function isRunningInTauri(): boolean {
   if (typeof window === 'undefined') return false;
@@ -109,14 +113,10 @@ function isRunningInTauri(): boolean {
 function invokeTauriSafe(cmd: string, args?: Record<string, unknown>): void {
   try {
     const w = window as unknown as TauriWindowBridge;
-    const maybePromise = w.__TAURI__?.core?.invoke?.(cmd, args);
-    if (maybePromise && typeof maybePromise.catch === 'function') {
-      maybePromise.catch(() => {
-        // Safe no-op if running outside Tauri or command unavailable
-      });
-    }
+    const p = w.__TAURI__?.core?.invoke?.(cmd, args);
+    if (p && typeof p.catch === 'function') p.catch(() => {});
   } catch {
-    // Safe no-op in browser preview
+    // No-op
   }
 }
 
@@ -138,147 +138,6 @@ function formatMmSs(totalSeconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-function formatDurationVn(totalMinutes: number): string {
-  const mins = Math.max(0, Math.round(totalMinutes));
-  if (mins < 60) return `${mins}p`;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return m === 0 ? `${h}g` : `${h}g ${m}p`;
-}
-
-function parseHhMm(hhmm: string): number {
-  const [hStr, mStr] = hhmm.split(':');
-  const h = Number(hStr);
-  const m = Number(mStr);
-  if (Number.isNaN(h) || Number.isNaN(m)) return -1;
-  return h * 60 + m;
-}
-
-function formatShortProcessName(processName?: string): string {
-  if (!processName) return '';
-  const cleaned = processName.replace(/\.exe$/i, '').trim();
-  if (!cleaned) return '';
-  return cleaned.length > 15 ? `${cleaned.slice(0, 14)}…` : cleaned;
-}
-
-function computeDisciplineGrade(params: {
-  focusScore: number;
-  focusTotalMins: number;
-  distractionPct: number;
-  distractionAlert: boolean;
-}): {
-  grade: 'S' | 'A' | 'B' | 'C';
-  stamp: string;
-  bg: string;
-  fg: string;
-  title: string;
-} {
-  const { focusScore, focusTotalMins, distractionPct, distractionAlert } = params;
-  if (distractionAlert) {
-    return {
-      grade: 'C',
-      stamp: 'XAO NHÃNG!',
-      bg: '#b83a4b',
-      fg: '#ffffff',
-      title: 'Đang bị xao nhãng trong lúc làm nhiệm vụ — quay lại tập trung!',
-    };
-  }
-  if (focusScore >= 85 && focusTotalMins >= 90 && distractionPct <= 50) {
-    return {
-      grade: 'S',
-      stamp: 'HẠNG S',
-      bg: '#c99330',
-      fg: '#140e04',
-      title: 'Kỷ luật xuất sắc hôm nay (Focus >= 85%, >= 1g 30p tập trung)',
-    };
-  }
-  if (focusScore >= 70 && focusTotalMins >= 45 && distractionPct <= 75) {
-    return {
-      grade: 'A',
-      stamp: 'HẠNG A',
-      bg: '#2e8b57',
-      fg: '#ffffff',
-      title: 'Kỷ luật vững nhịp (Focus >= 70%, >= 45p tập trung)',
-    };
-  }
-  if (focusScore >= 50 && distractionPct <= 95) {
-    return {
-      grade: 'B',
-      stamp: 'HẠNG B',
-      bg: '#3267a8',
-      fg: '#ffffff',
-      title: 'Kỷ luật ổn định — đẩy thêm phiên tập trung để lên Hạng A',
-    };
-  }
-  return {
-    grade: 'C',
-    stamp: 'CẦN SIẾT',
-    bg: '#b8622a',
-    fg: '#ffffff',
-    title: 'Cần siết lại nhịp tập trung và giảm ứng dụng xao nhãng',
-  };
-}
-
-function computeNextScheduleContext(
-  blocks: TimetableBlock[] | undefined,
-  totalFreeMinutes: number | undefined,
-  nowVnMins: number
-): { kind: 'active' | 'upcoming' | 'free'; text: string; shortText: string; title: string } {
-  const validBlocks = (blocks ?? [])
-    .filter((b) => b.type !== 'sleep')
-    .map((b) => ({
-      block: b,
-      start: parseHhMm(b.startTime),
-      end: parseHhMm(b.endTime),
-    }))
-    .filter((item) => item.start >= 0 && item.end > item.start)
-    .sort((a, b) => a.start - b.start);
-
-  const current = validBlocks.find((item) => item.start <= nowVnMins && item.end > nowVnMins);
-  if (current) {
-    const remain = Math.max(1, current.end - nowVnMins);
-    const remainLabel = formatDurationVn(remain);
-    return {
-      kind: 'active',
-      text: `Còn ${remainLabel} · ${current.block.title}`,
-      shortText: `Còn ${remainLabel} · ${current.block.title}`,
-      title: `Đang trong khung lịch (${current.block.startTime}–${current.block.endTime}): ${current.block.title} — còn ${remainLabel}`,
-    };
-  }
-
-  const upcoming = validBlocks.find((item) => item.start > nowVnMins);
-  if (upcoming) {
-    const waitMins = Math.max(1, upcoming.start - nowVnMins);
-    const waitLabel = formatDurationVn(waitMins);
-    return {
-      kind: 'upcoming',
-      text: `Còn ${waitLabel} → ${upcoming.block.startTime} ${upcoming.block.title}`,
-      shortText: `Còn ${waitLabel} → ${upcoming.block.startTime} ${upcoming.block.title}`,
-      title: `Lịch kế tiếp sau ${waitLabel}: ${upcoming.block.startTime}–${upcoming.block.endTime} ${upcoming.block.title}`,
-    };
-  }
-
-  const freeHrs = ((totalFreeMinutes ?? 0) / 60).toFixed(1).replace(/\.0$/, '');
-  return {
-    kind: 'free',
-    text: `Trống lịch · rảnh ${freeHrs}g`,
-    shortText: `Rảnh ${freeHrs}g hôm nay`,
-    title: `Không còn lịch cố định hôm nay · Rảnh ${freeHrs} giờ`,
-  };
-}
-
-// ==================== BUSY INDICATOR & SHARED PIXEL RIVETS ====================
-
-const PxBusyDots: React.FC = () => (
-  <span className="font-pixel text-[8px] leading-none">..</span>
-);
-
-const PixelCornerRivets: React.FC = () => (
-  <PixelRivets className="bg-[#d4a24c]" />
-);
-
-// ==================== MAIN 16-BIT 2D PIXEL DISCIPLINE HUD ====================
-
 export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
   state,
   overview,
@@ -287,7 +146,7 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
   onCompleteQuest,
   onQuickAddQuest,
   onToggleDnd,
-  onConvertFocusToQuest,
+  onCheckinHabit,
   onHideHud,
   onOpenMainApp,
 }) => {
@@ -296,9 +155,12 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
   const [selectedPendingIdx, setSelectedPendingIdx] = useState(0);
   const [quickTitle, setQuickTitle] = useState('');
   const [quickDuration, setQuickDuration] = useState<number>(25);
-  const [busyAction, setBusyAction] = useState<'play' | 'complete' | 'dnd' | 'add' | 'rescue' | null>(null);
-  const [previewBg, setPreviewBg] = useState<PreviewBg>('dark');
+  const [quickType, setQuickType] = useState<QuestType>('daily');
+  const [quickStat, setQuickStat] = useState<AttributeKey | 'AUTO'>('AUTO');
+  const [quickSyncCalendar, setQuickSyncCalendar] = useState<boolean>(false);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [previewHidden, setPreviewHidden] = useState(false);
+
   const quickInputRef = useRef<HTMLInputElement | null>(null);
   const hudModeRef = useRef<HudMode>(hudMode);
 
@@ -307,44 +169,51 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
   }, [hudMode]);
 
   const inTauri = isRunningInTauri();
-
   const todayKey = getVnTodayKey();
   const quests = state?.quests ?? [];
-  const todayQuests = quests.filter((q) => q.dateKey === todayKey || q.status === 'pending');
-  const pendingQuests = quests
-    .filter((q) => q.status === 'pending')
-    .sort((a, b) => Number(b.dateKey === todayKey) - Number(a.dateKey === todayKey));
-  const doneToday = todayQuests.filter((q) => q.status === 'completed').length;
-  const totalToday = todayQuests.length;
+  const pendingQuests = useMemo(
+    () =>
+      quests
+        .filter((q) => q.status === 'pending')
+        .sort((a, b) => {
+          const aMain = a.type === 'main' ? 1 : 0;
+          const bMain = b.type === 'main' ? 1 : 0;
+          if (aMain !== bMain) return bMain - aMain;
+          return Number(b.dateKey === todayKey) - Number(a.dateKey === todayKey);
+        }),
+    [quests, todayKey]
+  );
 
-  const activeFocusQuest =
+  const activeQuest =
     pendingQuests.find((q) => q.startedAt && !q.isPaused) ||
-    pendingQuests.find(
-      (q) => Boolean(q.startedAt) || q.isPaused || (q.pausedAccumulatedSeconds ?? 0) > 0
-    ) ||
+    pendingQuests.find((q) => q.isPaused || (q.pausedAccumulatedSeconds ?? 0) > 0) ||
     null;
-  const activeQuest = activeFocusQuest;
 
   const isRunning = Boolean(activeQuest && activeQuest.startedAt && !activeQuest.isPaused);
-  const isPaused = Boolean(activeQuest && !isRunning);
-  const safePendingIdx =
+  const safeIdx =
     pendingQuests.length > 0 ? Math.min(selectedPendingIdx, pendingQuests.length - 1) : 0;
-  const selectedPendingQuest = pendingQuests[safePendingIdx] || null;
-  const targetQuest = activeQuest || selectedPendingQuest;
+  const targetQuest = activeQuest || pendingQuests[safeIdx] || null;
+  const targetQuestPrimaryStat = targetQuest
+    ? (Object.keys(targetQuest.statRewards || {})[0] as AttributeKey) || 'INT'
+    : null;
+
+  const habits = state?.habits ?? [];
+  const dueHabits = useMemo(() => habits.filter((h) => h.dueToday !== false), [habits]);
+  const pendingHabits = useMemo(
+    () => dueHabits.filter((h) => !h.completedToday),
+    [dueHabits]
+  );
+  const completedHabitsCount = dueHabits.length - pendingHabits.length;
+  const mvdActive = Boolean(state?.disciplineSettings?.minimumViableDayActive);
 
   const dndUntilMs = overview?.dndUntil ? Date.parse(overview.dndUntil) : Number.NaN;
   const isDndActive =
     Boolean(overview?.dndActive) || (!Number.isNaN(dndUntilMs) && dndUntilMs > nowMs);
-  const dndRemainingMin =
-    isDndActive && !Number.isNaN(dndUntilMs)
-      ? Math.max(1, Math.ceil((dndUntilMs - nowMs) / 60000))
-      : null;
 
   const distractionAlert =
     overview?.distractionAlertLevel === 'soft_hud' ||
     overview?.distractionAlertLevel === 'toast';
 
-  // Real-time Discipline Telemetry
   const deepWorkMins = Math.round(
     overview?.activity?.deepWorkMinutes ?? state?.assistantSummary?.deepWorkMinutes ?? 0
   );
@@ -352,9 +221,12 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
   const focusTotalMins = deepWorkMins + studyMins;
   const dailyFocusGoalMins = Math.max(
     30,
-    Math.round(overview?.settings?.dailyFocusGoalMinutes ?? 180)
+    Math.round(
+      state?.disciplineSettings?.dailyFocusGoalMinutes ??
+        overview?.settings?.dailyFocusGoalMinutes ??
+        180
+    )
   );
-  const focusGoalPct = Math.min(100, Math.round((focusTotalMins / dailyFocusGoalMins) * 100));
   const focusScore = Math.max(
     0,
     Math.min(
@@ -362,55 +234,13 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
       Math.round(overview?.activity?.focusScore ?? state?.assistantSummary?.focusScore ?? 0)
     )
   );
-  const uncreditedFocusMins = Math.round(overview?.activity?.uncreditedFocusMinutes ?? 0);
-  const suggestedSession = overview?.activity?.suggestedFocusSession ?? null;
 
-  const distractionMins = Math.round(overview?.activity?.distractionMinutes ?? 0);
-  const budgetMins = Math.max(
-    5,
-    Math.round(
-      overview?.activity?.distractionBudgetMinutes ??
-        overview?.settings?.distractionBudgetMinutes ??
-        45
-    )
-  );
-  const distractionPct = Math.min(100, Math.round((distractionMins / budgetMins) * 100));
-  const safeRemainMins = Math.max(0, budgetMins - distractionMins);
-
-  const currentApp = overview?.activity?.currentApp ?? null;
-  const currentCategory: ActivityCategory =
-    currentApp?.category ?? state?.assistantSummary?.currentCategory ?? 'idle';
-  const categoryMeta = CATEGORY_INFO[currentCategory] || CATEGORY_INFO.other;
-  const shortAppName = formatShortProcessName(currentApp?.processName);
-
-  // Player Discipline Vitals
   const player = state?.player ?? null;
   const hp = Math.max(0, player?.hp ?? 100);
   const maxHp = Math.max(100, player?.maxHp ?? 100);
   const hpPct = Math.min(100, Math.round((hp / maxHp) * 100));
-  const isCriticalHp = hpPct <= 25;
   const heroMood: 'healthy' | 'wounded' | 'critical' =
     hpPct <= 25 ? 'critical' : hpPct <= 55 ? 'wounded' : 'healthy';
-
-  const heartCount = 5;
-  const hpPerHeart = maxHp / heartCount;
-  const heartStates: Array<'full' | 'half' | 'empty'> = Array.from(
-    { length: heartCount },
-    (_, idx) => {
-      const fullAt = (idx + 1) * hpPerHeart;
-      const halfAt = idx * hpPerHeart + hpPerHeart * 0.45;
-      if (hp >= fullAt - 0.5) return 'full';
-      if (hp >= halfAt) return 'half';
-      return 'empty';
-    }
-  );
-
-  const gradeInfo = computeDisciplineGrade({
-    focusScore,
-    focusTotalMins,
-    distractionPct,
-    distractionAlert,
-  });
 
   useEffect(() => {
     const intervalMs = isRunning || isDndActive ? 1000 : 15000;
@@ -435,7 +265,6 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
     invokeTauriSafe('resize_hud', { mode: nextMode });
   }, []);
 
-  // Restore persisted compact 'mini' mode on Tauri cold launch
   useEffect(() => {
     if (!inTauri) return;
     if (readPersistedHudMode() === 'mini') {
@@ -443,41 +272,25 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
     }
   }, [inTauri]);
 
-  // Listen to Tauri System Tray "tauri-hud-toggle-mode" event (mini <-> normal)
   useEffect(() => {
     if (!inTauri) return;
     let disposed = false;
-    let unlistenFn: (() => void) | null = null;
-    const w = window as unknown as TauriWindowBridge;
-    const listen = w.__TAURI__?.event?.listen;
+    let unlisten: (() => void) | null = null;
+    const listen = (window as unknown as TauriWindowBridge).__TAURI__?.event?.listen;
     if (typeof listen !== 'function') return;
-
     Promise.resolve(
       listen('tauri-hud-toggle-mode', () => {
-        const next: 'mini' | 'normal' = hudModeRef.current === 'mini' ? 'normal' : 'mini';
-        switchHudMode(next);
+        switchHudMode(hudModeRef.current === 'mini' ? 'normal' : 'mini');
       })
     )
       .then((fn) => {
-        if (disposed) {
-          fn?.();
-        } else {
-          unlistenFn = fn;
-        }
+        if (disposed) fn?.();
+        else unlisten = fn;
       })
-      .catch(() => {
-        // Safe no-op if Tauri event bridge is unavailable
-      });
-
+      .catch(() => {});
     return () => {
       disposed = true;
-      if (unlistenFn) {
-        try {
-          unlistenFn();
-        } catch {
-          // Ignore cleanup error
-        }
-      }
+      unlisten?.();
     };
   }, [inTauri, switchHudMode]);
 
@@ -497,131 +310,64 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
     setPreviewHidden(true);
   };
 
-  const stopDrag = (e: React.MouseEvent) => {
-    e.stopPropagation();
-  };
-
-  const handlePlayPause = async () => {
-    if (busyAction || !targetQuest) return;
-    setBusyAction('play');
+  const handleOpenMainWithDraft = () => {
     try {
-      if (isRunning && activeQuest) {
-        await onPauseQuest(activeQuest.id);
-      } else {
-        await onStartQuest(targetQuest.id);
+      if (quickTitle.trim() || hudMode === 'expanded') {
+        window.localStorage.setItem(
+          QUEST_COMPOSER_DRAFT_KEY,
+          JSON.stringify({
+            title: quickTitle.trim(),
+            durationMinutes: quickDuration,
+            type: quickType,
+            primaryStat: quickStat === 'AUTO' ? undefined : quickStat,
+            syncToTimetable: quickSyncCalendar,
+            openAdvanced: true,
+            ts: Date.now(),
+          })
+        );
       }
-    } finally {
-      setBusyAction(null);
+    } catch {
+      // Ignore storage error
     }
+    onOpenMainApp();
   };
 
-  const handleComplete = async () => {
-    if (busyAction || !targetQuest) return;
-    setBusyAction('complete');
-    try {
-      await onCompleteQuest(targetQuest.id);
-    } finally {
-      setBusyAction(null);
-    }
-  };
+  const stopDrag = (e: React.MouseEvent) => e.stopPropagation();
 
-  const handleToggleDnd = async () => {
-    if (busyAction) return;
-    setBusyAction('dnd');
-    try {
-      await onToggleDnd(isDndActive ? 0 : 60);
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleRescueFocus = async () => {
-    if (busyAction || !onConvertFocusToQuest || uncreditedFocusMins < 10) return;
-    setBusyAction('rescue');
-    try {
-      await onConvertFocusToQuest({
-        mode: 'complete_new',
-        title:
-          suggestedSession?.suggestedTitle ||
-          `Phiên Tập Trung (${formatDurationVn(uncreditedFocusMins)})`,
-        primaryStat: suggestedSession?.primaryStat || 'INT',
-      });
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleQuickAddSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleaned = quickTitle.trim();
-    if (!cleaned || busyAction) return;
-    setBusyAction('add');
-    try {
-      await onQuickAddQuest(cleaned, quickDuration);
-      setQuickTitle('');
-      switchHudMode('normal');
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const elapsedSec = activeFocusQuest ? getQuestElapsedSeconds(activeFocusQuest, nowMs) : 0;
-  const activePlannedSec = Math.max(60, (activeFocusQuest?.durationMinutes ?? 25) * 60);
-  const isFocusOvertime = Boolean(activeFocusQuest) && elapsedSec >= activePlannedSec;
-  const focusDisplaySec = isFocusOvertime
-    ? elapsedSec - activePlannedSec
-    : Math.max(0, activePlannedSec - elapsedSec);
-  const focusCountdownLabel = isFocusOvertime
-    ? `+${formatMmSs(focusDisplaySec)}`
-    : formatMmSs(focusDisplaySec);
-  const questProgressPct = activeFocusQuest
-    ? Math.min(100, Math.round((elapsedSec / activePlannedSec) * 100))
+  const elapsedSec = activeQuest ? getQuestElapsedSeconds(activeQuest, nowMs) : 0;
+  const plannedSec = Math.max(60, (activeQuest?.durationMinutes ?? 25) * 60);
+  const isOvertime = Boolean(activeQuest) && elapsedSec >= plannedSec;
+  const clockLabel = activeQuest
+    ? isOvertime
+      ? `+${formatMmSs(elapsedSec - plannedSec)}`
+      : formatMmSs(Math.max(0, plannedSec - elapsedSec))
+    : targetQuest
+      ? `${targetQuest.durationMinutes}p`
+      : '--:--';
+  const progressPct = activeQuest
+    ? Math.min(100, Math.round((elapsedSec / plannedSec) * 100))
     : 0;
-  const nowVnMins = getVnNowMinutes(new Date(nowMs));
-  const nextSchedule = computeNextScheduleContext(
-    state?.todayAnalysis?.blocks,
-    state?.todayAnalysis?.totalFreeMinutes,
-    nowVnMins
-  );
 
-  const focusBarColor =
-    focusScore >= 70 ? '#38a169' : focusScore >= 45 ? '#c99330' : '#b83a4b';
-  const distractionBarColor =
-    distractionAlert || distractionPct > 85
-      ? '#c93b4b'
-      : distractionPct >= 50
-        ? '#d99026'
-        : '#4a7ab5';
-  const energyLevel = player?.energyLevel ?? 75;
-  const energyColor =
-    energyLevel >= 70 ? '#52c484' : energyLevel >= 40 ? '#e6c24c' : '#e55365';
+  const runAction = async (key: string, fn: () => Promise<void>) => {
+    if (busyKey) return;
+    setBusyKey(key);
+    try {
+      await fn();
+    } finally {
+      setBusyKey(null);
+    }
+  };
 
-  const hasPurityBadge =
-    Boolean(activeQuest) && (activeQuest?.verifiedFocusSeconds ?? 0) >= 60;
-  const purityPct = activeQuest?.focusIntegrityPct ?? 100;
-  const flowBonusReady =
-    Boolean(activeQuest) &&
-    (activeQuest?.verifiedFocusSeconds ?? 0) >= 600 &&
-    purityPct >= 80;
-  const showUnloggedRescue =
-    !activeQuest &&
-    !selectedPendingQuest &&
-    uncreditedFocusMins >= 15 &&
-    Boolean(onConvertFocusToQuest);
-
-  // ==================== MINI MODE (284x68px inside 292x76px Tauri window) ====================
+  // ==================== MINI MODE (284x68px) ====================
   const miniPlaque = (
     <div
-      className={`px-hud-frame relative flex h-[68px] max-h-[68px] w-[284px] select-none items-center gap-[6px] overflow-hidden px-[6px] py-[6px] text-[#f3ead8] ${
+      className={`px-hud-frame flex h-[68px] w-[284px] select-none items-center gap-[8px] overflow-hidden px-[8px] py-[6px] text-[#f4ecdc] ${
         distractionAlert ? 'px-hud-frame-alert' : ''
       }`}
     >
-      <PixelCornerRivets />
-
-      {/* Draggable Portrait */}
       <div
         data-tauri-drag-region
-        className="flex h-[30px] w-[30px] shrink-0 cursor-grab items-center justify-center border-2 border-[#d4a24c] bg-[#100e18] active:cursor-grabbing"
+        className="flex h-[32px] w-[32px] shrink-0 cursor-grab items-center justify-center border border-[#d4a24c] bg-[#100e18] active:cursor-grabbing"
         title="Kéo để di chuyển HUD"
       >
         <div className="pointer-events-none">
@@ -635,87 +381,55 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
         </div>
       </div>
 
-      {/* Draggable Single-Line Safe Telemetry */}
       <div
         data-tauri-drag-region
-        className="flex min-w-0 flex-1 cursor-grab flex-col justify-center gap-[5px] overflow-hidden active:cursor-grabbing"
-        title={
-          activeQuest
-            ? `${activeQuest.title} (${formatMmSs(elapsedSec)} / ${activeQuest.durationMinutes}p)`
-            : `${gradeInfo.title} · ${nextSchedule.title}`
-        }
+        className="flex min-w-0 flex-1 cursor-grab flex-col justify-center gap-[4px] overflow-hidden active:cursor-grabbing"
       >
-        <div className="pointer-events-none flex min-w-0 items-center gap-[4px] overflow-hidden whitespace-nowrap leading-none">
-          <span
-            className="shrink-0 border border-[#09070f] px-[3px] py-[1px] font-pixel text-[7.5px] font-bold"
-            style={{ backgroundColor: gradeInfo.bg, color: gradeInfo.fg }}
-          >
-            {gradeInfo.grade}
-          </span>
-          <span
-            className="shrink-0 font-mono text-[10px] font-extrabold tabular-nums"
-            style={{ color: distractionAlert ? '#ff6b7a' : focusBarColor }}
-          >
-            {focusScore}%
-          </span>
-          <span className="min-w-0 truncate whitespace-nowrap font-mono text-[9.5px] font-bold text-[#d2c8e0] tabular-nums">
-            {formatDurationVn(focusTotalMins)}/{formatDurationVn(dailyFocusGoalMins)}
-          </span>
-        </div>
-
-        <div
-          className="pointer-events-none flex min-w-0 items-center gap-[4px] overflow-hidden whitespace-nowrap leading-none"
-          title={
-            activeFocusQuest
-              ? `FOCUS: ${activeFocusQuest.title} (${focusCountdownLabel}${isFocusOvertime ? ' FLOW' : ''})`
-              : nextSchedule.title
-          }
-        >
-          {distractionAlert ? (
-            <span className="min-w-0 truncate whitespace-nowrap font-pixel text-[8px] font-bold text-[#ff6b7a]">
-              ! ĐANG XAO NHÃNG
+        {distractionAlert ? (
+          <div className="pointer-events-none flex items-center gap-1 font-pixel text-[8px] font-bold text-[#ff6b7a]">
+            <PxWarn size={10} danger />
+            <span className="truncate">ĐANG XAO NHÃNG!</span>
+          </div>
+        ) : (
+          <div className="pointer-events-none flex items-center gap-[5px] leading-none">
+            <span className="font-mono text-[11px] font-extrabold tabular-nums text-[#f0c46c]">
+              {clockLabel}
             </span>
-          ) : activeFocusQuest ? (
-            <>
-              <PxSword
-                size={9}
-                color={isFocusOvertime ? '#52c484' : isRunning ? '#f0c46c' : '#8eb8eb'}
-              />
-              <span
-                className="shrink-0 font-mono text-[10.5px] font-extrabold tabular-nums"
-                style={{
-                  color: isFocusOvertime ? '#52c484' : isRunning ? '#f0c46c' : '#8eb8eb',
-                }}
-              >
-                {focusCountdownLabel}
-              </span>
-              <span className="min-w-0 truncate whitespace-nowrap font-mono text-[9px] text-[#b7adc9]">
-                {activeFocusQuest.title}
-              </span>
-            </>
-          ) : (
-            <span className="min-w-0 truncate whitespace-nowrap font-mono text-[9.5px] font-bold text-[#e6c278] tabular-nums">
-              {nextSchedule.shortText}
+            <span className="truncate font-display text-[11px] font-bold text-[#f4ecdc]">
+              {targetQuest ? targetQuest.title : pendingHabits[0]?.title || 'Sẵn sàng Focus'}
             </span>
-          )}
+          </div>
+        )}
+        <div className="pointer-events-none flex items-center gap-[6px] font-mono text-[9px] text-[#bfb6d1] tabular-nums leading-none">
+          <span className="text-[#56c989]">Focus {focusScore}%</span>
+          <span>·</span>
+          <span>Việc {pendingQuests.length}</span>
+          <span>·</span>
+          <span>
+            TQ {completedHabitsCount}/{dueHabits.length}
+          </span>
         </div>
       </div>
 
-      {/* 4 Compact Tactile Pixel Buttons: Play, Expand, Hide, Dashboard */}
       <div className="flex shrink-0 items-center gap-[3px]">
         <button
           type="button"
           data-tauri-drag-region="false"
           onMouseDown={stopDrag}
-          disabled={!targetQuest || busyAction !== null}
-          onClick={() => void handlePlayPause()}
+          disabled={!targetQuest || busyKey !== null}
+          onClick={() =>
+            void runAction('play', async () => {
+              if (!targetQuest) return;
+              if (isRunning && activeQuest) await onPauseQuest(activeQuest.id);
+              else await onStartQuest(targetQuest.id);
+            })
+          }
           className={`px-hud-btn flex h-[24px] w-[24px] items-center justify-center disabled:opacity-40 ${
             isRunning ? 'px-hud-btn-gold' : 'px-hud-btn-green'
           }`}
-          title={isRunning ? 'Tạm dừng nhiệm vụ' : 'Bắt đầu nhiệm vụ'}
-          aria-label={isRunning ? 'Tạm dừng nhiệm vụ' : 'Bắt đầu nhiệm vụ'}
+          title={isRunning ? 'Tạm dừng' : 'Bắt đầu'}
         >
-          {busyAction === 'play' ? <PxBusyDots /> : isRunning ? <PxPause size={9} /> : <PxPlay size={9} />}
+          {isRunning ? <PxPause size={9} /> : <PxPlay size={9} />}
         </button>
 
         <button
@@ -724,8 +438,7 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
           onMouseDown={stopDrag}
           onClick={() => switchHudMode('normal')}
           className="px-hud-btn px-hud-btn-slate flex h-[24px] w-[24px] items-center justify-center"
-          title="Mở rộng bảng kỷ luật đầy đủ"
-          aria-label="Mở rộng HUD"
+          title="Mở rộng HUD"
         >
           <PxMiniToggle size={9} expand />
         </button>
@@ -736,8 +449,7 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
           onMouseDown={stopDrag}
           onClick={handleHideClick}
           className="px-hud-btn px-hud-btn-slate flex h-[24px] w-[24px] items-center justify-center"
-          title="Ẩn HUD về khay hệ thống (Ctrl+Shift+Space để hiện lại)"
-          aria-label="Ẩn HUD"
+          title="Ẩn HUD"
         >
           <PxHide size={9} />
         </button>
@@ -748,8 +460,7 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
           onMouseDown={stopDrag}
           onClick={onOpenMainApp}
           className="px-hud-btn px-hud-btn-blue flex h-[24px] w-[24px] items-center justify-center"
-          title="Mở Bảng điều khiển chính"
-          aria-label="Mở Bảng điều khiển chính"
+          title="Mở ứng dụng chính (Phóng to)"
         >
           <PxDashboard size={9} />
         </button>
@@ -760,638 +471,455 @@ export const FloatingHudPage: React.FC<FloatingHudPageProps> = ({
   // ==================== NORMAL / EXPANDED MODE (396x178px / 396x228px) ====================
   const fullPlaque = (
     <div
-      className={`px-hud-frame relative flex w-[396px] select-none flex-col px-[8px] py-[6px] text-[#f3ead8] ${
+      className={`px-hud-frame flex w-[396px] select-none flex-col justify-between px-[10px] py-[8px] text-[#f4ecdc] ${
         hudMode === 'expanded' ? 'h-[228px]' : 'h-[178px]'
       } ${distractionAlert ? 'px-hud-frame-alert' : ''}`}
     >
-      <PixelCornerRivets />
-
-      {/* ROW 1: Pixel Identity, Discipline Grade Stamp & Window Controls (32px, draggable) */}
+      {/* ROW 1: Ultra-Clean Header (28px, draggable) */}
       <div
         data-tauri-drag-region
-        className="flex h-[32px] cursor-grab items-center justify-between gap-[6px] active:cursor-grabbing"
+        className="flex h-[28px] cursor-grab items-center justify-between gap-2 active:cursor-grabbing"
       >
-        <div className="pointer-events-none flex min-w-0 flex-1 items-center gap-[6px]">
-          {/* 28x28 Gold-Beveled Pixel Portrait */}
-          <div className="flex h-[28px] w-[28px] shrink-0 items-center justify-center border-2 border-[#d4a24c] bg-[#100e18]">
+        <div className="pointer-events-none flex min-w-0 items-center gap-2">
+          <div className="flex h-[24px] w-[24px] shrink-0 items-center justify-center border border-[#d4a24c] bg-[#100e18]">
             <PixelHeroSprite
               rank={player?.rank || 'E-Rank'}
               avatarStyle={player?.profile.avatarStyle || 'shadow_monarch'}
               mood={heroMood}
-              size={24}
+              size={20}
               className="!animate-none"
             />
           </div>
-
-          {/* LV + Instant Discipline Grade Stamp */}
-          <div className="flex shrink-0 flex-col gap-[2px] leading-none" title={gradeInfo.title}>
-            <div className="flex items-center gap-[3px]">
-              <span className="border border-[#09070f] bg-[#c99330] px-[4px] py-[1px] font-pixel text-[7.5px] font-bold text-[#140e04]">
-                LV.{player?.level ?? 1}
-              </span>
-              <span
-                className="border border-[#09070f] px-[4px] py-[1px] font-pixel text-[7px] font-bold"
-                style={{ backgroundColor: gradeInfo.bg, color: gradeInfo.fg }}
-              >
-                {gradeInfo.stamp}
-              </span>
-            </div>
-            <div className="flex items-center gap-[3px]">
-              <div className="flex items-center gap-[1px]">
-                {heartStates.map((st, idx) => (
-                  <PixelHeart key={idx} state={st} size={9} critical={isCriticalHp} />
-                ))}
-              </div>
-              <span className="font-mono text-[8.5px] font-bold text-[#e57380] tabular-nums">
-                {hp}/{maxHp}
-              </span>
-            </div>
-          </div>
-
-          {/* Streak & Energy */}
-          <div className="flex shrink-0 flex-col justify-center gap-[3px] border-l-2 border-[#2e2942] pl-[6px] font-mono text-[9.5px] font-bold leading-none tabular-nums">
-            <span className="flex items-center gap-[3px] text-[#f0b44c]" title="Chuỗi ngày giữ kỷ luật">
-              <PxFlame size={9} />
-              {player?.streakDays ?? 0} ngày
+          <span className="font-pixel text-[8px] font-bold text-[#f0c46c]">
+            LV.{player?.level ?? 1}
+          </span>
+          <span className="inline-flex items-center gap-0.5 font-mono text-[10px] font-bold text-[#f0c46c]">
+            <PxFlame size={10} /> {player?.streakDays ?? 0}d
+          </span>
+          {distractionAlert ? (
+            <span className="inline-flex items-center gap-1 bg-[#b83a4b] px-1.5 py-0.5 font-pixel text-[7.5px] font-bold text-white">
+              <PxWarn size={9} color="#ffffff" /> XAO NHÃNG!
             </span>
-            <span className="flex items-center gap-[3px]" style={{ color: energyColor }} title="Thể trạng hôm nay (không trừ HP)">
-              <PxBolt size={9} color={energyColor} />
-              Pin {energyLevel}%
+          ) : (
+            <span className="font-mono text-[10px] text-[#bfb6d1]">
+              Focus <strong className="text-[#56c989]">{focusTotalMins}p</strong>/{dailyFocusGoalMins}p
             </span>
-          </div>
+          )}
         </div>
 
-        {/* Right: 4 Crisp 16-bit Controls (DND, Mini, Hide HUD, Open Dashboard) */}
         <div className="flex shrink-0 items-center gap-[3px]">
           <button
             type="button"
             data-tauri-drag-region="false"
             onMouseDown={stopDrag}
-            disabled={busyAction !== null}
-            onClick={() => void handleToggleDnd()}
-            className={`px-hud-btn flex h-[24px] w-[24px] items-center justify-center disabled:opacity-40 ${
+            onClick={() =>
+              void runAction('dnd', () => onToggleDnd(isDndActive ? 0 : 60))
+            }
+            className={`px-hud-btn flex h-[22px] w-[22px] items-center justify-center ${
               isDndActive ? 'px-hud-btn-gold' : 'px-hud-btn-slate'
             }`}
-            title={
-              isDndActive
-                ? `Đang tạm im thông báo (còn ${dndRemainingMin ?? 60}p) — bấm để tắt`
-                : 'Tạm im thông báo 1 giờ (DND)'
-            }
-            aria-label={isDndActive ? 'Tắt tạm im' : 'Bật tạm im 1 giờ'}
+            title={isDndActive ? 'Tắt DND' : 'Tạm im thông báo 1 giờ'}
           >
-            {busyAction === 'dnd' ? <PxBusyDots /> : <PxBell size={10} muted={isDndActive} />}
+            <PxBell size={9} muted={isDndActive} />
           </button>
-
           <button
             type="button"
             data-tauri-drag-region="false"
             onMouseDown={stopDrag}
             onClick={() => switchHudMode('mini')}
-            className="px-hud-btn px-hud-btn-slate flex h-[24px] w-[24px] items-center justify-center"
-            title="Thu gọn thành thanh Mini gọn (284×68)"
-            aria-label="Thu gọn chế độ Mini"
+            className="px-hud-btn px-hud-btn-slate flex h-[22px] w-[22px] items-center justify-center"
+            title="Thu gọn Mini"
           >
-            <PxMiniToggle size={10} />
+            <PxMiniToggle size={9} />
           </button>
-
           <button
             type="button"
             data-tauri-drag-region="false"
             onMouseDown={stopDrag}
             onClick={handleHideClick}
-            className="px-hud-btn px-hud-btn-slate flex h-[24px] w-[24px] items-center justify-center"
-            title="Ẩn HUD về khay hệ thống (Ctrl+Shift+Space để hiện lại)"
-            aria-label="Ẩn HUD"
+            className="px-hud-btn px-hud-btn-slate flex h-[22px] w-[22px] items-center justify-center"
+            title="Ẩn HUD"
           >
-            <PxHide size={10} />
+            <PxHide size={9} />
           </button>
-
           <button
             type="button"
             data-tauri-drag-region="false"
             onMouseDown={stopDrag}
-            onClick={onOpenMainApp}
-            className="px-hud-btn px-hud-btn-blue flex h-[24px] w-[24px] items-center justify-center"
-            title="Mở Bảng điều khiển đầy đủ"
-            aria-label="Mở Bảng điều khiển chính"
+            onClick={handleOpenMainWithDraft}
+            className="px-hud-btn px-hud-btn-blue flex h-[22px] w-[22px] items-center justify-center"
+            title="Mở ứng dụng chính (đồng bộ tức thì)"
           >
-            <PxDashboard size={10} />
+            <PxDashboard size={9} />
           </button>
         </div>
       </div>
 
-      {/* ROW 2: 2 Crystal-Clear Discipline Cards (54px) */}
-      <div className="mt-[5px] grid h-[54px] grid-cols-2 gap-[6px]">
-        {/* Card A: Tập trung & Mục tiêu hôm nay */}
-        <div
-          data-tauri-drag-region
-          className="px-hud-inset flex cursor-grab flex-col justify-between px-[6px] py-[4px] active:cursor-grabbing"
-          title={`Mục tiêu tập trung hôm nay: ${formatDurationVn(focusTotalMins)} / ${formatDurationVn(dailyFocusGoalMins)} (Làm sâu ${deepWorkMins}p + Học ${studyMins}p · Điểm tập trung ${focusScore}%)`}
-        >
-          <div className="pointer-events-none flex items-center justify-between gap-1 leading-none">
-            <span className="flex items-center gap-[3px] font-mono text-[9.5px] font-bold text-[#ede5f7]">
-              <PxTarget size={9} />
-              Tập trung
-            </span>
-            <span className="font-mono text-[10px] font-extrabold tabular-nums" style={{ color: focusBarColor }}>
-              {formatDurationVn(focusTotalMins)}
-              <span className="font-normal text-[#8b80a6]">/{formatDurationVn(dailyFocusGoalMins)}</span>
-            </span>
-          </div>
-
-          <div className="px-hud-bar-track pointer-events-none h-[10px] w-full">
-            <div
-              className="h-full transition-none"
-              style={{ width: `${focusGoalPct}%`, backgroundColor: focusBarColor }}
-            />
-          </div>
-
-          <div className="pointer-events-none flex items-center justify-between font-mono text-[8.5px] leading-none tabular-nums">
-            <span className="text-[#c5bcd6]">
-              Điểm <strong style={{ color: focusBarColor }}>{focusScore}%</strong>
-            </span>
-            <span className="truncate text-[#8b80a6]">
-              Sâu {deepWorkMins}p · Học {studyMins}p
-            </span>
-          </div>
-        </div>
-
-        {/* Card B: Hạn mức Xao nhãng & Nhiệm vụ ngày */}
-        <div
-          data-tauri-drag-region
-          className="px-hud-inset flex cursor-grab flex-col justify-between px-[6px] py-[4px] active:cursor-grabbing"
-          title={`Xao nhãng: ${distractionMins}p / hạn mức ${budgetMins}p · Nhiệm vụ đã hoàn thành hôm nay: ${doneToday}/${totalToday}`}
-        >
-          <div className="pointer-events-none flex items-center justify-between gap-1 leading-none">
-            <span className="flex items-center gap-[3px] font-mono text-[9.5px] font-bold text-[#ede5f7]">
-              <PxWarn size={9} danger={distractionAlert || distractionPct > 85} />
-              Xao nhãng
-            </span>
-            <span
-              className="font-mono text-[10px] font-extrabold tabular-nums"
-              style={{ color: distractionBarColor }}
-            >
-              {distractionMins}p<span className="font-normal text-[#8b80a6]">/{budgetMins}p</span>
-            </span>
-          </div>
-
-          <div className="px-hud-bar-track pointer-events-none h-[10px] w-full">
-            <div
-              className="h-full transition-none"
-              style={{ width: `${distractionPct}%`, backgroundColor: distractionBarColor }}
-            />
-          </div>
-
-          <div className="pointer-events-none flex items-center justify-between font-mono text-[8.5px] leading-none tabular-nums">
-            {distractionAlert ? (
-              <span className="font-pixel text-[7.5px] font-bold text-[#ff6b7a]">
-                ! QUAY LẠI NGAY
+      {/* ROW 2: Current Task & Live Timer (58px) */}
+      <div className="px-hud-inset flex h-[58px] flex-col justify-between px-[8px] py-[5px]">
+        <div className="flex items-center justify-between gap-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <PxSword size={11} color={isRunning ? '#f0c46c' : '#78b0ee'} />
+            {targetQuest && (
+              <span className="shrink-0 border border-[#463e63] bg-[#1f1b2e] px-1 py-0 font-mono text-[8.5px] font-bold text-[#f0c46c]">
+                {TYPE_SHORT_LABELS[targetQuest.type] || 'Daily'}
+                {targetQuestPrimaryStat ? `·${targetQuestPrimaryStat}` : ''}
               </span>
-            ) : distractionMins >= budgetMins ? (
-              <span className="font-bold text-[#ff6b7a]">Vượt hạn mức!</span>
-            ) : (
-              <span className="text-[#998fb3]">Còn {safeRemainMins}p an toàn</span>
             )}
-            <span className="font-bold text-[#d4a24c]">
-              Việc {doneToday}/{totalToday}
+            <span className="truncate font-display text-[11.5px] font-bold text-[#f4ecdc]">
+              {targetQuest ? targetQuest.title : 'Chưa có nhiệm vụ — bấm + để thêm'}
             </span>
           </div>
-        </div>
-      </div>
-
-      {/* ROW 3: Live PC Context & Smart Next-Schedule Countdown (24px, draggable) */}
-      <div
-        data-tauri-drag-region
-        className="px-hud-inset mt-[5px] flex h-[24px] cursor-grab items-center justify-between gap-[6px] px-[6px] active:cursor-grabbing"
-      >
-        <div
-          className="pointer-events-none flex min-w-0 max-w-[43%] items-center gap-[4px] font-mono text-[9px] leading-none text-[#e0d8eb]"
-          title={
-            currentApp
-              ? `Đang dùng: ${currentApp.processName} (${categoryMeta.label})`
-              : 'Theo dõi ứng dụng trên PC'
-          }
-        >
-          <span
-            className="h-[6px] w-[6px] shrink-0 border border-[#09070f]"
-            style={{ backgroundColor: categoryMeta.color }}
-          />
-          <span className="truncate">
-            {shortAppName ? `${shortAppName} · ${categoryMeta.label}` : `PC · ${categoryMeta.label}`}
-          </span>
-        </div>
-
-        <div
-          className="pointer-events-none flex min-w-0 flex-1 items-center justify-end gap-[4px] border-l-2 border-[#2e2942] pl-[6px] font-mono text-[9px] font-bold leading-none text-[#f0c46c]"
-          title={nextSchedule.title}
-        >
-          <PxClock size={9} color={nextSchedule.kind === 'active' ? '#52c484' : '#d4a24c'} />
-          <span className="truncate">
-            {nextSchedule.kind === 'active' ? `Đang lịch · ${nextSchedule.text}` : nextSchedule.text}
-          </span>
-        </div>
-      </div>
-
-      {/* ROW 4: Smart Quest Execution / Unlogged Focus Rescue Dock (38px) */}
-      <div className="mt-[5px] flex h-[38px] items-center gap-[4px]">
-        {showUnloggedRescue ? (
-          <div className="px-hud-inset flex h-[38px] min-w-0 flex-1 items-center justify-between gap-[6px] border-[#c99330] px-[7px]">
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-mono text-[9.5px] font-extrabold text-[#f0c46c]">
-                ⚡ +{formatDurationVn(uncreditedFocusMins)} tập trung chưa lưu
-              </div>
-              <div className="truncate font-mono text-[8.5px] text-[#b7adc9]">
-                Quy đổi ngay thành Quest để nhận XP &amp; Gold
-              </div>
-            </div>
-            <button
-              type="button"
-              data-tauri-drag-region="false"
-              onMouseDown={stopDrag}
-              disabled={busyAction !== null}
-              onClick={() => void handleRescueFocus()}
-              className="px-hud-btn px-hud-btn-gold h-[26px] shrink-0 px-[7px] font-pixel text-[7.5px] font-bold disabled:opacity-40"
-              title="Lưu phiên tập trung PC thành Quest đã hoàn thành"
-            >
-              {busyAction === 'rescue' ? <PxBusyDots /> : 'Lưu Quest'}
-            </button>
-          </div>
-        ) : (
-          <div
-            data-tauri-drag-region
-            className="px-hud-inset flex h-[38px] min-w-0 flex-1 cursor-grab flex-col justify-center gap-[3px] px-[7px] active:cursor-grabbing"
-            title={
-              activeQuest
-                ? `${activeQuest.title} (${formatMmSs(elapsedSec)} / ${activeQuest.durationMinutes}p)`
-                : selectedPendingQuest
-                  ? `Nhiệm vụ chờ: ${selectedPendingQuest.title} (${selectedPendingQuest.durationMinutes}p)`
-                  : 'Chưa có nhiệm vụ chờ — bấm + để thêm nhanh'
-            }
-          >
-            {!state ? (
-              <span className="pointer-events-none truncate font-mono text-[10px] text-[#847a99]">
-                Đang kết nối máy chủ PC...
-              </span>
-            ) : activeFocusQuest ? (
-              <>
-                <div className="pointer-events-none flex min-w-0 items-center justify-between gap-[6px] leading-none">
-                  <div className="flex min-w-0 flex-1 items-center gap-[4px]">
-                    <PxSword
-                      size={10}
-                      color={isFocusOvertime ? '#52c484' : isRunning ? '#f0c46c' : '#8eb8eb'}
-                    />
-                    <span className="truncate font-display text-[11px] font-bold text-[#f3ead8]">
-                      <span className="font-mono text-[9.5px] text-[#d4a24c]">FOCUS:</span>{' '}
-                      {activeFocusQuest.title}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-[4px]">
-                    {flowBonusReady && !isFocusOvertime && (
-                      <span
-                        className="border border-[#09070f] bg-[#c99330] px-[3px] py-[1px] font-mono text-[8px] font-extrabold text-[#140e04]"
-                        title="Đủ điều kiện Flow Bonus +15% XP khi hoàn thành!"
-                      >
-                        ★+15%
-                      </span>
-                    )}
-                    {hasPurityBadge && !flowBonusReady && !isFocusOvertime && (
-                      <span className="font-mono text-[8.5px] font-bold text-[#6ee7a8] tabular-nums">
-                        {purityPct}%
-                      </span>
-                    )}
-                    <span
-                      className="font-mono text-[11px] font-extrabold tabular-nums"
-                      style={{
-                        color: isFocusOvertime ? '#52c484' : isRunning ? '#f0c46c' : '#8eb8eb',
-                      }}
-                    >
-                      {focusCountdownLabel}
-                    </span>
-                    {isFocusOvertime ? (
-                      <span className="border border-[#09070f] bg-[#2e8b57] px-[3px] py-[1px] font-pixel text-[7px] font-bold text-white">
-                        FLOW
-                      </span>
-                    ) : isPaused ? (
-                      <span className="font-pixel text-[7px] text-[#8eb8eb]">PAUSE</span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="px-hud-bar-track pointer-events-none h-[6px] w-full">
-                  <div
-                    className="h-full transition-none"
-                    style={{
-                      width: `${questProgressPct}%`,
-                      backgroundColor: isFocusOvertime
-                        ? '#38a169'
-                        : isRunning
-                          ? '#c99330'
-                          : '#4a7ab5',
-                    }}
-                  />
-                </div>
-              </>
-            ) : selectedPendingQuest ? (
-              <div className="flex min-w-0 items-center justify-between gap-[4px]">
-                <div className="pointer-events-none min-w-0 flex-1">
-                  <div className="truncate font-display text-[11px] font-bold text-[#e8dff5]">
-                    {selectedPendingQuest.title}
-                  </div>
-                  <div className="font-mono text-[8.5px] text-[#968cb0] tabular-nums">
-                    Dự kiến {selectedPendingQuest.durationMinutes}p
-                    {pendingQuests.length > 1
-                      ? ` · Việc ${safePendingIdx + 1}/${pendingQuests.length}`
-                      : ' · Sẵn sàng bấm ▶'}
-                  </div>
-                </div>
-                {pendingQuests.length > 1 && (
-                  <div className="flex shrink-0 items-center gap-[2px]">
-                    <button
-                      type="button"
-                      data-tauri-drag-region="false"
-                      onMouseDown={stopDrag}
-                      onClick={() =>
-                        setSelectedPendingIdx((idx) =>
-                          idx <= 0 ? pendingQuests.length - 1 : idx - 1
-                        )
-                      }
-                      className="px-hud-btn px-hud-btn-slate flex h-[20px] w-[18px] items-center justify-center"
-                      title="Xem nhiệm vụ trước"
-                      aria-label="Nhiệm vụ trước"
-                    >
-                      <PxChevron dir="left" />
-                    </button>
-                    <button
-                      type="button"
-                      data-tauri-drag-region="false"
-                      onMouseDown={stopDrag}
-                      onClick={() =>
-                        setSelectedPendingIdx((idx) => (idx + 1) % pendingQuests.length)
-                      }
-                      className="px-hud-btn px-hud-btn-slate flex h-[20px] w-[18px] items-center justify-center"
-                      title="Xem nhiệm vụ tiếp theo"
-                      aria-label="Nhiệm vụ tiếp theo"
-                    >
-                      <PxChevron dir="right" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="pointer-events-none">
-                <div className="truncate font-mono text-[10px] font-bold text-[#c9bfd8]">
-                  Chưa có nhiệm vụ đang chờ
-                </div>
-                <div className="truncate font-mono text-[8.5px] text-[#847a99]">
-                  Bấm nút + bên phải để thêm việc kỉ luật ngay
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 3 Chunky Tactile 16-Bit Action Buttons: [▶/⏸], [✓], [+] */}
-        {!showUnloggedRescue && (
-          <>
-            <button
-              type="button"
-              data-tauri-drag-region="false"
-              onMouseDown={stopDrag}
-              disabled={!targetQuest || busyAction !== null}
-              onClick={() => void handlePlayPause()}
-              className={`px-hud-btn flex h-[38px] w-[32px] shrink-0 items-center justify-center disabled:opacity-40 ${
-                isRunning ? 'px-hud-btn-gold' : 'px-hud-btn-green'
-              }`}
-              title={
-                isRunning
-                  ? 'Tạm dừng nhiệm vụ đang chạy'
-                  : isPaused
-                    ? 'Tiếp tục nhiệm vụ'
-                    : selectedPendingQuest
-                      ? `Bắt đầu: ${selectedPendingQuest.title}`
-                      : 'Chưa có nhiệm vụ để chạy'
-              }
-              aria-label={isRunning ? 'Tạm dừng nhiệm vụ' : 'Bắt đầu nhiệm vụ'}
-            >
-              {busyAction === 'play' ? (
-                <PxBusyDots />
-              ) : isRunning ? (
-                <PxPause size={10} />
-              ) : (
-                <PxPlay size={10} />
-              )}
-            </button>
-
-            <button
-              type="button"
-              data-tauri-drag-region="false"
-              onMouseDown={stopDrag}
-              disabled={!targetQuest || busyAction !== null}
-              onClick={() => void handleComplete()}
-              className="px-hud-btn px-hud-btn-gold flex h-[38px] w-[32px] shrink-0 items-center justify-center disabled:opacity-40"
-              title={
-                targetQuest
-                  ? `Hoàn thành ngay: ${targetQuest.title}`
-                  : 'Chưa có nhiệm vụ để hoàn thành'
-              }
-              aria-label="Hoàn thành nhiệm vụ"
-            >
-              {busyAction === 'complete' ? <PxBusyDots /> : <PxCheck size={10} />}
-            </button>
-          </>
-        )}
-
-        <button
-          type="button"
-          data-tauri-drag-region="false"
-          onMouseDown={stopDrag}
-          onClick={() => switchHudMode(hudMode === 'expanded' ? 'normal' : 'expanded')}
-          className={`px-hud-btn flex h-[38px] w-[32px] shrink-0 items-center justify-center ${
-            hudMode === 'expanded' ? 'px-hud-btn-red' : 'px-hud-btn-slate'
-          }`}
-          title={hudMode === 'expanded' ? 'Đóng khung thêm nhanh' : 'Thêm nhanh việc kỉ luật (+)'}
-          aria-label="Mở hoặc đóng thêm nhanh"
-          aria-expanded={hudMode === 'expanded'}
-        >
-          {hudMode === 'expanded' ? <PxClose size={10} /> : <PxPlus size={10} />}
-        </button>
-      </div>
-
-      {/* EXPANDED DRAWER: Sunken Pixel Quick-Add Strip */}
-      {hudMode === 'expanded' && (
-        <form
-          onSubmit={(e) => void handleQuickAddSubmit(e)}
-          className="mt-[6px] flex h-[40px] items-center gap-[4px] border-t-2 border-[#09070f] pt-[6px]"
-        >
-          <input
-            ref={quickInputRef}
-            type="text"
-            data-tauri-drag-region="false"
-            onMouseDown={stopDrag}
-            value={quickTitle}
-            onChange={(e) => setQuickTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') switchHudMode('normal');
-            }}
-            placeholder="Thêm việc kỉ luật..."
-            disabled={busyAction === 'add'}
-            className="px-hud-inset h-[30px] min-w-0 flex-1 rounded-none px-[7px] font-mono text-[10.5px] text-[#f3ead8] placeholder:text-[#736987] focus:border-[#d4a24c] focus:shadow-none"
-          />
 
           <div className="flex shrink-0 items-center gap-[3px]">
-            {QUICK_DURATIONS.map((mins) => (
+            {!activeQuest && pendingQuests.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  data-tauri-drag-region="false"
+                  onMouseDown={stopDrag}
+                  onClick={() =>
+                    setSelectedPendingIdx(
+                      (i) => (i - 1 + pendingQuests.length) % pendingQuests.length
+                    )
+                  }
+                  className="px-hud-btn px-hud-btn-slate flex h-[20px] w-[16px] items-center justify-center"
+                  title="Việc trước"
+                >
+                  <PxChevron dir="left" size={8} />
+                </button>
+                <span className="font-mono text-[9px] text-[#bfb6d1] tabular-nums">
+                  {safeIdx + 1}/{pendingQuests.length}
+                </span>
+                <button
+                  type="button"
+                  data-tauri-drag-region="false"
+                  onMouseDown={stopDrag}
+                  onClick={() => setSelectedPendingIdx((i) => (i + 1) % pendingQuests.length)}
+                  className="px-hud-btn px-hud-btn-slate flex h-[20px] w-[16px] items-center justify-center"
+                  title="Việc tiếp theo"
+                >
+                  <PxChevron dir="right" size={8} />
+                </button>
+              </>
+            )}
+            <span
+              className="px-0.5 font-mono text-[11.5px] font-extrabold tabular-nums"
+              style={{ color: isOvertime ? '#56c989' : isRunning ? '#f0c46c' : '#bfb6d1' }}
+            >
+              {clockLabel}
+            </span>
+            <button
+              type="button"
+              data-tauri-drag-region="false"
+              onMouseDown={stopDrag}
+              disabled={!targetQuest || busyKey !== null}
+              onClick={() =>
+                void runAction('play', async () => {
+                  if (!targetQuest) return;
+                  if (isRunning && activeQuest) await onPauseQuest(activeQuest.id);
+                  else await onStartQuest(targetQuest.id);
+                })
+              }
+              className={`px-hud-btn flex h-[22px] w-[23px] items-center justify-center disabled:opacity-40 ${
+                isRunning ? 'px-hud-btn-gold' : 'px-hud-btn-green'
+              }`}
+              title={isRunning ? 'Tạm dừng' : 'Bắt đầu'}
+            >
+              {isRunning ? <PxPause size={9} /> : <PxPlay size={9} />}
+            </button>
+            <button
+              type="button"
+              data-tauri-drag-region="false"
+              onMouseDown={stopDrag}
+              disabled={!targetQuest || busyKey !== null}
+              onClick={() =>
+                void runAction('done', async () => {
+                  if (!targetQuest) return;
+                  await onCompleteQuest(targetQuest.id);
+                })
+              }
+              className="px-hud-btn px-hud-btn-blue flex h-[22px] w-[23px] items-center justify-center disabled:opacity-40"
+              title="Hoàn thành"
+            >
+              <PxCheck size={10} />
+            </button>
+            <button
+              type="button"
+              data-tauri-drag-region="false"
+              onMouseDown={stopDrag}
+              onClick={() => switchHudMode(hudMode === 'expanded' ? 'normal' : 'expanded')}
+              className={`px-hud-btn flex h-[22px] w-[22px] items-center justify-center ${
+                hudMode === 'expanded' ? 'px-hud-btn-gold' : 'px-hud-btn-slate'
+              }`}
+              title="Thêm nhanh nhiệm vụ (đồng bộ với App chính)"
+            >
+              {hudMode === 'expanded' ? <PxClose size={9} /> : <PxPlus size={9} />}
+            </button>
+          </div>
+        </div>
+
+        <div className="px-hud-bar-track h-[7px] w-full">
+          <div
+            className="h-full"
+            style={{
+              width: `${progressPct}%`,
+              backgroundColor: isOvertime ? '#2e8b57' : '#c99330',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ROW 3: 1-Click Core Habits Quick-Check Strip (when normal) OR Compact Habits + Unified Quick-Add (when expanded) */}
+      {hudMode !== 'expanded' ? (
+        <div className="px-hud-inset flex h-[64px] flex-col justify-between px-[8px] py-[5px]">
+          <div className="flex items-center justify-between font-mono text-[9.5px]">
+            <span className="font-bold text-[#bfb6d1]">
+              Thói quen hôm nay ({completedHabitsCount}/{dueHabits.length})
+            </span>
+            {mvdActive ? (
+              <span className="font-bold text-[#f0c46c]">MVD · 2p giữ chuỗi</span>
+            ) : (
               <button
-                key={mins}
                 type="button"
                 data-tauri-drag-region="false"
                 onMouseDown={stopDrag}
-                onClick={() => setQuickDuration(mins)}
-                className={`px-hud-btn h-[30px] px-[6px] font-mono text-[9.5px] font-bold tabular-nums ${
-                  quickDuration === mins ? 'px-hud-btn-gold' : 'px-hud-btn-slate'
-                }`}
+                onClick={onOpenMainApp}
+                className="font-bold text-[#78b0ee] hover:underline"
               >
-                {mins}p
+                Quản lý đầy đủ ↗
               </button>
-            ))}
+            )}
           </div>
 
-          <button
-            type="submit"
-            data-tauri-drag-region="false"
-            onMouseDown={stopDrag}
-            disabled={!quickTitle.trim() || busyAction === 'add'}
-            className="px-hud-btn px-hud-btn-gold flex h-[30px] shrink-0 items-center gap-[3px] px-[8px] font-pixel text-[8px] font-bold disabled:opacity-40"
-          >
-            {busyAction === 'add' ? <PxBusyDots /> : <PxPlus size={8} />}
-            <span>Thêm</span>
-          </button>
+          {dueHabits.length === 0 ? (
+            <div className="flex items-center justify-between text-[10px] text-[#847a99]">
+              <span>Chưa thiết lập thói quen cốt lõi.</span>
+              <button
+                type="button"
+                data-tauri-drag-region="false"
+                onMouseDown={stopDrag}
+                onClick={onOpenMainApp}
+                className="font-mono font-bold text-[#f0c46c] hover:underline"
+              >
+                Thiết lập →
+              </button>
+            </div>
+          ) : pendingHabits.length === 0 ? (
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#56c989]">
+              <PxCheck size={12} color="#56c989" />
+              <span>Đã hoàn thành toàn bộ thói quen hôm nay!</span>
+            </div>
+          ) : (
+            <div className="space-y-[3px]">
+              {pendingHabits.slice(0, 2).map((h) => (
+                <div key={h.id} className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 flex-1 truncate text-[10.5px] font-semibold text-[#f4ecdc]">
+                    {h.title}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {onCheckinHabit && (
+                      <>
+                        <button
+                          type="button"
+                          data-tauri-drag-region="false"
+                          onMouseDown={stopDrag}
+                          disabled={busyKey !== null}
+                          onClick={() =>
+                            void runAction(`hm-${h.id}`, () => onCheckinHabit(h.id, 'minimum'))
+                          }
+                          className="px-hud-btn px-hud-btn-slate px-[5px] py-[1px] font-mono text-[8.5px] font-bold text-[#f0c46c]"
+                          title={`Giữ chuỗi bản tối thiểu: ${h.minimumSpec}`}
+                        >
+                          2p
+                        </button>
+                        <button
+                          type="button"
+                          data-tauri-drag-region="false"
+                          onMouseDown={stopDrag}
+                          disabled={busyKey !== null}
+                          onClick={() =>
+                            void runAction(`hf-${h.id}`, () => onCheckinHabit(h.id, 'full'))
+                          }
+                          className="px-hud-btn px-hud-btn-green flex h-[18px] w-[20px] items-center justify-center"
+                          title={`Check-in bản chuẩn: ${h.standardSpec}`}
+                        >
+                          <PxCheck size={9} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* EXPANDED UNIFIED QUEST COMPOSER (114px) */
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!quickTitle.trim() || busyKey) return;
+            void runAction('add', async () => {
+              await onQuickAddQuest(quickTitle.trim(), quickDuration, {
+                type: quickType,
+                primaryStat: quickStat === 'AUTO' ? undefined : quickStat,
+                syncToTimetable: quickSyncCalendar,
+              });
+              setQuickTitle('');
+              switchHudMode('normal');
+            });
+          }}
+          className="px-hud-inset flex h-[114px] flex-col justify-between px-[8px] py-[6px]"
+        >
+          <div className="flex items-center justify-between gap-1 font-mono text-[9px]">
+            <span className="font-bold text-[#f0c46c]">THÊM NHIỆM VỤ ĐỒNG BỘ</span>
+            <button
+              type="button"
+              data-tauri-drag-region="false"
+              onMouseDown={stopDrag}
+              onClick={handleOpenMainWithDraft}
+              className="font-bold text-[#78b0ee] hover:underline"
+              title="Mở trình tạo nhiệm vụ chi tiết trên App chính"
+            >
+              Mở trình quản lý đầy đủ ↗
+            </button>
+          </div>
+
+          <div className="flex items-center gap-[4px]">
+            <input
+              ref={quickInputRef}
+              data-tauri-drag-region="false"
+              onMouseDown={stopDrag}
+              value={quickTitle}
+              onChange={(e) => setQuickTitle(e.target.value)}
+              placeholder="Nhập tên nhiệm vụ... (Enter)"
+              className="h-[28px] min-w-0 flex-1 px-2 text-[11px]"
+            />
+            <button
+              type="submit"
+              data-tauri-drag-region="false"
+              onMouseDown={stopDrag}
+              disabled={!quickTitle.trim() || busyKey !== null}
+              className="px-hud-btn px-hud-btn-green h-[28px] px-[9px] font-mono text-[10px] font-bold disabled:opacity-40"
+            >
+              + Thêm
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-[4px]">
+            {/* Duration Presets */}
+            <div className="flex items-center gap-[2px]">
+              {QUICK_DURATIONS.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  data-tauri-drag-region="false"
+                  onMouseDown={stopDrag}
+                  onClick={() => setQuickDuration(d)}
+                  className={`px-hud-btn h-[22px] px-[5px] font-mono text-[9px] font-bold ${
+                    quickDuration === d ? 'px-hud-btn-gold' : 'px-hud-btn-slate'
+                  }`}
+                >
+                  {d}p
+                </button>
+              ))}
+            </div>
+
+            {/* Quest Type Selector */}
+            <select
+              data-tauri-drag-region="false"
+              onMouseDown={stopDrag}
+              value={quickType}
+              onChange={(e) => setQuickType(e.target.value as QuestType)}
+              className="h-[22px] px-1 font-mono text-[9px] font-bold"
+              title="Loại nhiệm vụ"
+            >
+              <option value="daily">Daily</option>
+              <option value="main">Main ★</option>
+              <option value="side">Side</option>
+              <option value="recovery">Hồi phục</option>
+              <option value="emergency">Khẩn cấp</option>
+            </select>
+
+            {/* Primary Stat Selector */}
+            <select
+              data-tauri-drag-region="false"
+              onMouseDown={stopDrag}
+              value={quickStat}
+              onChange={(e) => setQuickStat(e.target.value as AttributeKey | 'AUTO')}
+              className="h-[22px] px-1 font-mono text-[9px] font-bold"
+              title="Chỉ số cộng thêm (Tự động nhận diện theo tên việc)"
+            >
+              <option value="AUTO">Chỉ số: Tự động</option>
+              <option value="INT">+INT (Tư duy)</option>
+              <option value="PER">+PER (Học sâu)</option>
+              <option value="AGI">+AGI (Kỷ luật)</option>
+              <option value="STR">+STR (Thể lực)</option>
+              <option value="VIT">+VIT (Hồi phục)</option>
+              <option value="CHA">+CHA (Giao tiếp)</option>
+            </select>
+
+            {/* Sync to Timetable Toggle */}
+            <button
+              type="button"
+              data-tauri-drag-region="false"
+              onMouseDown={stopDrag}
+              onClick={() => setQuickSyncCalendar((v) => !v)}
+              className={`px-hud-btn flex h-[22px] items-center gap-0.5 px-[5px] font-mono text-[8.5px] font-bold ${
+                quickSyncCalendar ? 'px-hud-btn-blue' : 'px-hud-btn-slate'
+              }`}
+              title="Tự động xếp vào khung giờ trống trên Thời Khóa Biểu hôm nay"
+            >
+              <PxCalendar size={8} />
+              <span>{quickSyncCalendar ? 'Gắn lịch' : 'Linh hoạt'}</span>
+            </button>
+          </div>
         </form>
       )}
     </div>
   );
 
-  const activePlaque = hudMode === 'mini' ? miniPlaque : fullPlaque;
-
-  // Inside Tauri transparent Always-on-Top window
   if (inTauri) {
     return (
-      <div className="flex h-screen w-full items-start justify-start overflow-hidden bg-transparent pl-[2px] pt-[2px]">
-        {activePlaque}
+      <div className="flex h-screen w-screen items-center justify-center bg-transparent">
+        {hudMode === 'mini' ? miniPlaque : fullPlaque}
       </div>
     );
   }
 
-  // Browser Preview Mode (!inTauri): Authentic 2D Pixel Preview Bar
-  const previewSurfaceStyle: React.CSSProperties =
-    previewBg === 'dark'
-      ? {
-          backgroundColor: '#12101a',
-          backgroundImage:
-            'linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)',
-          backgroundSize: '16px 16px',
-        }
-      : previewBg === 'light'
-        ? {
-            backgroundColor: '#e6dfd1',
-            backgroundImage:
-              'linear-gradient(to right, rgba(24,21,35,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(24,21,35,0.06) 1px, transparent 1px)',
-            backgroundSize: '16px 16px',
-          }
-        : {
-            backgroundColor: '#242031',
-            backgroundImage:
-              'linear-gradient(45deg, #322d44 25%, transparent 25%), linear-gradient(-45deg, #322d44 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #322d44 75%), linear-gradient(-45deg, transparent 75%, #322d44 75%)',
-            backgroundSize: '16px 16px',
-            backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
-          };
-
+  // Browser preview container
   return (
-    <div
-      style={previewSurfaceStyle}
-      className="flex h-screen w-full flex-col items-center justify-center gap-5 overflow-hidden p-4"
-    >
-      <div className="px-hud-frame relative flex flex-wrap items-center justify-center gap-2 px-3 py-2 text-[#f3ead8]">
-        <PixelCornerRivets />
-        <span className="font-pixel text-[8.5px] font-bold text-[#d4a24c]">
-          2D PIXEL HUD
-        </span>
-
-        <div className="flex items-center gap-1">
-          {(
-            [
-              { key: 'dark', label: 'Nền tối' },
-              { key: 'light', label: 'Nền sáng' },
-              { key: 'transparent', label: 'Trong suốt' },
-            ] as const
-          ).map((bg) => (
-            <button
-              key={bg.key}
-              type="button"
-              onClick={() => setPreviewBg(bg.key)}
-              className={`px-hud-btn px-2 py-1 font-mono text-[10px] font-bold ${
-                previewBg === bg.key ? 'px-hud-btn-gold' : 'px-hud-btn-slate'
-              }`}
-            >
-              {bg.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-1">
-          {(['mini', 'normal', 'expanded'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => {
-                setPreviewHidden(false);
-                switchHudMode(m);
-              }}
-              className={`px-hud-btn px-2 py-1 font-pixel text-[8px] font-bold uppercase ${
-                !previewHidden && hudMode === m ? 'px-hud-btn-green' : 'px-hud-btn-slate'
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setPreviewHidden((v) => !v)}
-            className={`px-hud-btn px-2 py-1 font-mono text-[10px] font-bold ${
-              previewHidden ? 'px-hud-btn-gold' : 'px-hud-btn-slate'
-            }`}
-          >
-            {previewHidden ? 'Hiện HUD' : 'Ẩn HUD'}
-          </button>
-        </div>
-
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#0f0d17] p-6">
+      {previewHidden ? (
         <button
           type="button"
-          onClick={onOpenMainApp}
-          className="px-hud-btn px-hud-btn-blue px-2 py-1 font-mono text-[10px] font-bold"
+          onClick={() => setPreviewHidden(false)}
+          className="btn-primary px-4 py-2 text-xs"
         >
-          ← Mở Dashboard
+          Hiện lại Mini HUD
         </button>
-      </div>
-
-      {previewHidden ? (
-        <div className="px-hud-frame relative flex items-center gap-3 px-4 py-3 text-[#d2c8e0]">
-          <PixelCornerRivets />
-          <span className="font-mono text-xs">
-            HUD đang ở trạng thái <strong>Ẩn</strong> (bấm{' '}
-            <strong className="text-[#f0c46c]">Ctrl+Shift+Space</strong> trong bản .exe hoặc nút bên cạnh để hiện lại).
-          </span>
-          <button
-            type="button"
-            onClick={() => setPreviewHidden(false)}
-            className="px-hud-btn px-hud-btn-green px-3 py-1 font-mono text-xs font-bold"
-          >
-            Hiện lại HUD
-          </button>
-        </div>
       ) : (
-        <div className="flex flex-col items-center">{activePlaque}</div>
+        <>
+          {hudMode === 'mini' ? miniPlaque : fullPlaque}
+          <div className="flex items-center gap-2 text-xs text-sub">
+            <button
+              type="button"
+              onClick={() => switchHudMode(hudMode === 'mini' ? 'normal' : 'mini')}
+              className="btn-secondary px-3 py-1 text-xs"
+            >
+              Chế độ: {hudMode === 'mini' ? 'Mini (284×68)' : 'Normal (396×178)'}
+            </button>
+            <button
+              type="button"
+              onClick={onOpenMainApp}
+              className="btn-secondary px-3 py-1 text-xs"
+            >
+              Về Ứng dụng chính
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
 };
-
-export default FloatingHudPage;

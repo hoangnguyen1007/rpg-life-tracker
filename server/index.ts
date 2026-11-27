@@ -41,6 +41,10 @@ import {
   shiftVnDateKey,
 } from './evening-closeout.ts';
 import {
+  computeEnrichedHabits,
+  computeLocalIntelligence,
+} from './local-intelligence.ts';
+import {
   installWindowsStartup,
   launchSystemTray,
   uninstallWindowsStartup,
@@ -92,8 +96,16 @@ import type {
   ChapterStageNode,
   ChatContextScope,
   CloseoutMood,
+  CoreHabit,
   DaySettlementReport,
   DeathReport,
+  DisciplineMode,
+  DisciplineSettings,
+  HabitCompletionKind,
+  HabitFrequency,
+  HabitTimeOfDay,
+  KnowledgeNote,
+  KnowledgeSource,
   PlayerProfile,
   PlayerState,
   Quest,
@@ -101,6 +113,7 @@ import type {
   QuestType,
   RaidChestId,
   RaidDifficultyTier,
+  RecallRating,
   RejectionReason,
   StoryChapter,
   SystemResetMode,
@@ -144,7 +157,14 @@ function awardSkillPoints(player: PlayerState, amount: number): void {
   player.totalSkillPointsEarned = (player.totalSkillPointsEarned || 0) + amount;
 }
 
-export function computeQuestMissDamage(quest: Quest, fatigueReductionPct: number): number {
+export function computeQuestMissDamage(
+  quest: Quest,
+  fatigueReductionPct: number,
+  disciplineModeOverride?: DisciplineMode
+): number {
+  const mode = disciplineModeOverride ?? db.getDisciplineSettings().mode;
+  if (mode === 'sustainable') return 0;
+
   let raw = 0;
   const r = quest.rank;
   const isHigh = r === 'A' || r === 'S';
@@ -173,8 +193,9 @@ export function computeQuestMissDamage(quest: Quest, fatigueReductionPct: number
   }
 
   if (raw <= 0) return 0;
+  const modeScale = mode === 'balanced' ? 0.5 : 1.0;
   const shield = Math.min(0.35, Math.max(0, fatigueReductionPct / 100));
-  return Math.max(2, Math.round(raw * (1 - shield)));
+  return Math.max(2, Math.round(raw * modeScale * (1 - shield)));
 }
 
 function triggerPlayerDeathAndCheckpointRollback(
@@ -305,7 +326,13 @@ function settlePendingQuestsInTx(
   const shadows = db.getShadows();
   const growthBonuses = computePlayerGrowthBonuses(player, skills, inventory, shadows);
 
-  const protectedByGraceDay = Boolean(player.plannedRestMode);
+  const disciplineSettings = db.getDisciplineSettings();
+  const protectedByGraceDay =
+    Boolean(player.plannedRestMode) || disciplineSettings.mode === 'sustainable';
+  const canUseStreakShield =
+    !protectedByGraceDay &&
+    disciplineSettings.mode === 'balanced' &&
+    disciplineSettings.streakShieldsUsedThisWeek < disciplineSettings.streakShieldsPerWeek;
   const mitigatedByShieldPct = Math.round(Math.min(35, growthBonuses.fatigueReductionPct));
 
   const missedQuests: DaySettlementReport['missedQuests'] = [];
@@ -316,7 +343,7 @@ function settlePendingQuestsInTx(
     db.saveQuest(q);
     const dmg = protectedByGraceDay
       ? 0
-      : computeQuestMissDamage(q, growthBonuses.fatigueReductionPct);
+      : computeQuestMissDamage(q, growthBonuses.fatigueReductionPct, disciplineSettings.mode);
     totalHpDamage += dmg;
     missedQuests.push({
       id: q.id,
@@ -325,6 +352,21 @@ function settlePendingQuestsInTx(
       rank: q.rank,
       hpDamage: dmg,
     });
+  }
+
+  let streakShieldActivated = false;
+  if (totalHpDamage > 0 && canUseStreakShield) {
+    streakShieldActivated = true;
+    totalHpDamage = 0;
+    for (const mq of missedQuests) mq.hpDamage = 0;
+    db.saveDisciplineSettings({
+      streakShieldsUsedThisWeek: disciplineSettings.streakShieldsUsedThisWeek + 1,
+    });
+    db.addAuditLog(
+      'STREAK_SHIELD_USED',
+      `Khiên Bảo Vệ Chuỗi (${disciplineSettings.streakShieldsUsedThisWeek + 1}/${disciplineSettings.streakShieldsPerWeek} tuần này) đã chặn toàn bộ sát thương HP!`,
+      { missedCount: missedQuests.length }
+    );
   }
 
   let died = false;
@@ -347,12 +389,18 @@ function settlePendingQuestsInTx(
 
   db.addAuditLog(
     'DAY_SETTLED',
-    `${auditSummaryPrefix}: ${missedQuests.length} nhiệm vụ bỏ lỡ (-${totalHpDamage} HP${protectedByGraceDay ? ' · Grace Day' : ''})`,
+    `${auditSummaryPrefix}: ${missedQuests.length} nhiệm vụ bỏ lỡ (-${totalHpDamage} HP${
+      protectedByGraceDay
+        ? ' · Grace/Bền bỉ'
+        : streakShieldActivated
+          ? ' · Khiên Bảo Vệ Chuỗi'
+          : ''
+    })`,
     {
       settledDateKeys,
       missedCount: missedQuests.length,
       totalHpDamage,
-      protectedByGraceDay,
+      protectedByGraceDay: protectedByGraceDay || streakShieldActivated,
       died,
     }
   );
@@ -362,7 +410,7 @@ function settlePendingQuestsInTx(
     missedQuests,
     totalHpDamage,
     mitigatedByShieldPct,
-    protectedByGraceDay,
+    protectedByGraceDay: protectedByGraceDay || streakShieldActivated,
     died,
     deathReport,
   };
@@ -616,6 +664,14 @@ function buildStatePayload(): SystemStatePayload {
   const chatThreads = db.getChatThreads();
   const activitySummary = desktopTracker.getDailySummary(getVnTodayKey());
   const unreadNudges = db.getAssistantNudges(30).filter((n) => !n.dismissed).length;
+  const todayKey = getVnTodayKey();
+  const disciplineSettings = db.getDisciplineSettings();
+  const habitLogs60 = db.getHabitLogsRange(shiftVnDateKey(todayKey, -59), todayKey);
+  const habits = computeEnrichedHabits(db.getHabits(false), habitLogs60, todayKey);
+  const start14Key = shiftVnDateKey(todayKey, -13);
+  const habitLogsRecent = habitLogs60.filter((l) => l.dateKey >= start14Key);
+  const knowledgeNotes = db.getKnowledgeNotes(120);
+  const localIntelligence = computeLocalIntelligence();
 
   return {
     player,
@@ -638,6 +694,11 @@ function buildStatePayload(): SystemStatePayload {
     lastDeliberation,
     growthBonuses,
     chatThreads,
+    disciplineSettings,
+    habits,
+    habitLogsRecent,
+    knowledgeNotes,
+    localIntelligence,
     assistantSummary: {
       trackerRunning: desktopTracker.isRunning(),
       focusScore: activitySummary.focusScore,
@@ -976,6 +1037,26 @@ app.post('/api/system/closeout', async (req, res) => {
           summary: `Chốt ngày ${todayKey} (${mood})`,
           insight: `Reflection Chốt Ngày: "${reflectionNote.slice(0, 140)}"`,
         });
+        if (reflectionNote.length >= 15) {
+          const nowIso = new Date().toISOString();
+          db.saveKnowledgeNote({
+            id: `kn-closeout-${todayKey}`,
+            title: `Bài học chốt ngày ${todayKey}`,
+            content: reflectionNote,
+            recallPrompt: `Bài học quan trọng nhất bạn rút ra vào ngày ${todayKey} là gì?`,
+            source: 'closeout',
+            sourceId: todayKey,
+            primaryStat: 'PER',
+            tags: ['closeout', mood, ...bottleneckTags.slice(0, 2)],
+            recallEnabled: false,
+            recallIntervalDays: 0,
+            recallEase: 2.5,
+            recallCount: 0,
+            nextReviewDate: null,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          });
+        }
       }
 
       return { settlement: settleOut, carriedOverQuests: clonedList };
@@ -1261,6 +1342,46 @@ app.post('/api/goals/analyze', async (req, res) => {
   }
 });
 
+app.put('/api/goals/:id', (req, res) => {
+  const existing = db.getGoals().find((g) => g.id === req.params.id);
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy mục tiêu.' });
+    return;
+  }
+  const body = (req.body || {}) as Partial<import('./types.ts').Goal>;
+  const updated: import('./types.ts').Goal = {
+    ...existing,
+    title: typeof body.title === 'string' && body.title.trim() ? body.title.trim() : existing.title,
+    category: body.category || existing.category,
+    horizon: body.horizon === 'short_term' || body.horizon === 'long_term' ? body.horizon : existing.horizon,
+    priority:
+      body.priority === 'CRITICAL' || body.priority === 'HIGH' || body.priority === 'MEDIUM'
+        ? body.priority
+        : existing.priority,
+    deadline: typeof body.deadline === 'string' && body.deadline.trim() ? body.deadline.trim() : existing.deadline,
+    targetMetric:
+      typeof body.targetMetric === 'string' ? body.targetMetric.trim() || existing.targetMetric : existing.targetMetric,
+    recommendedMethod:
+      typeof body.recommendedMethod === 'string' && body.recommendedMethod.trim()
+        ? body.recommendedMethod.trim()
+        : existing.recommendedMethod,
+    subMilestones: Array.isArray(body.subMilestones)
+      ? body.subMilestones.map((m) => String(m).trim()).filter(Boolean)
+      : existing.subMilestones,
+    woopObstacle:
+      body.woopObstacle !== undefined ? (body.woopObstacle ? String(body.woopObstacle).trim() : undefined) : existing.woopObstacle,
+    ifThenPlan:
+      body.ifThenPlan !== undefined ? (body.ifThenPlan ? String(body.ifThenPlan).trim() : undefined) : existing.ifThenPlan,
+    progress:
+      typeof body.progress === 'number'
+        ? Math.max(0, Math.min(100, Math.round(body.progress)))
+        : existing.progress,
+  };
+  db.saveGoal(updated);
+  db.checkpointWal();
+  res.json(buildStatePayload());
+});
+
 app.delete('/api/goals/:id', (req, res) => {
   const goalId = req.params.id;
   db.runTransaction(() => {
@@ -1362,7 +1483,20 @@ app.put('/api/timetable/blocks/:id', (req, res) => {
     ...updates,
     id: existing.id,
   };
-  db.saveTimetableBlock(updated);
+  db.runTransaction(() => {
+    db.saveTimetableBlock(updated);
+    for (const q of db.getQuests()) {
+      if (q.linkedBlockId === existing.id && q.status === 'pending') {
+        q.title = updated.title;
+        q.scheduledSlot = `${updated.startTime} - ${updated.endTime}`;
+        const dur = timeToMinutes(updated.endTime) - timeToMinutes(updated.startTime);
+        if (dur >= 10 && dur <= 360) {
+          q.durationMinutes = dur;
+        }
+        db.saveQuest(q);
+      }
+    }
+  });
   db.checkpointWal();
   res.json(buildStatePayload());
 });
@@ -1894,6 +2028,43 @@ app.post('/api/quests/:id/pause', (req, res) => {
   res.json(buildStatePayload());
 });
 
+function inferPrimaryStatForTask(
+  title: string,
+  description?: string,
+  qType?: QuestType,
+  linkedGoal?: import('./types.ts').Goal,
+  linkedSkill?: import('./types.ts').SkillNode
+): AttributeKey {
+  if (linkedSkill?.primaryStat) return linkedSkill.primaryStat;
+  if (qType === 'recovery') return 'VIT';
+  const text = `${title} ${description || ''}`.toLowerCase();
+  if (/(gym|tập|chạy|thể lực|workout|chống đẩy|bơi|cầu lông|bóng|cardio|squat|plank|thể dục)/.test(text)) {
+    return 'STR';
+  }
+  if (/(ngủ|nghỉ|nsdr|thiền|hồi phục|giãn cơ|thư giãn|uống nước|walk|đi bộ)/.test(text)) {
+    return 'VIT';
+  }
+  if (/(ngoại ngữ|tiếng anh|ielts|toeic|đọc|sách|từ vựng|nghiên cứu|tài liệu|paper|flashcard|ôn tập|recall)/.test(text)) {
+    return 'PER';
+  }
+  if (/(giao tiếp|họp|thuyết trình|nhóm|mentor|networking|email|báo cáo|phỏng vấn|client|pitch)/.test(text)) {
+    return 'CHA';
+  }
+  if (/(code|dự án|lập trình|toán|phân tích| thuật toán|kiến trúc|thiết kế|system|bug|feature|api|app|deep work|đồ án)/.test(text)) {
+    return 'INT';
+  }
+  if (/(lịch|kế hoạch|dọn|sắp xếp|review|chốt ngày|kỷ luật|thói quen|focus|sprint|checklist)/.test(text)) {
+    return 'AGI';
+  }
+  if (linkedGoal) {
+    if (linkedGoal.category === 'Health & Vitality') return 'STR';
+    if (linkedGoal.category === 'Language & IELTS' || linkedGoal.category === 'Research & Academic') return 'PER';
+    if (linkedGoal.category === 'Career & Internship') return 'CHA';
+    if (linkedGoal.category === 'Personal Mastery') return 'AGI';
+  }
+  return 'INT';
+}
+
 // Create Custom Manual Quest
 app.post('/api/quests/custom', (req, res) => {
   const body = req.body as {
@@ -1908,8 +2079,13 @@ app.post('/api/quests/custom', (req, res) => {
     secondaryStat?: AttributeKey;
     statRewards?: Partial<Record<AttributeKey, number>>;
     skillId?: string;
+    goalId?: string;
     requiresProof?: boolean;
+    ifThenTrigger?: string;
+    scientificProtocol?: string;
+    subtasks?: Array<{ id?: string; label: string; done?: boolean } | string>;
     syncToTimetable?: boolean;
+    dateKey?: string;
   };
   if (!body.title || !body.title.trim()) {
     res.status(400).json({ error: 'Tên nhiệm vụ không được trống.' });
@@ -1917,14 +2093,22 @@ app.post('/api/quests/custom', (req, res) => {
   }
 
   const title = body.title.trim();
-  const dur = Math.max(10, Math.min(240, Number(body.durationMinutes) || 30));
-  const statKey = body.primaryStat || 'INT';
+  const dur = Math.max(5, Math.min(240, Number(body.durationMinutes) || 25));
   const qType: QuestType = body.type || 'daily';
+  const goals = db.getGoals();
+  const skills = db.getSkills();
+  const linkedGoal = body.goalId ? goals.find((g) => g.id === body.goalId) : undefined;
+  const explicitSkill = body.skillId ? skills.find((s) => s.id === body.skillId) : undefined;
+  const validStats: AttributeKey[] = ['INT', 'PER', 'STR', 'VIT', 'AGI', 'CHA'];
+  const statKey: AttributeKey =
+    body.primaryStat && validStats.includes(body.primaryStat)
+      ? body.primaryStat
+      : inferPrimaryStatForTask(title, body.description, qType, linkedGoal, explicitSkill);
   const qRank: QuestRank = body.rank || (dur >= 60 ? 'B' : dur >= 35 ? 'C' : 'D');
   const requiresProof = Boolean(body.requiresProof);
-  const skills = db.getSkills();
   const resolvedSkillId =
-    body.skillId || inferSkillIdForTask(title, body.description, statKey, skills);
+    (explicitSkill ? explicitSkill.id : undefined) ||
+    inferSkillIdForTask(title, body.description, statKey, skills);
 
   const balanced = computeBalancedQuestRewards({
     durationMinutes: dur,
@@ -1935,6 +2119,12 @@ app.post('/api/quests/custom', (req, res) => {
     secondaryStat: body.secondaryStat,
   });
 
+  const targetDateKey =
+    typeof body.dateKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.dateKey)
+      ? body.dateKey
+      : getVnTodayKey();
+  const targetDow = getVnDayOfWeekFromDateKey(targetDateKey);
+
   let scheduledSlot = body.scheduledSlot?.trim() || 'Flexible Slot';
   let linkedBlockId: string | undefined;
 
@@ -1942,12 +2132,11 @@ app.post('/api/quests/custom', (req, res) => {
     const match = scheduledSlot.match(/(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/);
     let startTime = match?.[1];
     let endTime = match?.[2];
-    const todayDow = getVnDayOfWeek();
 
     if (!startTime || !endTime) {
       const player = db.getPlayer();
-      const dayAnalysis = analyzeDaySchedule(db.getTimetableBlocks(), todayDow, player.energyLevel);
-      const nowMin = getVnNowMinutes();
+      const dayAnalysis = analyzeDaySchedule(db.getTimetableBlocks(), targetDow, player.energyLevel);
+      const nowMin = targetDateKey === getVnTodayKey() ? getVnNowMinutes() : 7 * 60;
       const futureWin = dayAnalysis.freeWindows
         .map((w) => ({
           startTime: minutesToTime(Math.max(nowMin, timeToMinutes(w.startTime))),
@@ -1969,24 +2158,50 @@ app.post('/api/quests/custom', (req, res) => {
     }
 
     if (startTime && endTime) {
+      const normTime = (t: string) => {
+        const [hh, mm] = t.split(':').map(Number);
+        return `${String(hh || 0).padStart(2, '0')}:${String(mm || 0).padStart(2, '0')}`;
+      };
+      startTime = normTime(startTime);
+      endTime = normTime(endTime);
+      scheduledSlot = `${startTime} - ${endTime}`;
       linkedBlockId = uid('tt-task');
       db.saveTimetableBlock({
         id: linkedBlockId,
-        dayOfWeek: todayDow,
+        dayOfWeek: targetDow,
         startTime,
         endTime,
         title,
         type: qType === 'recovery' ? 'rest_buffer' : 'fixed_habit',
         energyCost: dur >= 50 ? 'HIGH' : 'MEDIUM',
         isRecurring: false,
-        notes: 'Đồng bộ từ Quick-Add Task',
+        notes: 'Đồng bộ từ Nhiệm vụ',
       });
     }
   }
 
+  const parsedSubtasks = Array.isArray(body.subtasks)
+    ? body.subtasks
+        .map((item, idx) => {
+          if (typeof item === 'string') {
+            const lbl = item.trim();
+            return lbl ? { id: uid(`sub-${idx}`), label: lbl, done: false } : null;
+          }
+          if (item && typeof item === 'object' && typeof item.label === 'string' && item.label.trim()) {
+            return {
+              id: item.id || uid(`sub-${idx}`),
+              label: item.label.trim(),
+              done: Boolean(item.done),
+            };
+          }
+          return null;
+        })
+        .filter((x): x is { id: string; label: string; done: boolean } => x !== null)
+    : [];
+
   const quest: Quest = {
     id: uid('q-custom'),
-    dateKey: getVnTodayKey(),
+    dateKey: targetDateKey,
     type: qType,
     rank: qRank,
     title,
@@ -1994,6 +2209,7 @@ app.post('/api/quests/custom', (req, res) => {
     learningMethod: body.learningMethod?.trim() || 'Self-Directed Execution',
     reasoning: 'Được tạo trực tiếp bởi Player (hoặc từ phân tích AI Draft).',
     agentSource: 'ARCHITECT',
+    goalId: linkedGoal?.id,
     skillId: resolvedSkillId,
     linkedBlockId,
     scheduledSlot,
@@ -2001,10 +2217,15 @@ app.post('/api/quests/custom', (req, res) => {
     xpReward: balanced.xpReward,
     masteryReward: balanced.masteryReward,
     goldReward: balanced.goldReward,
-    statRewards: body.statRewards && Object.keys(body.statRewards).length > 0 ? body.statRewards : balanced.statRewards,
-    subtasks: [],
+    statRewards:
+      body.statRewards && Object.keys(body.statRewards).length > 0
+        ? body.statRewards
+        : balanced.statRewards,
+    subtasks: parsedSubtasks,
     status: 'pending',
     requiresProof,
+    ifThenTrigger: body.ifThenTrigger?.trim() || undefined,
+    scientificProtocol: body.scientificProtocol?.trim() || undefined,
     createdAt: new Date().toISOString(),
   };
   db.saveQuest(quest);
@@ -2037,25 +2258,210 @@ app.post('/api/quests/:id/subtask', (req, res) => {
     st.id === subtaskId ? { ...st, done: !st.done } : st
   );
   db.saveQuest(quest);
+  db.checkpointWal();
   res.json(buildStatePayload());
 });
 
-// Edit Quest Details
+// Reopen Completed / Skipped Quest back to Pending
+app.post('/api/quests/:id/reopen', (req, res) => {
+  const quest = db.getQuestById(req.params.id);
+  if (!quest) {
+    res.status(404).json({ error: 'Quest not found' });
+    return;
+  }
+  quest.status = 'pending';
+  quest.completedAt = undefined;
+  quest.startedAt = undefined;
+  quest.isPaused = false;
+  db.saveQuest(quest);
+  db.checkpointWal();
+  res.json(buildStatePayload());
+});
+
+// Edit Quest Details & Bi-Directional Timetable / Goal / Skill Sync
 app.put('/api/quests/:id', (req, res) => {
   const quest = db.getQuestById(req.params.id);
   if (!quest) {
     res.status(404).json({ error: 'Quest not found' });
     return;
   }
-  const updates = req.body as Partial<typeof quest>;
-  const updated = {
-    ...quest,
-    title: updates.title ?? quest.title,
-    description: updates.description ?? quest.description,
-    scheduledSlot: updates.scheduledSlot ?? quest.scheduledSlot,
-    durationMinutes: updates.durationMinutes ?? quest.durationMinutes,
+  const updates = req.body as Partial<typeof quest> & {
+    primaryStat?: AttributeKey;
+    secondaryStat?: AttributeKey;
+    syncToTimetable?: boolean;
   };
-  db.saveQuest(updated);
+
+  db.runTransaction(() => {
+    const nextTitle =
+      typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : quest.title;
+    const nextDesc =
+      typeof updates.description === 'string' ? updates.description.trim() : quest.description;
+    const nextType: QuestType = updates.type || quest.type;
+    const nextDur =
+      typeof updates.durationMinutes === 'number'
+        ? Math.max(5, Math.min(240, Math.round(updates.durationMinutes)))
+        : quest.durationMinutes;
+    const nextRank: QuestRank =
+      updates.rank ||
+      (updates.durationMinutes !== undefined
+        ? nextDur >= 60
+          ? 'B'
+          : nextDur >= 35
+            ? 'C'
+            : 'D'
+        : quest.rank);
+    const nextRequiresProof =
+      typeof updates.requiresProof === 'boolean' ? updates.requiresProof : quest.requiresProof;
+
+    const currentPrimaryStat =
+      (Object.keys(quest.statRewards || {})[0] as AttributeKey) || 'INT';
+    const nextPrimaryStat: AttributeKey = updates.primaryStat || currentPrimaryStat;
+    const skills = db.getSkills();
+    const nextSkillId =
+      updates.skillId !== undefined
+        ? updates.skillId || undefined
+        : updates.primaryStat || updates.title
+          ? inferSkillIdForTask(nextTitle, nextDesc, nextPrimaryStat, skills) || quest.skillId
+          : quest.skillId;
+    const nextGoalId =
+      updates.goalId !== undefined ? updates.goalId || undefined : quest.goalId;
+
+    const shouldRecomputeRewards =
+      updates.durationMinutes !== undefined ||
+      updates.type !== undefined ||
+      updates.rank !== undefined ||
+      updates.primaryStat !== undefined ||
+      updates.requiresProof !== undefined;
+
+    const balanced = shouldRecomputeRewards
+      ? computeBalancedQuestRewards({
+          durationMinutes: nextDur,
+          rank: nextRank,
+          type: nextType,
+          requiresProof: nextRequiresProof,
+          primaryStat: nextPrimaryStat,
+          secondaryStat: updates.secondaryStat,
+        })
+      : null;
+
+    let nextSlot =
+      typeof updates.scheduledSlot === 'string' && updates.scheduledSlot.trim()
+        ? updates.scheduledSlot.trim()
+        : quest.scheduledSlot;
+    let nextLinkedBlockId = quest.linkedBlockId;
+    const targetDow = getVnDayOfWeekFromDateKey(quest.dateKey || getVnTodayKey());
+
+    if (updates.syncToTimetable === false && nextLinkedBlockId) {
+      db.deleteTimetableBlock(nextLinkedBlockId);
+      nextLinkedBlockId = undefined;
+    } else if (updates.syncToTimetable === true || nextLinkedBlockId) {
+      const slotMatch = nextSlot.match(/(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/);
+      let startTime = slotMatch?.[1];
+      let endTime = slotMatch?.[2];
+
+      if (!startTime || !endTime) {
+        if (updates.syncToTimetable === true) {
+          const player = db.getPlayer();
+          const dayAnalysis = analyzeDaySchedule(
+            db.getTimetableBlocks(),
+            targetDow,
+            player.energyLevel
+          );
+          const nowMin = getVnNowMinutes();
+          const futureWin = dayAnalysis.freeWindows
+            .map((w) => ({
+              startTime: minutesToTime(Math.max(nowMin, timeToMinutes(w.startTime))),
+              endTime: w.endTime,
+              durationMinutes:
+                timeToMinutes(w.endTime) - Math.max(nowMin, timeToMinutes(w.startTime)),
+              windowQuality: w.windowQuality,
+            }))
+            .filter((w) => w.durationMinutes >= 15);
+          const allocated = new SlotAllocator(
+            futureWin.length > 0 ? futureWin : dayAnalysis.freeWindows
+          ).allocate(nextDur, nextDur >= 45);
+          const allocMatch = allocated.match(/(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/);
+          if (allocMatch) {
+            startTime = allocMatch[1];
+            endTime = allocMatch[2];
+          }
+        }
+      }
+
+      if (startTime && endTime) {
+        const normTime = (t: string) => {
+          const [hh, mm] = t.split(':').map(Number);
+          return `${String(hh || 0).padStart(2, '0')}:${String(mm || 0).padStart(2, '0')}`;
+        };
+        startTime = normTime(startTime);
+        endTime = normTime(endTime);
+        nextSlot = `${startTime} - ${endTime}`;
+        const blkId = nextLinkedBlockId || uid('tt-task');
+        nextLinkedBlockId = blkId;
+        db.saveTimetableBlock({
+          id: blkId,
+          dayOfWeek: targetDow,
+          startTime,
+          endTime,
+          title: nextTitle,
+          type: nextType === 'recovery' ? 'rest_buffer' : 'fixed_habit',
+          energyCost: nextDur >= 50 ? 'HIGH' : 'MEDIUM',
+          isRecurring: false,
+          notes: 'Đồng bộ từ Nhiệm vụ',
+        });
+      } else if (nextLinkedBlockId && !slotMatch) {
+        // User changed slot to 'Flexible' -> remove fixed block
+        db.deleteTimetableBlock(nextLinkedBlockId);
+        nextLinkedBlockId = undefined;
+      }
+    }
+
+    const nextSubtasks = Array.isArray(updates.subtasks)
+      ? updates.subtasks
+          .map((st, idx) => ({
+            id: st.id || uid(`sub-${idx}`),
+            label: String(st.label || '').trim(),
+            done: Boolean(st.done),
+          }))
+          .filter((st) => Boolean(st.label))
+      : quest.subtasks;
+
+    const updated: Quest = {
+      ...quest,
+      title: nextTitle,
+      description: nextDesc,
+      type: nextType,
+      rank: nextRank,
+      durationMinutes: nextDur,
+      scheduledSlot: nextSlot,
+      linkedBlockId: nextLinkedBlockId,
+      goalId: nextGoalId,
+      skillId: nextSkillId,
+      requiresProof: nextRequiresProof,
+      ifThenTrigger:
+        updates.ifThenTrigger !== undefined
+          ? updates.ifThenTrigger?.trim() || undefined
+          : quest.ifThenTrigger,
+      proofNote:
+        updates.proofNote !== undefined
+          ? updates.proofNote?.trim() || undefined
+          : quest.proofNote,
+      status: updates.status || quest.status,
+      subtasks: nextSubtasks,
+      xpReward: balanced ? balanced.xpReward : quest.xpReward,
+      goldReward: balanced ? balanced.goldReward : quest.goldReward,
+      masteryReward: balanced ? balanced.masteryReward : quest.masteryReward,
+      statRewards:
+        updates.statRewards && Object.keys(updates.statRewards).length > 0
+          ? updates.statRewards
+          : balanced
+            ? balanced.statRewards
+            : quest.statRewards,
+    };
+    db.saveQuest(updated);
+  });
+
+  db.checkpointWal();
   res.json(buildStatePayload());
 });
 
@@ -2304,6 +2710,30 @@ app.post('/api/quests/:id/complete', (req, res) => {
         : `Hoàn thành nhiệm vụ ${effectiveMinutes}m (${quest.scheduledSlot})${contributedSkillName ? ` · +${skillPracticeXpGain} Skill XP (${contributedSkillName})` : ''}.`,
     });
 
+    if (proofNote && proofNote.trim().length >= 8) {
+      const nowIso = new Date().toISOString();
+      const autoEnableRecall = primaryStatForSkill === 'INT' || primaryStatForSkill === 'PER';
+      db.saveKnowledgeNote({
+        id: `kn-q-${quest.id}`,
+        title: quest.title,
+        content: proofNote.trim(),
+        recallPrompt: `Bạn đã rút ra / hoàn thành điều gì cốt lõi từ "${quest.title}"?`,
+        source: 'quest_proof',
+        sourceId: quest.id,
+        goalId: quest.goalId,
+        skillId: targetSkillId || quest.skillId,
+        primaryStat: primaryStatForSkill,
+        tags: [quest.type, primaryStatForSkill],
+        recallEnabled: autoEnableRecall,
+        recallIntervalDays: autoEnableRecall ? 1 : 0,
+        recallEase: 2.5,
+        recallCount: 0,
+        nextReviewDate: autoEnableRecall ? shiftVnDateKey(todayKey, 1) : null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+    }
+
     db.addAuditLog(
       'QUEST_COMPLETED',
       `Hoàn thành Quest "${quest.title}" (+${xpGain} XP, +${spGain} SP, +${goldGain}G)`,
@@ -2546,6 +2976,28 @@ app.post('/api/bosses/:bossId/stages/:stageId/verify', (req, res) => {
       damage: stage.hpDamage,
       bossDefeated: boss.currentHp === 0,
     });
+
+    if (proofText.trim().length >= 8) {
+      const nowIso = new Date().toISOString();
+      db.saveKnowledgeNote({
+        id: `kn-b-${boss.id}-${stage.id}`,
+        title: `${boss.title} · ${stage.title}`,
+        content: proofText.trim(),
+        recallPrompt: `Cột mốc "${stage.title}" (${boss.title}) đã được vượt qua bằng bằng chứng nào?`,
+        source: 'boss_proof',
+        sourceId: `${boss.id}:${stage.id}`,
+        goalId: boss.goalId,
+        primaryStat: 'INT',
+        tags: ['boss-proof', boss.rank],
+        recallEnabled: false,
+        recallIntervalDays: 0,
+        recallEase: 2.5,
+        recallCount: 0,
+        nextReviewDate: null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+    }
 
     if (boss.currentHp === 0 && !boss.defeated) {
       bossDefeatedNow = true;
@@ -3922,7 +4374,7 @@ app.post('/api/raid/regenerate-ai', async (_req, res) => {
 });
 
 // ==================== NATIVE MINI HUD CONTROL BRIDGE (WEB <-> TAURI .EXE <-> TRAY) ====================
-type HudBridgeAction = 'show' | 'hide' | 'toggle' | 'dock';
+type HudBridgeAction = 'show' | 'hide' | 'toggle' | 'dock' | 'open_dashboard';
 let hudNativeVisible = false;
 let lastHudBridgeAt = 0;
 let pendingHudAction: HudBridgeAction | null = null;
@@ -4028,7 +4480,12 @@ app.post('/api/hud/control', (req, res) => {
   if (!requireLocalhost(req, res)) return;
   const { action } = (req.body || {}) as { action?: HudBridgeAction };
   const safeAction: HudBridgeAction =
-    action === 'show' || action === 'hide' || action === 'dock' ? action : 'toggle';
+    action === 'show' ||
+    action === 'hide' ||
+    action === 'dock' ||
+    action === 'open_dashboard'
+      ? action
+      : 'toggle';
 
   const nativeRunning = isNativeHudBridgeAlive();
   if (!nativeRunning) {
@@ -4040,7 +4497,12 @@ app.post('/api/hud/control', (req, res) => {
     const launched = launchNativeHudExeDetached();
     if (launched) {
       hudNativeVisible = true;
-      pendingHudAction = safeAction === 'dock' ? 'dock' : 'show';
+      pendingHudAction =
+        safeAction === 'dock'
+          ? 'dock'
+          : safeAction === 'open_dashboard'
+            ? 'open_dashboard'
+            : 'show';
       res.json({ ok: true, nativeRunning: true, visible: true, launched: true });
       return;
     }
@@ -4053,10 +4515,471 @@ app.post('/api/hud/control', (req, res) => {
       ? true
       : safeAction === 'hide'
         ? false
-        : !hudNativeVisible;
+        : safeAction === 'open_dashboard'
+          ? hudNativeVisible
+          : !hudNativeVisible;
   hudNativeVisible = nextVisible;
   flushHudActionToWaiters(safeAction);
   res.json({ ok: true, nativeRunning: true, visible: nextVisible, launched: false });
+});
+
+// ==================== CORE HABITS, DISCIPLINE SETTINGS, KNOWLEDGE VAULT & LOCAL INTELLIGENCE ====================
+
+app.get('/api/habits', (_req, res) => {
+  const todayKey = getTodayKey();
+  const logs60 = db.getHabitLogsRange(shiftVnDateKey(todayKey, -59), todayKey);
+  const habits = computeEnrichedHabits(db.getHabits(false), logs60, todayKey);
+  res.json({ habits });
+});
+
+app.post('/api/habits', (req, res) => {
+  const body = (req.body || {}) as {
+    title?: string;
+    timeOfDay?: HabitTimeOfDay;
+    frequency?: HabitFrequency;
+    customDays?: number[];
+    targetPerWeek?: number;
+    standardSpec?: string;
+    minimumSpec?: string;
+    durationMinutes?: number;
+    primaryStat?: AttributeKey;
+    goalId?: string;
+    skillId?: string;
+  };
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  if (!title) {
+    res.status(400).json({ error: 'Vui lòng nhập tên thói quen.' });
+    return;
+  }
+  const timeOfDay: HabitTimeOfDay =
+    body.timeOfDay === 'morning' || body.timeOfDay === 'evening' ? body.timeOfDay : 'anytime';
+  const frequency: HabitFrequency =
+    body.frequency === 'weekdays' ||
+    body.frequency === 'weekends' ||
+    body.frequency === 'custom_days' ||
+    body.frequency === 'times_per_week'
+      ? body.frequency
+      : 'daily';
+  const validStats: AttributeKey[] = ['INT', 'PER', 'STR', 'VIT', 'AGI', 'CHA'];
+  const primaryStat: AttributeKey =
+    body.primaryStat && validStats.includes(body.primaryStat) ? body.primaryStat : 'AGI';
+
+  const habit: CoreHabit = {
+    id: uid('hab'),
+    title,
+    timeOfDay,
+    frequency,
+    customDays: Array.isArray(body.customDays)
+      ? body.customDays.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+      : undefined,
+    targetPerWeek:
+      frequency === 'times_per_week'
+        ? Math.max(1, Math.min(7, Math.round(Number(body.targetPerWeek) || 3)))
+        : undefined,
+    standardSpec: (body.standardSpec || '').trim() || `${Math.max(5, Number(body.durationMinutes) || 20)} phút tập trung`,
+    minimumSpec: (body.minimumSpec || '').trim() || '2 phút khởi động tối thiểu',
+    durationMinutes: Math.max(2, Math.min(180, Math.round(Number(body.durationMinutes) || 20))),
+    primaryStat,
+    goalId: body.goalId || undefined,
+    skillId: body.skillId || undefined,
+    archived: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  db.saveHabit(habit);
+  db.checkpointWal();
+  res.json({ habit, state: buildStatePayload() });
+});
+
+app.post('/api/habits/seed-starters', (_req, res) => {
+  const existing = db.getHabits(false);
+  if (existing.length > 0) {
+    res.json({ addedCount: 0, state: buildStatePayload() });
+    return;
+  }
+  const nowIso = new Date().toISOString();
+  const starters: CoreHabit[] = [
+    {
+      id: uid('hab'),
+      title: 'Khởi động ngày không chạm mạng xã hội',
+      timeOfDay: 'morning',
+      frequency: 'daily',
+      standardSpec: '30 phút đầu sáng chỉ uống nước & chốt 1 việc trọng tâm',
+      minimumSpec: '5 phút uống nước & mở danh sách Hôm Nay trước khi cầm điện thoại',
+      durationMinutes: 15,
+      primaryStat: 'AGI',
+      createdAt: nowIso,
+    },
+    {
+      id: uid('hab'),
+      title: '1 phiên Deep Work không thông báo',
+      timeOfDay: 'anytime',
+      frequency: 'weekdays',
+      standardSpec: '45 phút tập trung trọn vẹn cho mục tiêu quan trọng nhất',
+      minimumSpec: '10 phút làm bước nhỏ nhất của việc trọng tâm',
+      durationMinutes: 45,
+      primaryStat: 'INT',
+      createdAt: nowIso,
+    },
+    {
+      id: uid('hab'),
+      title: 'Vận động thể chất giữ sức bền',
+      timeOfDay: 'anytime',
+      frequency: 'times_per_week',
+      targetPerWeek: 4,
+      standardSpec: '30 phút tập thể dục / chạy bộ / gym',
+      minimumSpec: '5 phút giãn cơ hoặc chống đẩy tại chỗ',
+      durationMinutes: 30,
+      primaryStat: 'STR',
+      createdAt: nowIso,
+    },
+    {
+      id: uid('hab'),
+      title: 'Ngắt màn hình & Chốt ngày trước ngủ',
+      timeOfDay: 'evening',
+      frequency: 'daily',
+      standardSpec: 'Chốt ngày, viết 1 dòng bài học & tắt màn hình trước 23:00',
+      minimumSpec: 'Bấm Chốt ngày nhanh trong 60 giây',
+      durationMinutes: 10,
+      primaryStat: 'VIT',
+      createdAt: nowIso,
+    },
+  ];
+  for (const h of starters) db.saveHabit(h);
+  db.checkpointWal();
+  res.json({ addedCount: starters.length, state: buildStatePayload() });
+});
+
+app.put('/api/habits/:id', (req, res) => {
+  const existing = db.getHabitById(req.params.id);
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy thói quen.' });
+    return;
+  }
+  const body = (req.body || {}) as Partial<CoreHabit>;
+  const updated: CoreHabit = {
+    ...existing,
+    title: typeof body.title === 'string' && body.title.trim() ? body.title.trim() : existing.title,
+    timeOfDay:
+      body.timeOfDay === 'morning' || body.timeOfDay === 'anytime' || body.timeOfDay === 'evening'
+        ? body.timeOfDay
+        : existing.timeOfDay,
+    frequency: body.frequency || existing.frequency,
+    customDays: Array.isArray(body.customDays) ? body.customDays : existing.customDays,
+    targetPerWeek:
+      typeof body.targetPerWeek === 'number'
+        ? Math.max(1, Math.min(7, Math.round(body.targetPerWeek)))
+        : existing.targetPerWeek,
+    standardSpec:
+      typeof body.standardSpec === 'string' && body.standardSpec.trim()
+        ? body.standardSpec.trim()
+        : existing.standardSpec,
+    minimumSpec:
+      typeof body.minimumSpec === 'string' && body.minimumSpec.trim()
+        ? body.minimumSpec.trim()
+        : existing.minimumSpec,
+    durationMinutes:
+      typeof body.durationMinutes === 'number'
+        ? Math.max(2, Math.min(180, Math.round(body.durationMinutes)))
+        : existing.durationMinutes,
+    primaryStat: body.primaryStat || existing.primaryStat,
+    goalId: body.goalId !== undefined ? body.goalId || undefined : existing.goalId,
+    skillId: body.skillId !== undefined ? body.skillId || undefined : existing.skillId,
+    archived: typeof body.archived === 'boolean' ? body.archived : existing.archived,
+  };
+  db.saveHabit(updated);
+  db.checkpointWal();
+  res.json({ habit: updated, state: buildStatePayload() });
+});
+
+app.delete('/api/habits/:id', (req, res) => {
+  db.deleteHabit(req.params.id);
+  db.checkpointWal();
+  res.json(buildStatePayload());
+});
+
+app.post('/api/habits/:id/checkin', (req, res) => {
+  const habit = db.getHabitById(req.params.id);
+  if (!habit) {
+    res.status(404).json({ error: 'Không tìm thấy thói quen.' });
+    return;
+  }
+  const body = (req.body || {}) as {
+    kind?: HabitCompletionKind | 'undo';
+    dateKey?: string;
+    note?: string;
+  };
+  const dateKey =
+    typeof body.dateKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.dateKey)
+      ? body.dateKey
+      : getTodayKey();
+
+  if (body.kind === 'undo') {
+    db.deleteHabitLog(habit.id, dateKey);
+    db.checkpointWal();
+    res.json({ xpGain: 0, goldGain: 0, undone: true, state: buildStatePayload() });
+    return;
+  }
+
+  const kind: HabitCompletionKind = body.kind === 'minimum' ? 'minimum' : 'full';
+  const prevLog = db.getHabitLogForDate(habit.id, dateKey);
+
+  const outcome = db.runTransaction(() => {
+    db.upsertHabitLog({
+      id: prevLog?.id || uid('hlog'),
+      habitId: habit.id,
+      dateKey,
+      kind,
+      note: typeof body.note === 'string' ? body.note.trim() || undefined : undefined,
+      completedAt: new Date().toISOString(),
+    });
+
+    // Only grant rewards on first check-in for this habit today (prevents double-farming!)
+    let xpGain = 0;
+    let goldGain = 0;
+    let leveledUp = false;
+
+    if (!prevLog) {
+      const player = db.getPlayer();
+      xpGain = kind === 'full' ? 28 : 14;
+      goldGain = kind === 'full' ? 18 : 10;
+      player.currentXp += xpGain;
+      player.gold += goldGain;
+      if (kind === 'full') {
+        player.stats[habit.primaryStat] = (player.stats[habit.primaryStat] || 10) + 1;
+        player.hp = Math.min(player.maxHp, (player.hp ?? player.maxHp) + 3);
+      }
+      if (player.streakDays === 0 || player.lastCheckinDate !== dateKey) {
+        player.streakDays += 1;
+        player.lastCheckinDate = dateKey;
+      }
+      leveledUp = applyLevelUps(player);
+      db.savePlayer(player);
+
+      db.recordDailyProgress({
+        dateKey,
+        questsCompleted: 0,
+        focusMinutes: kind === 'full' ? Math.min(habit.durationMinutes, 45) : 5,
+        xpEarned: xpGain,
+        masteryEarned: kind === 'full' ? 5 : 2,
+        energyLevel: player.energyLevel,
+      });
+
+      if (habit.goalId) {
+        const goal = db.getGoals().find((g) => g.id === habit.goalId);
+        if (goal) {
+          goal.progress = Math.min(100, goal.progress + (kind === 'full' ? 2 : 1));
+          db.saveGoal(goal);
+        }
+      }
+
+      db.addAuditLog(
+        'HABIT_COMPLETED',
+        `Check-in thói quen "${habit.title}" (${kind === 'minimum' ? 'Bản tối thiểu' : 'Bản chuẩn'} · +${xpGain} XP)`,
+        { habitId: habit.id, dateKey, kind, xpGain, goldGain }
+      );
+    }
+
+    return { xpGain, goldGain, leveledUp };
+  });
+
+  db.checkpointWal();
+  res.json({
+    ...outcome,
+    kind,
+    state: buildStatePayload(),
+  });
+});
+
+app.get('/api/discipline/settings', (_req, res) => {
+  res.json(db.getDisciplineSettings());
+});
+
+app.put('/api/discipline/settings', (req, res) => {
+  const body = (req.body || {}) as Partial<DisciplineSettings>;
+  const updated = db.saveDisciplineSettings(body);
+  db.addAuditLog(
+    'DISCIPLINE_SETTINGS_UPDATED',
+    `Cập nhật chế độ kỷ luật: ${updated.mode} · Focus ${updated.dailyFocusGoalMinutes}p · Ngân sách xao nhãng ${updated.distractionBudgetMinutes}p`,
+    { mode: updated.mode, minimumViableDayActive: updated.minimumViableDayActive }
+  );
+  db.checkpointWal();
+  res.json({ settings: updated, state: buildStatePayload() });
+});
+
+app.get('/api/knowledge', (req, res) => {
+  const limit = Math.max(1, Math.min(300, Number(req.query.limit) || 120));
+  const todayKey = getTodayKey();
+  res.json({
+    notes: db.getKnowledgeNotes(limit),
+    dueRecalls: db.getDueRecallNotes(todayKey),
+  });
+});
+
+app.post('/api/knowledge', (req, res) => {
+  const body = (req.body || {}) as {
+    title?: string;
+    content?: string;
+    recallPrompt?: string;
+    source?: KnowledgeSource;
+    goalId?: string;
+    skillId?: string;
+    primaryStat?: AttributeKey;
+    tags?: string[];
+    recallEnabled?: boolean;
+  };
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  const content = typeof body.content === 'string' ? body.content.trim() : '';
+  if (!title || !content) {
+    res.status(400).json({ error: 'Cần nhập tiêu đề và nội dung ghi chú/bằng chứng.' });
+    return;
+  }
+  const todayKey = getTodayKey();
+  const nowIso = new Date().toISOString();
+  const recallEnabled = Boolean(body.recallEnabled);
+  const note: KnowledgeNote = {
+    id: uid('kn'),
+    title,
+    content,
+    recallPrompt:
+      typeof body.recallPrompt === 'string' && body.recallPrompt.trim()
+        ? body.recallPrompt.trim()
+        : `Ý chính / bài học rút ra từ "${title}" là gì?`,
+    source: body.source || 'manual',
+    goalId: body.goalId || undefined,
+    skillId: body.skillId || undefined,
+    primaryStat: body.primaryStat || 'PER',
+    tags: Array.isArray(body.tags) ? body.tags.map((t) => String(t).trim()).filter(Boolean) : [],
+    recallEnabled,
+    recallIntervalDays: recallEnabled ? 1 : 0,
+    recallEase: 2.5,
+    recallCount: 0,
+    nextReviewDate: recallEnabled ? shiftVnDateKey(todayKey, 1) : null,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  db.saveKnowledgeNote(note);
+  db.checkpointWal();
+  res.json({ note, state: buildStatePayload() });
+});
+
+app.put('/api/knowledge/:id', (req, res) => {
+  const existing = db.getKnowledgeNoteById(req.params.id);
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy ghi chú.' });
+    return;
+  }
+  const body = (req.body || {}) as Partial<KnowledgeNote>;
+  const todayKey = getTodayKey();
+  const nextRecallEnabled =
+    typeof body.recallEnabled === 'boolean' ? body.recallEnabled : existing.recallEnabled;
+  const updated: KnowledgeNote = {
+    ...existing,
+    title: typeof body.title === 'string' && body.title.trim() ? body.title.trim() : existing.title,
+    content:
+      typeof body.content === 'string' && body.content.trim()
+        ? body.content.trim()
+        : existing.content,
+    recallPrompt:
+      typeof body.recallPrompt === 'string' ? body.recallPrompt.trim() || undefined : existing.recallPrompt,
+    goalId: body.goalId !== undefined ? body.goalId || undefined : existing.goalId,
+    skillId: body.skillId !== undefined ? body.skillId || undefined : existing.skillId,
+    primaryStat: body.primaryStat || existing.primaryStat,
+    tags: Array.isArray(body.tags) ? body.tags : existing.tags,
+    recallEnabled: nextRecallEnabled,
+    nextReviewDate: nextRecallEnabled
+      ? existing.nextReviewDate || shiftVnDateKey(todayKey, 1)
+      : null,
+    updatedAt: new Date().toISOString(),
+  };
+  db.saveKnowledgeNote(updated);
+  db.checkpointWal();
+  res.json({ note: updated, state: buildStatePayload() });
+});
+
+app.delete('/api/knowledge/:id', (req, res) => {
+  db.deleteKnowledgeNote(req.params.id);
+  db.checkpointWal();
+  res.json(buildStatePayload());
+});
+
+app.post('/api/knowledge/:id/review', (req, res) => {
+  const existing = db.getKnowledgeNoteById(req.params.id);
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy thẻ ôn tập.' });
+    return;
+  }
+  const body = (req.body || {}) as { rating?: RecallRating };
+  const rating: RecallRating =
+    body.rating === 'again' || body.rating === 'hard' || body.rating === 'easy'
+      ? body.rating
+      : 'good';
+
+  const todayKey = getTodayKey();
+  const prevInterval = Math.max(0, existing.recallIntervalDays || 0);
+  let nextEase = existing.recallEase || 2.5;
+  let nextInterval = 1;
+
+  if (rating === 'again') {
+    nextInterval = 1;
+    nextEase = Math.max(1.3, Number((nextEase - 0.25).toFixed(2)));
+  } else if (rating === 'hard') {
+    nextInterval = prevInterval <= 1 ? 2 : Math.max(2, Math.round(prevInterval * 1.25));
+    nextEase = Math.max(1.3, Number((nextEase - 0.1).toFixed(2)));
+  } else if (rating === 'good') {
+    if (prevInterval <= 0) nextInterval = 1;
+    else if (prevInterval === 1) nextInterval = 3;
+    else if (prevInterval <= 3) nextInterval = 7;
+    else nextInterval = Math.min(60, Math.round(prevInterval * nextEase));
+  } else {
+    // easy
+    if (prevInterval <= 1) nextInterval = 4;
+    else if (prevInterval <= 3) nextInterval = 10;
+    else nextInterval = Math.min(90, Math.round(prevInterval * (nextEase + 0.35)));
+    nextEase = Math.min(3.2, Number((nextEase + 0.15).toFixed(2)));
+  }
+
+  const nowIso = new Date().toISOString();
+  const updated: KnowledgeNote = {
+    ...existing,
+    recallEnabled: true,
+    recallIntervalDays: nextInterval,
+    recallEase: nextEase,
+    recallCount: (existing.recallCount || 0) + 1,
+    nextReviewDate: shiftVnDateKey(todayKey, nextInterval),
+    lastReviewedAt: nowIso,
+    updatedAt: nowIso,
+  };
+
+  let xpGain = 15;
+  let leveledUp = false;
+  db.runTransaction(() => {
+    db.saveKnowledgeNote(updated);
+    const player = db.getPlayer();
+    player.currentXp += xpGain;
+    player.masteryScore += 4;
+    player.stats.PER = (player.stats.PER || 10) + (rating === 'good' || rating === 'easy' ? 1 : 0);
+    leveledUp = applyLevelUps(player);
+    db.savePlayer(player);
+    db.addAuditLog(
+      'KNOWLEDGE_REVIEWED',
+      `Ôn tập Spaced Recall "${updated.title}" (${rating} → hẹn ôn sau ${nextInterval} ngày)`,
+      { noteId: updated.id, rating, nextInterval }
+    );
+  });
+
+  db.checkpointWal();
+  res.json({
+    note: updated,
+    nextIntervalDays: nextInterval,
+    xpGain,
+    leveledUp,
+    state: buildStatePayload(),
+  });
+});
+
+app.get('/api/intelligence/local', (_req, res) => {
+  res.json(computeLocalIntelligence());
 });
 
 const distDir = path.resolve(process.cwd(), 'dist');

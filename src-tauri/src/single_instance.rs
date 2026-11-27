@@ -2,8 +2,21 @@ use std::time::Duration;
 
 use crate::startup_log;
 
-pub const SINGLE_INSTANCE_MUTEX_NAME: &str = "Local\\RPG_Life_Tracker_Tauri_SingleInstance";
+pub const SINGLE_INSTANCE_MUTEX_PREFIX: &str = "Local\\RPG_Life_Tracker_Tauri_SingleInstance";
 const HUD_CONTROL_ENDPOINT: &str = "http://127.0.0.1:3001/api/hud/control";
+
+fn scoped_mutex_name() -> String {
+    let raw_desktop = startup_log::current_desktop_name();
+    let sanitized: String = raw_desktop
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    if sanitized.is_empty() || sanitized.eq_ignore_ascii_case("Default") {
+        SINGLE_INSTANCE_MUTEX_PREFIX.to_string()
+    } else {
+        format!("{SINGLE_INSTANCE_MUTEX_PREFIX}_{sanitized}")
+    }
+}
 
 #[cfg(windows)]
 mod win_mutex {
@@ -19,7 +32,7 @@ mod win_mutex {
         SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_RESTORE, SW_SHOW,
     };
 
-    use super::SINGLE_INSTANCE_MUTEX_NAME;
+    use super::scoped_mutex_name;
     use crate::startup_log;
 
     pub struct SingleInstanceGuard(Mutex<Option<HANDLE>>);
@@ -52,7 +65,8 @@ mod win_mutex {
     }
 
     pub fn try_acquire() -> AcquireStatus {
-        let wide_name = to_wide_null(SINGLE_INSTANCE_MUTEX_NAME);
+        let mutex_name = scoped_mutex_name();
+        let wide_name = to_wide_null(&mutex_name);
         unsafe {
             let handle = CreateMutexW(null(), 0, wide_name.as_ptr());
             let err = GetLastError();
@@ -70,27 +84,33 @@ mod win_mutex {
         }
     }
 
-    pub fn fallback_show_existing_hud_window() -> bool {
-        let title = to_wide_null("RPG Life Tracker HUD");
-        unsafe {
-            let hwnd = FindWindowW(null(), title.as_ptr());
-            if hwnd.is_null() {
-                return false;
+    pub fn fallback_show_existing_window() -> bool {
+        let titles = ["RPG Life Tracker — The System", "RPG Life Tracker HUD"];
+        for t in titles {
+            let wide = to_wide_null(t);
+            unsafe {
+                let hwnd = FindWindowW(null(), wide.as_ptr());
+                if hwnd.is_null() {
+                    continue;
+                }
+                ShowWindow(hwnd, SW_RESTORE);
+                ShowWindow(hwnd, SW_SHOW);
+                if t.ends_with("HUD") {
+                    SetWindowPos(
+                        hwnd,
+                        HWND_TOPMOST,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_FRAMECHANGED,
+                    );
+                }
+                SetForegroundWindow(hwnd);
+                return true;
             }
-            ShowWindow(hwnd, SW_RESTORE);
-            ShowWindow(hwnd, SW_SHOW);
-            SetWindowPos(
-                hwnd,
-                HWND_TOPMOST,
-                0,
-                0,
-                0,
-                0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_FRAMECHANGED,
-            );
-            SetForegroundWindow(hwnd);
-            true
         }
+        false
     }
 }
 
@@ -107,25 +127,28 @@ mod win_mutex {
         AcquireStatus::Acquired(SingleInstanceGuard)
     }
 
-    pub fn fallback_show_existing_hud_window() -> bool {
+    pub fn fallback_show_existing_window() -> bool {
         false
     }
 }
 
 pub use win_mutex::SingleInstanceGuard;
 
-/// Acquires the Win32 named single-instance mutex before WebView2 initializes.
-/// If another instance is already running, immediately wakes and docks its Mini HUD
-/// via `POST http://127.0.0.1:3001/api/hud/control {"action":"dock"}` and exits cleanly (0).
+/// Acquires the Win32 desktop-scoped single-instance mutex before WebView2 initializes.
+/// If another instance is already running on the SAME desktop, wakes its Main Dashboard (or HUD
+/// on `--autostart`) via `POST http://127.0.0.1:3001/api/hud/control` and exits cleanly (0).
 pub fn acquire_or_wake_existing() -> SingleInstanceGuard {
+    let mutex_name = scoped_mutex_name();
+    let is_autostart = std::env::args().any(|a| a == "--autostart");
     match win_mutex::try_acquire() {
         win_mutex::AcquireStatus::Acquired(guard) => {
-            startup_log::log(&format!("mutex: acquired ({SINGLE_INSTANCE_MUTEX_NAME})"));
+            startup_log::log(&format!("mutex: acquired ({mutex_name})"));
             guard
         }
         win_mutex::AcquireStatus::AlreadyRunning => {
+            let wake_action = if is_autostart { "dock" } else { "open_dashboard" };
             startup_log::log(&format!(
-                "mutex: already_exists ({SINGLE_INSTANCE_MUTEX_NAME}) — waking existing HUD via POST {HUD_CONTROL_ENDPOINT}"
+                "mutex: already_exists ({mutex_name}) — waking existing instance via action={wake_action}"
             ));
             let agent = ureq::AgentBuilder::new()
                 .timeout_connect(Duration::from_secs(2))
@@ -135,7 +158,7 @@ pub fn acquire_or_wake_existing() -> SingleInstanceGuard {
 
             let http_ok = match agent
                 .post(HUD_CONTROL_ENDPOINT)
-                .send_json(serde_json::json!({ "action": "dock" }))
+                .send_json(serde_json::json!({ "action": wake_action }))
             {
                 Ok(resp) => {
                     let status = resp.status();
@@ -152,7 +175,7 @@ pub fn acquire_or_wake_existing() -> SingleInstanceGuard {
             };
 
             if !http_ok {
-                let win_found = win_mutex::fallback_show_existing_hud_window();
+                let win_found = win_mutex::fallback_show_existing_window();
                 startup_log::log(&format!("mutex: fallback_find_window={win_found}"));
             }
 

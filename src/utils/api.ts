@@ -12,11 +12,19 @@ import type {
   BackupStatusPayload,
   ChatContextScope,
   CloseoutMood,
+  CoreHabit,
   DailyCloseoutRecord,
   DaySettlementReport,
   DeathReport,
+  DisciplineSettings,
   EveningCloseoutPreviewPayload,
+  HabitCompletionKind,
+  HabitFrequency,
+  HabitTimeOfDay,
+  KnowledgeNote,
+  KnowledgeSource,
   LanAccessPayload,
+  LocalIntelligencePayload,
   LongTermAnalyticsPayload,
   PlayerProfile,
   Quest,
@@ -24,6 +32,7 @@ import type {
   QuestType,
   RaidChestId,
   RaidDifficultyTier,
+  RecallRating,
   RejectionReason,
   StatMap,
   StorageInfoPayload,
@@ -135,6 +144,94 @@ export function getLanToken(): string | null {
   }
 }
 
+const SYNC_CHANNEL_NAME = 'rpg_system_sync_v1';
+const SYNC_STORAGE_KEY = 'rpg_system_sync_ts';
+const INSTANCE_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+type SyncListener = (payload: { url: string; ts: number; sourceId: string }) => void;
+const syncListeners = new Set<SyncListener>();
+let broadcastChannel: BroadcastChannel | null = null;
+
+function ensureSyncChannel(): void {
+  if (typeof window === 'undefined') return;
+  if (!broadcastChannel && typeof BroadcastChannel !== 'undefined') {
+    try {
+      broadcastChannel = new BroadcastChannel(SYNC_CHANNEL_NAME);
+      broadcastChannel.onmessage = (ev) => {
+        const data = ev.data as { url?: string; ts?: number; sourceId?: string } | undefined;
+        if (!data || data.sourceId === INSTANCE_ID) return;
+        const payload = {
+          url: data.url || '',
+          ts: data.ts || Date.now(),
+          sourceId: data.sourceId || 'remote',
+        };
+        syncListeners.forEach((fn) => fn(payload));
+      };
+    } catch {
+      broadcastChannel = null;
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (ev) => {
+    if (ev.key !== SYNC_STORAGE_KEY || !ev.newValue) return;
+    try {
+      const parsed = JSON.parse(ev.newValue) as { url?: string; ts?: number; sourceId?: string };
+      if (!parsed || parsed.sourceId === INSTANCE_ID) return;
+      const payload = {
+        url: parsed.url || '',
+        ts: parsed.ts || Date.now(),
+        sourceId: parsed.sourceId || 'storage',
+      };
+      syncListeners.forEach((fn) => fn(payload));
+    } catch {
+      // Ignore malformed storage payload
+    }
+  });
+}
+
+export function notifySystemStateMutated(url = 'manual'): void {
+  if (typeof window === 'undefined') return;
+  const payload = { url, ts: Date.now(), sourceId: INSTANCE_ID };
+  try {
+    ensureSyncChannel();
+    broadcastChannel?.postMessage(payload);
+  } catch {
+    // Ignore channel errors
+  }
+  try {
+    window.localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function subscribeSystemStateSync(listener: SyncListener): () => void {
+  ensureSyncChannel();
+  syncListeners.add(listener);
+  return () => {
+    syncListeners.delete(listener);
+  };
+}
+
+function shouldBroadcastMutation(url: string, method?: string): boolean {
+  const m = (method || 'GET').toUpperCase();
+  if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return false;
+  if (
+    url.includes('/api/assistant/activity/ingest') ||
+    url.includes('/api/assistant/activity/record-sample') ||
+    url.includes('/api/hud/sync-state') ||
+    url.includes('/api/quests/analyze-draft') ||
+    url.includes('/api/settings/ai/test') ||
+    url.includes('/api/settings/ai/models') ||
+    url.includes('/api/timetable/import-text') && url.includes('previewOnly')
+  ) {
+    return false;
+  }
+  return true;
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const lanToken = getLanToken();
   const headers: Record<string, string> = {
@@ -163,7 +260,11 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     }
     throw new Error(errBody.error || errBody.message || `Request failed: ${res.status}`);
   }
-  return res.json() as Promise<T>;
+  const data = (await res.json()) as T;
+  if (shouldBroadcastMutation(url, options?.method)) {
+    notifySystemStateMutated(url);
+  }
+  return data;
 }
 
 export const systemApi = {
@@ -220,6 +321,12 @@ export const systemApi = {
         body: JSON.stringify({ rawInput }),
       }
     ),
+
+  updateGoal: (id: string, patch: Partial<import('../types/system').Goal>) =>
+    request<SystemStatePayload>(`/api/goals/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
 
   deleteGoal: (id: string) =>
     request<SystemStatePayload>(`/api/goals/${id}`, { method: 'DELETE' }),
@@ -321,9 +428,14 @@ export const systemApi = {
     primaryStat?: AttributeKey;
     secondaryStat?: AttributeKey;
     skillId?: string;
+    goalId?: string;
     statRewards?: Partial<StatMap>;
     requiresProof?: boolean;
+    ifThenTrigger?: string;
+    scientificProtocol?: string;
+    subtasks?: Array<{ id?: string; label: string; done?: boolean } | string>;
     syncToTimetable?: boolean;
+    dateKey?: string;
   }) =>
     request<SystemStatePayload>('/api/quests/custom', {
       method: 'POST',
@@ -347,6 +459,9 @@ export const systemApi = {
   pauseQuest: (questId: string) =>
     request<SystemStatePayload>('/api/quests/' + questId + '/pause', { method: 'POST' }),
 
+  reopenQuest: (questId: string) =>
+    request<SystemStatePayload>('/api/quests/' + questId + '/reopen', { method: 'POST' }),
+
   aiPlanDaySchedule: (payload: {
     prompt: string;
     dayOfWeek?: number;
@@ -366,7 +481,14 @@ export const systemApi = {
       body: JSON.stringify({ subtaskId }),
     }),
 
-  updateQuest: (questId: string, updates: Partial<Quest>) =>
+  updateQuest: (
+    questId: string,
+    updates: Partial<Quest> & {
+      primaryStat?: AttributeKey;
+      secondaryStat?: AttributeKey;
+      syncToTimetable?: boolean;
+    }
+  ) =>
     request<SystemStatePayload>(`/api/quests/${questId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
@@ -842,6 +964,102 @@ export const systemApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  // Core Habits & Rituals
+  createHabit: (payload: {
+    title: string;
+    timeOfDay: HabitTimeOfDay;
+    frequency: HabitFrequency;
+    customDays?: number[];
+    targetPerWeek?: number;
+    standardSpec: string;
+    minimumSpec: string;
+    durationMinutes?: number;
+    primaryStat?: AttributeKey;
+    goalId?: string;
+    skillId?: string;
+  }) =>
+    request<{ habit: CoreHabit; state: SystemStatePayload }>('/api/habits', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  seedStarterHabits: () =>
+    request<{ addedCount: number; state: SystemStatePayload }>('/api/habits/seed-starters', {
+      method: 'POST',
+    }),
+
+  updateHabit: (id: string, patch: Partial<CoreHabit>) =>
+    request<{ habit: CoreHabit; state: SystemStatePayload }>(`/api/habits/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
+
+  deleteHabit: (id: string) =>
+    request<SystemStatePayload>(`/api/habits/${id}`, { method: 'DELETE' }),
+
+  checkinHabit: (
+    id: string,
+    payload: { kind: HabitCompletionKind | 'undo'; dateKey?: string; note?: string }
+  ) =>
+    request<{
+      xpGain: number;
+      goldGain: number;
+      leveledUp?: boolean;
+      undone?: boolean;
+      kind?: HabitCompletionKind;
+      state: SystemStatePayload;
+    }>(`/api/habits/${id}/checkin`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  // Discipline Personalization
+  updateDisciplineSettings: (patch: Partial<DisciplineSettings>) =>
+    request<{ settings: DisciplineSettings; state: SystemStatePayload }>('/api/discipline/settings', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
+
+  // Knowledge Vault & Spaced Recall
+  createKnowledgeNote: (payload: {
+    title: string;
+    content: string;
+    recallPrompt?: string;
+    source?: KnowledgeSource;
+    goalId?: string;
+    skillId?: string;
+    primaryStat?: AttributeKey;
+    tags?: string[];
+    recallEnabled?: boolean;
+  }) =>
+    request<{ note: KnowledgeNote; state: SystemStatePayload }>('/api/knowledge', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateKnowledgeNote: (id: string, patch: Partial<KnowledgeNote>) =>
+    request<{ note: KnowledgeNote; state: SystemStatePayload }>(`/api/knowledge/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
+
+  deleteKnowledgeNote: (id: string) =>
+    request<SystemStatePayload>(`/api/knowledge/${id}`, { method: 'DELETE' }),
+
+  reviewKnowledgeNote: (id: string, rating: RecallRating) =>
+    request<{
+      note: KnowledgeNote;
+      nextIntervalDays: number;
+      xpGain: number;
+      leveledUp: boolean;
+      state: SystemStatePayload;
+    }>(`/api/knowledge/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ rating }),
+    }),
+
+  getLocalIntelligence: () => request<LocalIntelligencePayload>('/api/intelligence/local'),
 };
 
 export const quickStartFocus = (payload: {

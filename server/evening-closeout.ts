@@ -92,10 +92,12 @@ export function buildCloseoutPreview(
   const growthBonuses = computePlayerGrowthBonuses(player, skills, inventory, shadows);
 
   const assistantSettings = dbRef.getAssistantSettings();
+  const disciplineSettings = dbRef.getDisciplineSettings();
   const distractionBudgetMinutes = Math.max(
     10,
     Number(
-      assistantSettings.distractionBudgetMinutes ??
+      disciplineSettings.distractionBudgetMinutes ??
+        assistantSettings.distractionBudgetMinutes ??
         (assistantSettings as { distractionAlertMinutes?: number }).distractionAlertMinutes ??
         45
     )
@@ -120,15 +122,21 @@ export function buildCloseoutPreview(
   const pendingRaw = allQuests.filter((q) => q.status === 'pending' && q.dateKey <= dateKey);
 
   const plannedRestMode = Boolean(player.plannedRestMode);
+  const shieldWouldProtect =
+    disciplineSettings.mode === 'sustainable' ||
+    (disciplineSettings.mode === 'balanced' &&
+      disciplineSettings.streakShieldsUsedThisWeek < disciplineSettings.streakShieldsPerWeek);
+
   const pendingQuests: CloseoutPendingQuestPreview[] = pendingRaw.map((q) => ({
     id: q.id,
     title: q.title,
     type: q.type,
     rank: q.rank,
     durationMinutes: q.durationMinutes,
-    hpDamage: plannedRestMode
-      ? 0
-      : computeQuestMissDamageFn(q, growthBonuses.fatigueReductionPct),
+    hpDamage:
+      plannedRestMode || shieldWouldProtect
+        ? 0
+        : computeQuestMissDamageFn(q, growthBonuses.fatigueReductionPct),
     dateKey: q.dateKey,
   }));
 
@@ -145,7 +153,7 @@ export function buildCloseoutPreview(
     tomorrowDateKey,
     alreadyClosedToday,
     todayCloseout,
-    remindEveningBadge: vnNow.hour >= 21 && !alreadyClosedToday,
+    remindEveningBadge: vnNow.hour >= disciplineSettings.eveningCloseoutHour && !alreadyClosedToday,
     metrics: {
       deepWorkMinutes: activity.deepWorkMinutes,
       studyMinutes: activity.studyMinutes,

@@ -7,29 +7,35 @@ export interface PixelIconProps {
 }
 
 /**
- * Four 2px antique-gold/bronze corner pixel rivets matching the 16-bit HUD plaque.
- * Place inside any `relative` panel frame.
+ * Subtle corner pixel accents matching the 16-bit frame.
+ * Kept understated so panels breathe cleanly without visual clutter.
  */
-export const PixelRivets: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <>
-    <span
-      aria-hidden="true"
-      className={`pointer-events-none absolute left-[3px] top-[3px] z-10 h-[2px] w-[2px] bg-[var(--px-rivet)] ${className}`}
-    />
-    <span
-      aria-hidden="true"
-      className={`pointer-events-none absolute right-[3px] top-[3px] z-10 h-[2px] w-[2px] bg-[var(--px-rivet)] ${className}`}
-    />
-    <span
-      aria-hidden="true"
-      className={`pointer-events-none absolute bottom-[3px] left-[3px] z-10 h-[2px] w-[2px] bg-[var(--px-rivet)] ${className}`}
-    />
-    <span
-      aria-hidden="true"
-      className={`pointer-events-none absolute bottom-[3px] right-[3px] z-10 h-[2px] w-[2px] bg-[var(--px-rivet)] ${className}`}
-    />
-  </>
-);
+export const PixelRivets: React.FC<{ className?: string; visible?: boolean }> = ({
+  className = '',
+  visible = false,
+}) => {
+  if (!visible) return null;
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute left-[4px] top-[4px] z-10 h-[2px] w-[2px] bg-[var(--px-rivet)] opacity-70 ${className}`}
+      />
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute right-[4px] top-[4px] z-10 h-[2px] w-[2px] bg-[var(--px-rivet)] opacity-70 ${className}`}
+      />
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute bottom-[4px] left-[4px] z-10 h-[2px] w-[2px] bg-[var(--px-rivet)] opacity-70 ${className}`}
+      />
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute bottom-[4px] right-[4px] z-10 h-[2px] w-[2px] bg-[var(--px-rivet)] opacity-70 ${className}`}
+      />
+    </>
+  );
+};
 
 const svgProps = (size: number, className = '') => ({
   width: size,

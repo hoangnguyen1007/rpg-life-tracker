@@ -12,7 +12,10 @@ import {
   PixelRivets,
   PxBook,
   PxCheck,
+  PxClose,
+  PxEdit,
   PxEye,
+  PxPlus,
   PxRefresh,
   PxSave,
   PxScroll,
@@ -33,7 +36,9 @@ interface ProfileGoalsConsoleProps {
     profile: Partial<PlayerProfile> & { hunterClass?: string; activeTitle?: string }
   ) => Promise<void>;
   onAnalyzeGoal: (rawInput: string) => Promise<void>;
+  onUpdateGoal?: (id: string, patch: Partial<Goal>) => Promise<void>;
   onDeleteGoal: (id: string) => Promise<void>;
+  onSpawnGoalQuest?: (goalId: string, goalTitle: string) => void;
 }
 
 const EXAMPLE_GOALS: Array<{ label: string; text: string }> = [
@@ -89,9 +94,19 @@ export const ProfileGoalsConsole: React.FC<ProfileGoalsConsoleProps> = ({
   initialSubTab = 'profile',
   onSaveProfile,
   onAnalyzeGoal,
+  onUpdateGoal,
   onDeleteGoal,
+  onSpawnGoalQuest,
 }) => {
   const [subTab, setSubTab] = useState<'profile' | 'review'>(initialSubTab);
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [editGoalTitle, setEditGoalTitle] = useState('');
+  const [editGoalDeadline, setEditGoalDeadline] = useState('');
+  const [editGoalPriority, setEditGoalPriority] = useState<Goal['priority']>('HIGH');
+  const [editGoalProgress, setEditGoalProgress] = useState<number>(0);
+  const [editGoalMethod, setEditGoalMethod] = useState('');
+  const [editGoalMilestones, setEditGoalMilestones] = useState('');
+  const [savingGoalEdit, setSavingGoalEdit] = useState(false);
 
   useEffect(() => {
     setSubTab(initialSubTab);
@@ -328,15 +343,152 @@ export const ProfileGoalsConsole: React.FC<ProfileGoalsConsoleProps> = ({
                                   {g.title}
                                 </h4>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => onDeleteGoal(g.id)}
-                                title="Xóa mục tiêu"
-                                className="btn-secondary rounded-none p-1.5 text-dim hover:text-[var(--px-red-text)]"
-                              >
-                                <PxTrash size={14} />
-                              </button>
+                              <div className="flex shrink-0 items-center gap-1.5">
+                                {onSpawnGoalQuest && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onSpawnGoalQuest(g.id, g.title)}
+                                    className="btn-primary inline-flex items-center gap-1 rounded-none px-2.5 py-1.5 text-xs"
+                                    title="Tạo nhiệm vụ hôm nay gắn với Mục tiêu này"
+                                  >
+                                    <PxPlus size={12} />
+                                    <span>Tạo Quest</span>
+                                  </button>
+                                )}
+                                {onUpdateGoal && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (editingGoalId === g.id) {
+                                        setEditingGoalId(null);
+                                      } else {
+                                        setEditingGoalId(g.id);
+                                        setEditGoalTitle(g.title);
+                                        setEditGoalDeadline(g.deadline);
+                                        setEditGoalPriority(g.priority);
+                                        setEditGoalProgress(g.progress);
+                                        setEditGoalMethod(g.recommendedMethod);
+                                        setEditGoalMilestones(g.subMilestones.join('\n'));
+                                      }
+                                    }}
+                                    title="Sửa mục tiêu"
+                                    className="btn-secondary rounded-none p-1.5 text-sub hover:text-main"
+                                  >
+                                    {editingGoalId === g.id ? (
+                                      <PxClose size={14} />
+                                    ) : (
+                                      <PxEdit size={14} />
+                                    )}
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteGoal(g.id)}
+                                  title="Xóa mục tiêu"
+                                  className="btn-secondary rounded-none p-1.5 text-dim hover:text-[var(--px-red-text)]"
+                                >
+                                  <PxTrash size={14} />
+                                </button>
+                              </div>
                             </div>
+
+                            {editingGoalId === g.id && onUpdateGoal && (
+                              <form
+                                onSubmit={async (e) => {
+                                  e.preventDefault();
+                                  if (!editGoalTitle.trim() || savingGoalEdit) return;
+                                  setSavingGoalEdit(true);
+                                  try {
+                                    await onUpdateGoal(g.id, {
+                                      title: editGoalTitle.trim(),
+                                      deadline: editGoalDeadline.trim() || g.deadline,
+                                      priority: editGoalPriority,
+                                      progress: Math.max(0, Math.min(100, Number(editGoalProgress) || 0)),
+                                      recommendedMethod: editGoalMethod.trim() || g.recommendedMethod,
+                                      subMilestones: editGoalMilestones
+                                        .split(/\r?\n/)
+                                        .map((s) => s.trim())
+                                        .filter(Boolean),
+                                    });
+                                    setEditingGoalId(null);
+                                  } finally {
+                                    setSavingGoalEdit(false);
+                                  }
+                                }}
+                                className="px-inset space-y-2.5 border-2 border-[var(--px-gold)] p-3 text-xs"
+                              >
+                                <div className="font-pixel text-[9.5px] font-bold text-[var(--px-gold-text)]">
+                                  CHỈNH SỬA MỤC TIÊU
+                                </div>
+                                <input
+                                  value={editGoalTitle}
+                                  onChange={(e) => setEditGoalTitle(e.target.value)}
+                                  placeholder="Tên mục tiêu"
+                                  className="w-full px-2.5 py-1.5 text-xs font-bold"
+                                  required
+                                />
+                                <div className="grid grid-cols-3 gap-2">
+                                  <input
+                                    value={editGoalDeadline}
+                                    onChange={(e) => setEditGoalDeadline(e.target.value)}
+                                    placeholder="Deadline (VD: 2026-12-31)"
+                                    className="px-2 py-1.5 font-mono text-xs"
+                                  />
+                                  <select
+                                    value={editGoalPriority}
+                                    onChange={(e) =>
+                                      setEditGoalPriority(e.target.value as Goal['priority'])
+                                    }
+                                    className="px-2 py-1.5 text-xs"
+                                  >
+                                    <option value="CRITICAL">CRITICAL</option>
+                                    <option value="HIGH">HIGH</option>
+                                    <option value="MEDIUM">MEDIUM</option>
+                                  </select>
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      value={editGoalProgress}
+                                      onChange={(e) => setEditGoalProgress(Number(e.target.value))}
+                                      className="w-full px-2 py-1.5 font-mono text-xs"
+                                      title="Tiến độ (%)"
+                                    />
+                                    <span className="font-mono text-xs">%</span>
+                                  </div>
+                                </div>
+                                <input
+                                  value={editGoalMethod}
+                                  onChange={(e) => setEditGoalMethod(e.target.value)}
+                                  placeholder="Phương pháp đề xuất"
+                                  className="w-full px-2.5 py-1.5 text-xs"
+                                />
+                                <textarea
+                                  rows={3}
+                                  value={editGoalMilestones}
+                                  onChange={(e) => setEditGoalMilestones(e.target.value)}
+                                  placeholder="Các cột mốc (mỗi dòng 1 cột mốc)..."
+                                  className="w-full p-2 text-xs"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingGoalId(null)}
+                                    className="btn-secondary px-3 py-1 text-xs"
+                                  >
+                                    Hủy
+                                  </button>
+                                  <button
+                                    type="submit"
+                                    disabled={savingGoalEdit}
+                                    className="btn-primary px-3.5 py-1 text-xs"
+                                  >
+                                    {savingGoalEdit ? 'Đang lưu...' : 'Lưu Mục tiêu'}
+                                  </button>
+                                </div>
+                              </form>
+                            )}
                             <p className="text-xs text-sub">
                               <strong>Phương pháp:</strong> {g.recommendedMethod}
                             </p>

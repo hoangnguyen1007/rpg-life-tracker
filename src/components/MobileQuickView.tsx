@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type {
   AssistantOverviewPayload,
+  AttributeKey,
   Quest,
+  QuestType,
   SystemStatePayload,
 } from '../types/system';
 import { formatVnTimeShort, getVnTodayKey } from '../utils/timeVn';
@@ -36,7 +38,15 @@ export interface MobileQuickViewProps {
   onStartQuest: (id: string) => Promise<void>;
   onPauseQuest: (id: string) => Promise<void>;
   onCompleteQuest: (id: string) => Promise<void>;
-  onQuickAddQuest: (title: string, durationMinutes: number) => Promise<void>;
+  onQuickAddQuest: (
+    title: string,
+    durationMinutes: number,
+    options?: {
+      type?: QuestType;
+      primaryStat?: AttributeKey;
+      syncToTimetable?: boolean;
+    }
+  ) => Promise<void>;
   onToggleDnd: (minutes: number) => Promise<void>;
   onRefresh: () => Promise<void>;
 }
@@ -106,6 +116,8 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
   // Quick-Add state
   const [quickTitle, setQuickTitle] = useState('');
   const [quickDuration, setQuickDuration] = useState<number>(25);
+  const [quickType, setQuickType] = useState<QuestType>('daily');
+  const [quickSyncCalendar, setQuickSyncCalendar] = useState<boolean>(false);
   const [quickAdding, setQuickAdding] = useState(false);
 
   // Action busy states
@@ -402,9 +414,14 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
     if (!cleaned || quickAdding) return;
     setQuickAdding(true);
     try {
-      await onQuickAddQuest(cleaned, quickDuration);
+      await onQuickAddQuest(cleaned, quickDuration, {
+        type: quickType,
+        syncToTimetable: quickSyncCalendar,
+      });
       setQuickTitle('');
-      showToast(`Đã thêm Quest (${quickDuration}p).`);
+      showToast(
+        `Đã thêm Quest (${quickDuration}p${quickSyncCalendar ? ' · Đã gắn lịch' : ''}).`
+      );
     } finally {
       setQuickAdding(false);
     }
@@ -660,7 +677,7 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-5 gap-1.5">
           {QUICK_DURATIONS.map((mins) => {
             const active = quickDuration === mins;
             return (
@@ -677,6 +694,25 @@ export const MobileQuickView: React.FC<MobileQuickViewProps> = ({
               </button>
             );
           })}
+          <select
+            value={quickType}
+            onChange={(e) => setQuickType(e.target.value as QuestType)}
+            className="h-8 px-1.5 font-mono text-[11px] font-bold"
+          >
+            <option value="daily">Daily</option>
+            <option value="main">Main ★</option>
+            <option value="side">Side</option>
+            <option value="recovery">Hồi phục</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setQuickSyncCalendar((v) => !v)}
+            className={`flex h-8 items-center justify-center rounded-none font-mono text-[10.5px] font-bold ${
+              quickSyncCalendar ? 'btn-primary' : 'btn-secondary'
+            }`}
+          >
+            {quickSyncCalendar ? 'Gắn lịch ✓' : 'Linh hoạt'}
+          </button>
         </div>
       </form>
 
