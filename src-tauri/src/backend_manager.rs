@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -7,7 +8,7 @@ use crate::startup_log;
 
 pub const BACKEND_BASE_URL: &str = "http://127.0.0.1:3001";
 const HEALTH_URL: &str = "http://127.0.0.1:3001/api/health";
-const STARTUP_WAIT_TIMEOUT: Duration = Duration::from_secs(6);
+const STARTUP_WAIT_TIMEOUT: Duration = Duration::from_secs(8);
 const STARTUP_POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 #[cfg(windows)]
@@ -89,80 +90,136 @@ mod win_job {
 }
 
 /// Manages the lifecycle of the local Express/SQLite Node backend (`server/index.ts`).
-/// Stored in Tauri managed state for the entire application lifetime.
+/// Includes an automatic self-healing watchdog so if an external backend stops or
+/// the child process exits, Tauri immediately respawns its own embedded Node backend.
 pub struct BackendGuard {
     child: Mutex<Option<Child>>,
     #[cfg(windows)]
     job: Mutex<Option<win_job::JobHandle>>,
-    spawned_by_tauri: bool,
+    respawn_lock: Mutex<()>,
+    spawned_by_tauri: AtomicBool,
+    healthy: AtomicBool,
+    shutting_down: AtomicBool,
     workspace_root: PathBuf,
-    healthy: bool,
 }
 
 impl BackendGuard {
     /// Checks if `http://127.0.0.1:3001/api/health` is already serving.
-    /// If not, spawns `npx.cmd tsx server/index.ts` (or local `tsx.cmd`) silently in the
-    /// resolved workspace root and binds it to a Windows Kill-on-Close Job Object.
+    /// If not, spawns the local Node/tsx server silently in the resolved workspace root
+    /// and binds it to a Windows Kill-on-Close Job Object.
     pub fn ensure_started() -> Self {
         let workspace_root = resolve_workspace_root();
+        let guard = Self {
+            child: Mutex::new(None),
+            #[cfg(windows)]
+            job: Mutex::new(None),
+            respawn_lock: Mutex::new(()),
+            spawned_by_tauri: AtomicBool::new(false),
+            healthy: AtomicBool::new(false),
+            shutting_down: AtomicBool::new(false),
+            workspace_root,
+        };
+
         if is_backend_healthy() {
+            guard.healthy.store(true, Ordering::SeqCst);
             startup_log::log(&format!(
                 "backend_ready: already_running=true spawned_by_tauri=false root='{}'",
-                workspace_root.display()
+                guard.workspace_root.display()
             ));
-            return Self {
-                child: Mutex::new(None),
-                #[cfg(windows)]
-                job: Mutex::new(None),
-                spawned_by_tauri: false,
-                workspace_root,
-                healthy: true,
-            };
+            return guard;
+        }
+
+        let healthy = guard.ensure_alive();
+        startup_log::log(&format!(
+            "backend_ready: already_running=false spawned_by_tauri={} healthy={healthy} root='{}'",
+            guard.spawned_by_tauri(),
+            guard.workspace_root.display()
+        ));
+        guard
+    }
+
+    /// Ensures the local backend is alive and responding on `/api/health`.
+    /// Thread-safe: concurrent callers share a single respawn attempt.
+    pub fn ensure_alive(&self) -> bool {
+        if self.shutting_down.load(Ordering::SeqCst) {
+            return false;
+        }
+        if is_backend_healthy() {
+            self.healthy.store(true, Ordering::SeqCst);
+            return true;
+        }
+
+        let _lock = match self.respawn_lock.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        if self.shutting_down.load(Ordering::SeqCst) {
+            return false;
+        }
+        if is_backend_healthy() {
+            self.healthy.store(true, Ordering::SeqCst);
+            return true;
+        }
+
+        // Clean up any previous dead or hung child process before respawning.
+        if let Ok(mut slot) = self.child.lock() {
+            if let Some(mut prev_child) = slot.take() {
+                let _ = prev_child.kill();
+                let _ = prev_child.wait();
+            }
         }
 
         startup_log::log(&format!(
             "backend: spawning local Node/tsx server in root='{}'",
-            workspace_root.display()
+            self.workspace_root.display()
         ));
 
-        match spawn_backend_process(&workspace_root) {
-            Ok(mut guard) => {
+        match spawn_backend_child(&self.workspace_root) {
+            Ok(spawned) => {
+                if let Ok(mut slot) = self.child.lock() {
+                    *slot = Some(spawned.child);
+                }
+                #[cfg(windows)]
+                if let Ok(mut job_slot) = self.job.lock() {
+                    *job_slot = Some(spawned.job);
+                }
+                self.spawned_by_tauri.store(true, Ordering::SeqCst);
                 let healthy = wait_until_healthy(STARTUP_WAIT_TIMEOUT);
-                guard.healthy = healthy;
+                self.healthy.store(healthy, Ordering::SeqCst);
                 startup_log::log(&format!(
-                    "backend_ready: already_running=false spawned_by_tauri=true healthy={healthy} root='{}'",
-                    guard.workspace_root.display()
+                    "backend_spawned: healthy={healthy} root='{}'",
+                    self.workspace_root.display()
                 ));
-                guard
+                healthy
             }
             Err(err) => {
+                self.healthy.store(false, Ordering::SeqCst);
                 startup_log::log(&format!(
                     "backend_error: failed to spawn Node backend in '{}': {err}",
-                    workspace_root.display()
+                    self.workspace_root.display()
                 ));
-                Self {
-                    child: Mutex::new(None),
-                    #[cfg(windows)]
-                    job: Mutex::new(None),
-                    spawned_by_tauri: false,
-                    workspace_root,
-                    healthy: false,
-                }
+                false
             }
         }
     }
 
     pub fn spawned_by_tauri(&self) -> bool {
-        self.spawned_by_tauri
+        self.spawned_by_tauri.load(Ordering::SeqCst)
     }
 
     pub fn is_healthy_on_start(&self) -> bool {
-        self.healthy
+        self.healthy.load(Ordering::SeqCst)
+    }
+
+    pub fn is_shutting_down(&self) -> bool {
+        self.shutting_down.load(Ordering::SeqCst)
     }
 
     /// Deterministically terminates the managed backend child process and closes
     /// the Windows Job Object handle (reaping the entire Node/tsx process tree).
     pub fn shutdown(&self) {
+        self.shutting_down.store(true, Ordering::SeqCst);
         if let Ok(mut slot) = self.child.lock() {
             if let Some(mut child) = slot.take() {
                 let _ = child.kill();
@@ -259,12 +316,44 @@ pub fn resolve_workspace_root() -> PathBuf {
 }
 
 #[cfg(windows)]
-fn spawn_backend_process(workspace_root: &Path) -> Result<BackendGuard, std::io::Error> {
+fn resolve_node_executable() -> PathBuf {
+    let candidates = [
+        PathBuf::from(r"D:\node\node.exe"),
+        PathBuf::from(r"C:\Program Files\nodejs\node.exe"),
+    ];
+    for c in &candidates {
+        if c.is_file() {
+            return c.clone();
+        }
+    }
+    PathBuf::from("node.exe")
+}
+
+#[cfg(windows)]
+fn build_augmented_path() -> String {
+    let current = std::env::var("PATH").unwrap_or_default();
+    format!(r"D:\node;C:\Program Files\nodejs;{current}")
+}
+
+struct SpawnedBackend {
+    child: Child,
+    #[cfg(windows)]
+    job: win_job::JobHandle,
+}
+
+#[cfg(windows)]
+fn spawn_backend_child(workspace_root: &Path) -> Result<SpawnedBackend, std::io::Error> {
     use std::os::windows::process::CommandExt;
 
     let job = win_job::create_kill_on_close_job()?;
-
-    let local_tsx = workspace_root
+    let augmented_path = build_augmented_path();
+    let node_exe = resolve_node_executable();
+    let tsx_cli_mjs = workspace_root
+        .join("node_modules")
+        .join("tsx")
+        .join("dist")
+        .join("cli.mjs");
+    let local_tsx_cmd = workspace_root
         .join("node_modules")
         .join(".bin")
         .join("tsx.cmd");
@@ -273,6 +362,7 @@ fn spawn_backend_process(workspace_root: &Path) -> Result<BackendGuard, std::io:
         let mut cmd = Command::new(program);
         cmd.args(args)
             .current_dir(workspace_root)
+            .env("PATH", &augmented_path)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -280,13 +370,20 @@ fn spawn_backend_process(workspace_root: &Path) -> Result<BackendGuard, std::io:
         cmd.spawn()
     };
 
-    let child = if local_tsx.is_file() {
-        try_spawn(&local_tsx, &["server/index.ts"])
-            .or_else(|_| try_spawn(Path::new("npx.cmd"), &["tsx", "server/index.ts"]))
-            .or_else(|_| try_spawn(Path::new(r"D:\node\npx.cmd"), &["tsx", "server/index.ts"]))?
+    // Prefer direct `node.exe node_modules/tsx/dist/cli.mjs server/index.ts` (zero cmd.exe wrapper)
+    let child = if tsx_cli_mjs.is_file() {
+        let cli_str = tsx_cli_mjs.to_string_lossy().to_string();
+        try_spawn(&node_exe, &[cli_str.as_str(), "server/index.ts"])
+            .or_else(|_| try_spawn(&local_tsx_cmd, &["server/index.ts"]))
+            .or_else(|_| try_spawn(Path::new(r"D:\node\npx.cmd"), &["tsx", "server/index.ts"]))
+            .or_else(|_| try_spawn(Path::new("npx.cmd"), &["tsx", "server/index.ts"]))?
+    } else if local_tsx_cmd.is_file() {
+        try_spawn(&local_tsx_cmd, &["server/index.ts"])
+            .or_else(|_| try_spawn(Path::new(r"D:\node\npx.cmd"), &["tsx", "server/index.ts"]))
+            .or_else(|_| try_spawn(Path::new("npx.cmd"), &["tsx", "server/index.ts"]))?
     } else {
-        try_spawn(Path::new("npx.cmd"), &["tsx", "server/index.ts"])
-            .or_else(|_| try_spawn(Path::new(r"D:\node\npx.cmd"), &["tsx", "server/index.ts"]))?
+        try_spawn(Path::new(r"D:\node\npx.cmd"), &["tsx", "server/index.ts"])
+            .or_else(|_| try_spawn(Path::new("npx.cmd"), &["tsx", "server/index.ts"]))?
     };
 
     if let Err(err) = win_job::assign_child(&job, &child) {
@@ -295,17 +392,11 @@ fn spawn_backend_process(workspace_root: &Path) -> Result<BackendGuard, std::io:
         ));
     }
 
-    Ok(BackendGuard {
-        child: Mutex::new(Some(child)),
-        job: Mutex::new(Some(job)),
-        spawned_by_tauri: true,
-        workspace_root: workspace_root.to_path_buf(),
-        healthy: false,
-    })
+    Ok(SpawnedBackend { child, job })
 }
 
 #[cfg(not(windows))]
-fn spawn_backend_process(workspace_root: &Path) -> Result<BackendGuard, std::io::Error> {
+fn spawn_backend_child(workspace_root: &Path) -> Result<SpawnedBackend, std::io::Error> {
     let mut cmd = Command::new("npx");
     cmd.args(["tsx", "server/index.ts"])
         .current_dir(workspace_root)
@@ -314,11 +405,5 @@ fn spawn_backend_process(workspace_root: &Path) -> Result<BackendGuard, std::io:
         .stderr(Stdio::null());
 
     let child = cmd.spawn()?;
-
-    Ok(BackendGuard {
-        child: Mutex::new(Some(child)),
-        spawned_by_tauri: true,
-        workspace_root: workspace_root.to_path_buf(),
-        healthy: false,
-    })
+    Ok(SpawnedBackend { child })
 }

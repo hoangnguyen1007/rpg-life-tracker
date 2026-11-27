@@ -154,7 +154,43 @@ fn dock_and_save_hud(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn ensure_backend_alive_async(app: &AppHandle) {
+    if backend_manager::is_backend_healthy() {
+        return;
+    }
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        if let Some(guard) = handle.try_state::<backend_manager::BackendGuard>() {
+            if guard.ensure_alive() {
+                let _ = handle.emit("tauri-state-refresh", true);
+            }
+        }
+    });
+}
+
+fn start_backend_watchdog(app_handle: AppHandle) {
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_secs(4));
+            if let Some(guard) = app_handle.try_state::<backend_manager::BackendGuard>() {
+                if guard.is_shutting_down() {
+                    break;
+                }
+                if !backend_manager::is_backend_healthy() {
+                    startup_log::log("backend_watchdog: backend unreachable on :3001 — auto-respawning...");
+                    if guard.ensure_alive() {
+                        let _ = app_handle.emit("tauri-state-refresh", true);
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+    });
+}
+
 fn show_main_window_inner(app: &AppHandle) -> Result<(), String> {
+    ensure_backend_alive_async(app);
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| "Main window not found".to_string())?;
@@ -399,6 +435,21 @@ fn set_hud_visible(app: AppHandle, visible: bool) -> Result<bool, String> {
 #[tauri::command]
 fn dock_hud_corner(app: AppHandle) -> Result<(), String> {
     dock_and_save_hud(&app)
+}
+
+#[tauri::command]
+fn ensure_backend_alive(app: AppHandle) -> bool {
+    if backend_manager::is_backend_healthy() {
+        return true;
+    }
+    if let Some(guard) = app.try_state::<backend_manager::BackendGuard>() {
+        let ok = guard.ensure_alive();
+        if ok {
+            let _ = app.emit("tauri-state-refresh", true);
+        }
+        return ok;
+    }
+    false
 }
 
 #[tauri::command]
@@ -647,7 +698,8 @@ pub fn run() {
             get_hud_visible,
             set_hud_visible,
             dock_hud_corner,
-            get_tauri_env
+            get_tauri_env,
+            ensure_backend_alive
         ])
         .setup(move |app| {
             app.manage(single_instance_guard);
@@ -665,6 +717,7 @@ pub fn run() {
             let backend_guard = backend_manager::BackendGuard::ensure_started();
             let backend_ok = backend_guard.is_healthy_on_start();
             app.manage(backend_guard);
+            start_backend_watchdog(app.handle().clone());
 
             // 2. Launch pure-Win32 5s activity tracker (automatically suspends Node PowerShell polling).
             let tracker_handle = win_tracker::start_win_tracker();

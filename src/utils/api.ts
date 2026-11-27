@@ -232,6 +232,27 @@ function shouldBroadcastMutation(url: string, method?: string): boolean {
   return true;
 }
 
+async function tryWakeTauriBackend(): Promise<boolean> {
+  if (typeof window === 'undefined' || !isTauriDesktop()) return false;
+  try {
+    const win = window as unknown as {
+      __TAURI__?: {
+        core?: {
+          invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+        };
+      };
+    };
+    if (win.__TAURI__?.core?.invoke) {
+      const ok = await win.__TAURI__.core.invoke('ensure_backend_alive');
+      return Boolean(ok);
+    }
+  } catch {
+    // Ignore invoke errors and fall back to short delay retry
+  }
+  await new Promise((r) => setTimeout(r, 900));
+  return false;
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const lanToken = getLanToken();
   const headers: Record<string, string> = {
@@ -240,10 +261,24 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     ...((options?.headers as Record<string, string> | undefined) || {}),
   };
 
-  const res = await fetch(resolveApiUrl(url), {
-    ...options,
-    headers,
-  });
+  const targetUrl = resolveApiUrl(url);
+  let res: Response;
+  try {
+    res = await fetch(targetUrl, {
+      ...options,
+      headers,
+    });
+  } catch (firstErr) {
+    if (isTauriDesktop()) {
+      await tryWakeTauriBackend();
+      res = await fetch(targetUrl, {
+        ...options,
+        headers,
+      });
+    } else {
+      throw firstErr;
+    }
+  }
   if (!res.ok) {
     const errBody = (await res.json().catch(() => ({}))) as {
       error?: string;
